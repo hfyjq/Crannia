@@ -1,0 +1,23 @@
+{
+  "_comment": "复制成 lsp.json 放到项目根（或 data/lsp.json 全局兜底）。键就是服务器名。本机装好哪个就用哪个；下面两条只是示例，命令必须真实存在。也可以完全不放这个文件：内置目录会自动探测已安装的服务器（pyright/gopls/rust-analyzer 等），只启用，不安装。",
+  "servers": {
+    "python": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "extensionToLanguage": {
+        ".py": "python",
+        ".pyi": "python"
+      }
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "extensionToLanguage": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact",
+        ".js": "javascript",
+        ".jsx": "javascriptreact"
+      }
+    }
+  }
+}

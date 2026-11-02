@@ -1,0 +1,19 @@
+{
+  "name": "@crannia/ui",
+  "private": true,
+  "version": "1.0.0-beta.1",
+  "description": "Crannia 共享前端组件 —— 两个壳共用（apps/desktop 今天 / apps/web 将来）",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./styles.css": "./src/styles.css"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "dependencies": {
+    "lucide-react": "^1.52.0"
+  }
+}

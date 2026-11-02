@@ -1,0 +1,5 @@
+name: wechat_channel
+kind: channel
+description: WeChat Bot adapter via Tencent iLink protocol
+platform_type: wechat
+version: 0.1.0

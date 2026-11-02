@@ -1,0 +1,646 @@
+kind: skill
+name: file_parser
+version: "0.3.0"
+draft: false
+load_strategy: on_demand
+#: 技能级分类器声明：这一族的工具只写得到工作区（`SecurityGuard` 挡着），
+#: 而第 ② 层（工作区内的写）在运行期已经把它们放行了。逐个抄 70 遍 `none`
+#: 不是做过 70 个决定，是把同一个决定抄 70 遍。所以：技能级默认 + 工具级覆盖
+#: （见下面的 delete_files）。
+review_input: none
+#: 这一段会进技能索引，而索引在 100 字符处硬截断
+#: （`core/skill_index.py::_INDEX_DESC_CHARS`），而且每条请求都发。
+#: 措辞原则：新能力、最可能被找的东西放最前面，别按"先来后到"排。
+#: 原先这段是纯英文（"Parse PDF, TXT, CSV files…"），而模型的查询是中文，
+#: jieba 切出来的词永远匹配不上英文文本，于是工具在、搜不到，等于不在。
+description: "文件与图片处理：图片合成 PDF、PDF 页面操作（合并/拆分/提取/旋转/水印/压缩/加密/转图片）、图片压缩/缩放/转格式、解析 PDF/TXT/CSV 并检索、工作区文件与跨区搜索、交付文件给用户。"
+
+tools:
+  - name: parse_pdf
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      读取 PDF 文件内容：按页解析、分块建索引，正文用 search_chunks 检索。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the PDF file. If relative, resolved under workspace/"
+      required: ["file_path"]
+
+  - name: parse_txt
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      Stream-parse a TXT file line by line, chunk the content
+      (max 1500 chars per chunk), and index all chunks for retrieval.
+      Returns metadata only — use search_chunks to query content.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the TXT file. If relative, resolved under workspace/"
+        encoding:
+          type: string
+          description: "File encoding (default: utf-8)"
+          default: "utf-8"
+      required: ["file_path"]
+
+  - name: parse_csv
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      Parse a CSV file with automatic encoding detection (UTF-8 → GBK fallback
+      for Chinese files).  Uses Python's csv module — the header row is preserved
+      and repeated in every chunk so column names are always searchable.  Returns
+      metadata only — use search_chunks to query content.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the CSV file. If relative, resolved under workspace/"
+        encoding:
+          type: string
+          description: "File encoding (default: utf-8; auto-falls-back to GBK for Chinese CSV)"
+          default: "utf-8"
+      required: ["file_path"]
+
+  - name: list_workspace_files
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      List workspace files with pagination and stats.  Returns total count,
+      total size, and file-type breakdown (stats), plus a page of results.
+      Use offset to fetch more pages — stats are always over the full set
+      so you do NOT need to paginate to understand the scope.  Max 50 per page.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        pattern:
+          type: string
+          description: "Glob matched against the file name OR its path inside the workspace (use '/'), e.g. '*.docx', '实训*', '表格1/*'. A bare word is treated as a substring. Default: '*'."
+          default: "*"
+        sort_by:
+          type: string
+          description: "'time' (recent first), 'name', or 'size'."
+          default: "time"
+          enum: ["time", "name", "size"]
+        limit:
+          type: integer
+          description: "Max files per page (1-50, default 20)."
+          default: 20
+        offset:
+          type: integer
+          description: "0-based page offset for pagination."
+          default: 0
+      required: []
+
+  - name: request_cross_zone_search
+    permission: admin
+    destructive: false
+    # 自动模式下解禁（此前它落技能级的 `review_input: none`，第 ④ 层跳过
+    # 分类器，于是每次都要弹窗）。
+    # 现在给它一条真描述，让它过分类器：判安全就由框架预授权
+    #   （`_pre_grant_for_auto` 里 `request_cross_zone_search` 那一支已经在了），
+    #   auto 档下不弹。
+    #
+    # 这不推翻「不扩默认搜索范围」那条决定 —— 那条管的是扩范围（家目录 -> 整块盘），
+    #   而这一改管的是要不要弹窗。解禁之后搜索范围一个字没变
+    #   （`_search_user_home` 仍只搜家目录），只是不问了。
+    #
+    # 代价（如实记）：弹窗里那句「② 我可以将范围缩小至某个区域」是 auto 档下
+    #   唯一一条缩小范围的路，解禁之后它在 auto 档下不存在。
+    #   缓解：搜索回执本来就明说搜了哪儿，所以模型知道自己在哪儿搜过、
+    #   可以据此问用户。
+    review_input: "要在工作区之外找的文件线索，以及要搜的范围/位置"
+    description: >
+      Request permission to search outside the workspace.  Call this tool
+      when list_workspace_files returns no results and the file may exist
+      elsewhere on the user's computer (e.g. Desktop, Documents, Downloads).
+      If auto-approve is enabled the search runs immediately.  Otherwise
+      the framework will present the approval prompt to the user;
+      wait for the system instruction and call this tool again.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      required: ["file_hint"]
+      properties:
+        file_hint:
+          type: string
+          description: "Filename or keyword the user is looking for, e.g. '实训报告' or '2025443267_刘书宇_大作业'"
+        scope:
+          type: string
+          description: "'global' = 用户家目录 (NOT the whole disk); 搜别处传具体路径，如 'D:/'"
+          default: "global"
+
+  - name: search_chunks
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      Search indexed document chunks using BM25 keyword relevance.
+      Returns the top-3 most relevant chunks with page and position metadata.
+      If file_path is provided and no document is currently loaded, the file
+      will be auto-parsed first (parse_pdf or parse_txt depending on extension).
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        query:
+          type: string
+          description: "Search query in Chinese or English"
+        file_path:
+          type: string
+          description: "Optional: path to file to search. If provided and no document is loaded, auto-parses the file first."
+
+  - name: summarize_document
+    permission: read
+    destructive: false
+    output_kind: prose
+    # 描述改过一次，理由不是文风：
+    #   原文以 "Generate a comprehensive document summary" 开头、且只有正面描述，
+    #   读起来是"这条能把整份文档办妥"。那一发：模型
+    #   `list_workspace_files` ×2，然后 `summarize_document`，完，
+    #   而题面要的是"分析"。它拿到的全部认知是 1,059 字符
+    #   （415 页的 PDF）—— 因为这条工具的存在本身就把"分析"路由换成了"复述"。
+    #   修法照的是本仓已有的先例：`run_subagent` 那条 —— 描述里必须写反向判据
+    #   （"什么时候才用"+"别用它做"）；防滥用写在提示词/工具描述里，不写在档表里。
+    #   代价当场量过：这条 schema 165 → 211 tokens/请求（+46，常驻税）。
+    #   量法：`count_tokens` 同一把尺（tiktoken cl100k），只量这一条 schema
+    #     的 `json.dumps`。先量再改，改完重量一次。
+    description: >
+      Generate a document summary by iterative chunk aggregation, merging
+      rounds into one final text. ★ It gives an OVERVIEW, not an analysis:
+      each chunk is read once and nothing is mined. ★ Do NOT use it for
+      "analyze this / find these numbers / draw a conclusion" — those need
+      search_chunks called repeatedly to dig. Use it when the task really
+      wants one condensed paragraph. If file_path is provided and no
+      document is currently loaded, the file will be auto-parsed first
+      (parse_pdf or parse_txt depending on extension).
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Optional: path to file to summarize. If provided and no document is loaded, auto-parses first."
+
+  # ==================================================================
+  # v0.8.5: PDF manipulation tools
+  # ==================================================================
+
+  - name: pdf_info
+    permission: read
+    destructive: false
+    description: >
+      查看 PDF 信息（不解析正文）：页数、文件大小、标题、是否加密、目录书签。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the PDF file. If relative, resolved under workspace/"
+      required: ["file_path"]
+
+  - name: merge_pdfs
+    permission: write
+    destructive: false
+    description: >
+      合并 PDF：把多个 PDF 文件按顺序拼接成一份新 PDF。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_paths:
+          type: array
+          items:
+            type: string
+          description: "List of PDF file paths to merge, in order. Relative paths resolved under workspace/."
+        output_name:
+          type: string
+          default: "merged.pdf"
+          description: "Output filename (default: merged.pdf)"
+      required: ["file_paths"]
+
+  - name: split_pdf
+    permission: write
+    destructive: false
+    description: >
+      拆分 PDF：每 N 页切成一个文件，输出到 workspace/。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the PDF file to split"
+        pages_per_file:
+          type: integer
+          default: 1
+          minimum: 1
+          description: "Number of pages per output file (default: 1 per file)"
+        output_pattern:
+          type: string
+          description: "Custom filename pattern. Use {n} for sequential number. Default: '{stem}_part{n}.pdf'"
+      required: ["file_path"]
+
+  - name: extract_pages
+    permission: write
+    destructive: false
+    description: >
+      从 PDF 提取指定页，生成一份新的 PDF（页码 1 基）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the source PDF file"
+        pages:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: "List of page numbers to extract (1-indexed)"
+        output_name:
+          type: string
+          description: "Output filename (default: '{stem}_extracted.pdf')"
+      required: ["file_path", "pages"]
+
+  - name: copy_to_workspace
+    permission: write
+    destructive: false
+    description: >
+      Copy a file from any accessible location (Desktop, Downloads, D: drive,
+      etc.) into the workspace.  Use this after finding a file via cross-zone
+      search when the user wants to keep it in the workspace.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      required: ["file_path"]
+      properties:
+        file_path:
+          type: string
+          description: "Absolute path to the source file to copy"
+
+  - name: delete_files
+    permission: write
+    destructive: true
+    #: 工具级覆盖：技能级默认是 `none`，而这一件不是 ——
+    #: 它是不可逆的，而且 `pattern` 那条路能批量删（一个 glob 不算具体目标）。
+    #: 第 ② 层（工作区内的写）挡不住它 —— 那一层只对「写 + 可逆」生效。
+    review_input: "要删除的文件路径列表，或一个批量匹配模式"
+    description: >
+      Files go to the system recycle bin (restorable); the result says when
+      they did not. Delete files from the workspace. Two modes: (1) pass
+      file_paths with specific paths, or (2) pass pattern like "*wip*" to
+      bulk-delete all matching files at once. Requires user confirmation —
+      the framework will ask before deleting. Option 2 during confirmation
+      skips future prompts in this session.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_paths:
+          type: array
+          items:
+            type: string
+          description: "Specific file paths to delete."
+        pattern:
+          type: string
+          #: 这里曾经有两个 `description:` —— YAML 的重复键是静默的，
+          #: 后一个覆盖前一个，模型实际看到的是属于 `file_paths` 的那句
+          #: （"List of absolute or workspace-relative file paths to delete"）。
+          #: 炸出来的：模型因此写了一个路径形状的 pattern
+          #: （`workspace/_测试区C/*`），而匹配是按文件名做的，于是「没有匹配的文件」。
+          #: 现在这里是如实的说明。见 `test_manifest_no_duplicate_keys`。
+          description: "Glob matched against the file NAME only (not the path) — e.g. '*wip*' or '*.tmp'. Not scoped to a folder: it hits every matching file in the whole workspace. Use file_paths to name specific files."
+
+  - name: deliver_file
+    permission: write
+    destructive: false
+    #: 工具级覆盖：它把一个文件推出去。
+    #: 判据是「回答用户 ≠ 发给别人」的相邻面：
+    #: 交付本身是用户要的，但交给谁（哪个通道 / 哪个收件人）值得看一眼。
+    review_input: "要交付的文件路径、去向（通道 / 收件人）"
+    description: >
+      把已生成的文件推送给用户。
+
+      ⚠️ **只在用户明确要求发送/交付时才调用**（"发给我""发到我邮箱"
+      "发到微信"）。生成文件本身**不需要**它 —— 文件写到工作区后用户就能
+      拿到，多调一次只会在回复里多一条无关的通道报错。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "要发送的文件路径（如 workspace/report.docx）"
+        via:
+          type: string
+          enum: ["auto", "email", "download"]
+          description: >
+            发送方式。auto（默认）= 按当前会话通道自动选；
+            email = 强制邮件（用户明确要求发邮箱时才用）；
+            download = 只给下载/路径，不发邮件。
+      required: ["file_path"]
+
+  # PDF 页面操作族 + 图片族
+  #
+  # 描述一律中文：模型的检索词是中文，而 `search_tools` 的打分里
+  #   "描述命中"与"中文面命中"各只给 +2，英文描述在中文查询下永远是 0 分
+  #   （工具在，但搜不到，等于不在）。
+  # 名字尽量落在既有打分面上（`merge_`/`extract_`/`convert_` 这些前缀已经在
+  #   `bus/registry.py` 的读写档与 `core/activity.py` 的前缀兜底里）。
+
+  - name: images_to_pdf
+    permission: write
+    destructive: false
+    description: >
+      图片转 PDF：把多张图片（扫描件、照片）按给定顺序合成 PDF。
+      支持 png/jpg/jpeg/bmp/gif/webp/tif。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_paths:
+          type: array
+          items:
+            type: string
+          description: "图片路径列表，**按这个顺序**成为 PDF 的页序。相对路径在 workspace/ 下解析。"
+        output_name:
+          type: string
+          default: "images.pdf"
+          description: "输出 PDF 文件名（落到 workspace/）"
+      required: ["file_paths"]
+
+  - name: pdf_to_images
+    permission: write
+    destructive: false
+    description: >
+      PDF 转图片：把 PDF 每页渲染成图片文件（页码 1 基，一次最多 50 页）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源 PDF 路径"
+        pages:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: "要渲染的页码（**1 基**）。不传 = 全部页。"
+        dpi:
+          type: integer
+          default: 150
+          description: "渲染分辨率（36-600，默认 150）"
+        fmt:
+          type: string
+          enum: ["png", "jpg"]
+          default: "png"
+          description: "输出图片格式"
+        output_prefix:
+          type: string
+          description: "输出文件名前缀（默认用源文件名）"
+      required: ["file_path"]
+
+  - name: rotate_pdf_pages
+    permission: write
+    destructive: false
+    description: >
+      旋转 PDF 页面（扫描件方向不正时用）：角度 90/180/270，顺时针。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源 PDF 路径"
+        angle:
+          type: integer
+          enum: [90, 180, 270]
+          default: 90
+          description: "顺时针旋转角度（增量）"
+        pages:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: "要旋转的页码（**1 基**）。不传 = 全部页。"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_rotated.pdf'）"
+      required: ["file_path"]
+
+  - name: reorder_pdf_pages
+    permission: write
+    destructive: false
+    description: >
+      重排 PDF 页序：按给定页码顺序重排（页码 1 基）。
+      不列出的页即丢弃，列两次即复制。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源 PDF 路径"
+        pages:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: "新的页序（1 基）。例：[3,1,2] 把第 3 页提到最前。"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_reordered.pdf'）"
+      required: ["file_path", "pages"]
+
+  - name: pdf_watermark
+    permission: write
+    destructive: false
+    description: >
+      给 PDF 加水印：每页加斜排半透明文字水印，中文可用。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源 PDF 路径"
+        text:
+          type: string
+          description: "水印文字，例如「内部资料 请勿外传」"
+        font_size:
+          type: integer
+          default: 40
+          description: "字号（会被页宽与文字长度自动夹小）"
+        opacity:
+          type: number
+          default: 0.25
+          description: "不透明度 0.05-1.0（默认 0.25）"
+        angle:
+          type: integer
+          default: 45
+          description: "旋转角度（默认 45 度斜排）"
+        color:
+          type: string
+          default: "#FF0000"
+          description: "文字颜色 #RRGGBB"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_watermarked.pdf'）"
+      required: ["file_path", "text"]
+
+  - name: compress_pdf
+    permission: write
+    destructive: false
+    description: >
+      压缩 PDF 文件（无损：去重对象、压缩流、清理结构，不重采样图片）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源 PDF 路径"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_compressed.pdf'）"
+      required: ["file_path"]
+
+  - name: encrypt_pdf
+    permission: write
+    destructive: false
+    description: >
+      给 PDF 加密（AES-256），可分别控制允许打印与允许复制。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源 PDF 路径"
+        user_password:
+          type: string
+          description: "打开文件需要的密码"
+        owner_password:
+          type: string
+          description: "所有者密码（不传则与 user_password 相同）"
+        allow_printing:
+          type: boolean
+          default: true
+          description: "是否允许打印"
+        allow_copying:
+          type: boolean
+          default: false
+          description: "是否允许复制文本"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_encrypted.pdf'）"
+      required: ["file_path", "user_password"]
+
+  - name: compress_image
+    permission: write
+    destructive: false
+    description: >
+      压缩图片文件（可同时限宽）：png 无损优化，jpg/webp 可指定质量。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源图片路径"
+        quality:
+          type: integer
+          default: 80
+          description: "1-95，仅 jpg/webp 有效"
+        max_width:
+          type: integer
+          default: 0
+          description: "大于 0 时先等比缩到这个宽度"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_compressed.<原扩展名>'）"
+      required: ["file_path"]
+
+  - name: resize_image
+    permission: write
+    destructive: false
+    description: >
+      缩放图片：只给宽度或高度时等比缩放，两个都给则拉伸到该尺寸。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源图片路径"
+        width:
+          type: integer
+          description: "目标宽度（像素）"
+        height:
+          type: integer
+          description: "目标高度（像素）"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_<宽>x<高>.<扩展名>'）"
+      required: ["file_path"]
+
+  - name: convert_image_format
+    permission: write
+    destructive: false
+    description: >
+      转换图片格式（png/jpg/webp/bmp/tiff）；转 jpg/bmp 时透明区填白。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源图片路径"
+        target_format:
+          type: string
+          enum: ["png", "jpg", "jpeg", "webp", "bmp", "tiff"]
+          default: "png"
+          description: "目标格式"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>.<目标扩展名>'）"
+      required: ["file_path", "target_format"]
+
+  - name: rotate_image
+    permission: write
+    destructive: false
+    description: >
+      旋转图片（正数逆时针），90/270 度会撑开画布不裁边角。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "源图片路径"
+        angle:
+          type: integer
+          default: 90
+          description: "旋转角度（增量；取 360 的倍数会被拒绝）"
+        output_name:
+          type: string
+          description: "输出文件名（默认 '<原名>_rot<角度>.<扩展名>'）"
+      required: ["file_path"]

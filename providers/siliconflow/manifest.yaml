@@ -1,0 +1,16 @@
+kind: provider
+name: siliconflow
+version: 0.2.0
+description: 硅基流动 — 国产低成本代理 (Qwen/DeepSeek)
+api_mode: openai_compat
+config:
+  base_url: https://api.siliconflow.cn/v1
+  default_model: DeepSeek-V3.2
+  context_window: 65536
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: siliconflow
+  website: https://www.siliconflow.cn/
+env_keys:
+- SILICONFLOW_API_KEY

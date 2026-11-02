@@ -1,0 +1,16 @@
+kind: provider
+name: qwen
+version: 0.2.0
+description: Qwen (通义千问) — Qwen3.7-PLUS/MAX + 多模型代理
+api_mode: openai_compat
+config:
+  base_url: https://api.qianwen.com/v1
+  default_model: Qwen3.7-PLUS
+  context_window: 131072
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: qwen
+  website: https://www.qianwen.com/
+env_keys:
+- QWEN_API_KEY

@@ -1,0 +1,2462 @@
+{% extends "base.html" %}
+{% block header_title %}CLI 聊天{% endblock %}
+{% block content %}
+
+<div class="chat-container">
+  <!-- Welcome overlay — shown until first message -->
+  <div class="chat-welcome" id="chat-welcome">
+    <img src="/static/img/logo.svg" alt="Crannia" class="chat-welcome-logo" id="welcome-logo">
+    <div class="chat-welcome-greeting" id="welcome-greeting"></div>
+    <div class="chat-welcome-hint" id="welcome-hint">要使用 Agent，请先启动框架。</div>
+    <div class="chat-welcome-tags" id="welcome-tags"></div>
+  </div>
+
+  <!-- Status bar (same as 端配置) -->
+  <div class="status-bar" id="status-bar">
+    <div class="status-left">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">框架未启动</span>
+    </div>
+    <!-- 上下文读数。
+         它与 `#status-metrics` 是两个平级元素，不是嵌套 ——
+         `refreshStatus()` 每 5 秒把那一格整块 `textContent` 重写，
+         嵌进去的读数会被静默擦掉（症状只是"这功能好像不出现"）。 -->
+    <div class="status-right">
+      <!-- 保护已降级的常驻徽标。
+           判据「标签不许说谎」——用户必须一直看得见，
+           而不是在几十条消息之前的那一块里。空 = 没降级（不占地方）。 -->
+      <span id="status-ice" title="本会话内信息层保护已关闭（/clear 可恢复）"></span>
+      <span id="status-ctx" onclick="toggleContextPanel()" title="点一下看本会话装了什么"></span>
+      <span id="status-metrics"></span>
+    </div>
+  </div>
+
+  <!-- 会话构成面板 —— "本会话现在装了什么、各多大、和上次比变了多少"。
+       数据来自 `GET /api/context`（只读、不碰 `_pending_memory_inject`）。
+       它是按需拉取（点开才拉），不是每轮推送 —— 一轮一条的推送是环境
+          读数；这个是"查一次"的东西，进事件流就是每轮一行噪声。 -->
+  <div id="context-panel" class="context-panel" hidden>
+    <div class="ctx-head">
+      <span>本会话构成</span>
+      <button class="btn btn-secondary btn-ctx-close" onclick="toggleContextPanel(false)">关闭</button>
+    </div>
+    <div id="context-panel-body"></div>
+    <div id="context-panel-note" class="ctx-note"></div>
+  </div>
+
+  <!-- Chat messages -->
+  <div class="chat-bubbles" id="chat-msgs"></div>
+
+  <!-- Input row -->
+  <div id="chat-attach" class="chat-attach" hidden></div>
+  <div class="chat-input-row">
+    <textarea id="chat-input" rows="1" placeholder="输入消息... (Shift+Enter 换行，Enter 发送；Ctrl+V 直接贴图)" onkeydown="onInputKey(event)"></textarea>
+    <button class="btn btn-primary" id="chat-send" onclick="send()">发送</button>
+    <button class="btn btn-secondary btn-start-fw" id="btn-start" onclick="startFramework()">启动框架</button>
+    <button class="btn btn-secondary" onclick="clearChat()">清屏</button>
+    <!-- `/` 候选层 —— 数据来自后端 `GET /api/commands`，
+         前端不抄第二份名单。自己 `position:absolute` => 不占位。 -->
+    <div id="slash-popover" class="slash-popover" hidden></div>
+  </div>
+</div>
+
+<!-- ═══ 审批浮窗 ═══════════════════════════════════════════════════
+     它从 state 渲染（GET /api/approval），不从事件重建。
+       事件 `approval.request` 只是"去重取一次"的信号 —— 见
+       `core/events.py` 的规矩 3（存活性只能来自当前进程的观察）。
+       所以刷新/重连只是重取一次：没有幽灵浮窗，也不会漏。
+
+     这个 div 必须是静态 HTML（不是 JS 建的）。假 DOM 夹具里的
+        `_mkId` 会自动创建任何 id，删掉它前端套件照样绿，
+        所以 `tests/test_approval_events.py` 有一条 Python 侧的机械读。
+        那条读的是整个开标签，不是 id 那半截 —— 只读半截的话，
+        这段注释里恰好写着那半截，把 div 删掉它照样绿。 -->
+<div id="approval-modal" class="approval-modal" style="display:none">
+  <div class="approval-card" id="approval-card">
+    <div class="approval-head">
+      <span class="approval-title" id="approval-title">等待审批</span>
+      <button class="approval-dock" id="approval-dock"
+              title="浏览上下文">‹ 浏览上下文</button>
+    </div>
+    <div class="approval-body" id="approval-body"></div>
+    <div class="approval-options" id="approval-options"></div>
+    <div class="approval-foot">
+      <span class="approval-hint" id="approval-hint">↑↓ 或数字选择，回车确认</span>
+      <button class="btn btn-primary btn-sm" id="approval-ok"
+              onclick="approvalReply()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 右侧栏 diff ═══════════════════════════════════════════════
+     点「查看改动文件」里的文件名，这里展开这一次改了什么。
+       数据来自 `GET /api/file-diff`，而它只服务"本会话留过档的文件"
+       （`core/file_history.py`）—— 不是任意文件读取器。
+     零 `innerHTML`（本仓 WebUI 的硬规矩）：每一行都是 `el()` 建的节点，
+       内容一律走 `textContent` —— diff 正文是用户文件的内容，
+       拼字符串就是一条持久化 XSS。
+     面板是静态 HTML（同审批浮窗那条判据）：夹具会自动建任何 id，
+       所以删掉这个 div 前端套件照样绿（`tests/test_file_diff_ui.py` 用 Python
+       侧的机械读钉住它）。 -->
+<div id="diff-panel" class="diff-panel" hidden>
+  <div class="diff-head">
+    <span class="diff-title" id="diff-title">改动</span>
+    <span class="diff-actions">
+      <a id="diff-open" class="diff-open" target="_blank" rel="noopener" hidden>打开文件</a>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="closeDiff()">关闭</button>
+    </span>
+  </div>
+  <div class="diff-note" id="diff-note"></div>
+  <div class="diff-body" id="diff-body"></div>
+</div>
+
+<script>
+// ═══ Welcome greeting with animations ═══
+(function animateWelcome() {
+  const h = new Date().getHours();
+  const noAnim = localStorage.getItem('crannia-anim-disabled') === '1';
+  if (noAnim) document.documentElement.classList.add('no-anim');
+
+  // ── Greeting pools ──
+  const POOLS = [
+    { min:6, max:9.5,  fronts:['早','早安','早上好','一日之计在于晨'], backs:['从哪里开始？','想做点什么？','今天有什么安排？'] },
+    { min:9.5, max:12, fronts:['上午好','日安'], backs:['今天我能帮你什么？','有什么工作？','想做点什么？','今天从哪里开始？'] },
+    { min:12, max:13.5, fronts:['中午好','午安'], backs:['注意休息','需要我做点什么？','有什么工作？','想做点什么？'] },
+    { min:13.5, max:17.5, fronts:['下午好'], backs:['要做些什么？','有什么需要帮忙的？','有些什么工作？','我能帮你做点什么？','有什么计划？','记得多活动多喝水'] },
+    { min:17.5, max:24, fronts:['晚上好','晚好','辛苦了'], backs:['有什么安排？','我可以帮你做点什么？','注意休息','想做些什么？'] },
+    { min:0, max:6, fronts:['夜深了'], backs:['想做些什么？','有什么我可以帮忙的？','我可以帮你做点什么？','早点休息'] },
+  ];
+  let front = '你好', back = '我能帮你做点什么？';
+  for (const p of POOLS) {
+    if (h >= p.min && h < p.max) {
+      front = p.fronts[Math.floor(Math.random() * p.fronts.length)];
+      back = p.backs[Math.floor(Math.random() * p.backs.length)];
+      break;
+    }
+  }
+
+  const logo = document.getElementById('welcome-logo');
+  const greet = document.getElementById('welcome-greeting');
+  const hint = document.getElementById('welcome-hint');
+  const tags = document.getElementById('welcome-tags');
+
+  greet.textContent = front + '，' + back;
+
+  if (noAnim) {
+    // Static: logo + greeting only, no tags
+    logo.style.opacity = '1';
+    greet.style.opacity = '1';
+    hint.style.opacity = '1';
+    hint.textContent = '要使用 Agent，请先启动框架。';
+    tags.style.display = 'none';
+    return;
+  }
+
+  // ── Animated sequence ──
+  logo.style.opacity = '0';
+  greet.style.opacity = '0';
+  hint.style.opacity = '0';
+
+  setTimeout(() => { logo.style.opacity = '1'; }, 150);
+  setTimeout(() => { greet.style.opacity = '1'; }, 600);
+  setTimeout(() => { hint.style.opacity = '1'; }, 1000);
+
+  // Skill tags — pick 4 from larger pool, randomize
+  const skillPool = ['处理文档','撰写表格','搜集信息','处理邮件','来点音乐','深入探讨','娱乐一下','完成工作','管理日程','聊聊灵感'];
+  const picked = [];
+  const pool = [...skillPool];
+  for (let i = 0; i < 4; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picked.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  setTimeout(() => {
+    picked.forEach(function (s, i) {
+      const t = el('span', 'welcome-tag', s);
+      t.style.animationDelay = (i * 0.12) + 's';
+      tags.appendChild(t);
+    });
+    tags.style.opacity = '1';
+  }, 2000);
+})();
+
+// `/` 候选层
+//
+// 数据只从后端来（`GET /api/commands`）—— 前端不抄第二份
+//    名单。抄一份就会与 `pre_process._COMMANDS` 那张表各自漂（一个
+//    口径一个地方），而"表里有、候选里没有"正是第二条名单会出的病。
+//
+// 交互（与 GUI 一致）：
+//    `↑` `↓` 移动 · `Tab` / `Enter` 采纳 · `Esc` 关掉 · 鼠标点也能采纳
+//    采纳 = 只换掉头一个词（后面已经打的内容原样留着）
+//
+// 取不到目录，不弹，而且出声（`console.warn`）——「没有命令」与
+//    「读不到」长得一样，而前者会被读成一个结论。
+// 一条命令都没实现（`implemented:false`）的那几条照样列，但带标记：
+//    后端如实标了它，前端不该把它藏起来（不许承诺兑现不了的东西 —— 藏起来
+//    同样是骗：用户以为它不存在）。
+let _slashAll = null;      // 缓存的整份目录（第一次拉完就不再请求）
+let _slashErr = '';        // 拉不到时的原因（空串 = 没出错）
+let _slashTriedAt = 0;     // 上次尝试的时刻（失败之后节流重试，别每敲一下打一次）
+let _slashItems = [];      // 当前这一屏的候选
+let _slashSel = 0;         // 当前选中项
+let _slashOpen = false;
+
+async function slashLoad() {
+  if (_slashAll !== null) return _slashAll;
+  const now = Date.now();
+  if (_slashErr && now - _slashTriedAt < 3000) return [];   // 失败过就三秒内不重打
+  _slashTriedAt = now;
+  try {
+    const d = await api('/api/commands');
+    if (d && d.ok && Array.isArray(d.commands)) {
+      _slashAll = d.commands;
+      _slashErr = '';
+    } else {
+      // 后端如实回了 `ok:false`（例如框架没起来）—— 那不是
+      //    "命令是空的"：前者是"读不到"，后者是"确实没有"。
+      _slashAll = null;                 // 不缓存失败 => 下次再来
+      _slashErr = (d && d.error) ? String(d.error) : '后端没有给出命令目录';
+    }
+  } catch (e) {
+    _slashAll = null;
+    _slashErr = (e && e.message) ? e.message : String(e);
+  }
+  if (_slashErr) console.warn('[slash] 命令目录读不到：' + _slashErr);
+  return _slashAll || [];
+}
+
+/** 当前输入的头一个词；不构成候选条件时返回 `null`。
+ *
+ *  只有 `/` 开头才算。
+ *  什么时候收掉：头一个词正好是一条完整命令（后面跟了空格）就收
+ *     —— 那说明已经选完了、在打参数。不是"见到空格就收"：
+ *     `/co 你好` 里那个 `/co` 还没选完，候选该继续开着，采纳时把后面留着
+ *     （`slashAccept` 那一行 `v.slice(tok.length)` 就是干这个的）。
+ */
+function slashToken() {
+  const v = TXAREA.value || '';
+  if (!v.startsWith('/')) return null;
+  const m = v.match(/^(\S*)/);
+  const tok = m ? m[1] : '';
+  if (!tok) return null;
+  if (tok === v) return tok;              // 还在打这个词
+  return slashIsExact(tok) ? null : tok;  // 已经是个完整命令 => 收掉
+}
+
+/** `tok` 是不是一条完整的命令名（目录还没拉回来，说不准，返回假）。 */
+function slashIsExact(tok) {
+  if (!_slashAll) return false;
+  const t = String(tok).toLowerCase();
+  return _slashAll.some(function (c) {
+    return String(c.cmd || '').toLowerCase() === t;
+  });
+}
+
+async function slashUpdate() {
+  const tok = slashToken();
+  if (tok === null) { slashHide(); return; }
+  const all = await slashLoad();
+  if (tok !== slashToken()) return;      // 拉的过程中用户又打了字 => 这一次作废
+  const pref = tok.toLowerCase();
+  const items = all.filter(function (c) {
+    return String(c.cmd || '').toLowerCase().startsWith(pref);
+  }).slice(0, 12);
+  if (!items.length) {
+    // "没拉到"与"没有匹配"不许同形。前者要说出来
+    //    （否则用户看到的就是"打了 / 没反应"）。
+    if (_slashErr) { _slashItems = []; slashRender(); } else { slashHide(); }
+    return;
+  }
+  _slashItems = items;
+  if (_slashSel >= items.length) _slashSel = 0;
+  slashRender();
+}
+
+function slashRender() {
+  const box = document.getElementById('slash-popover');
+  if (!box) return;
+  box.textContent = '';                  // 零 innerHTML（内容来自后端）
+  if (!_slashItems.length) {
+    // 读不到就出声 —— 这一行不可采纳，敲回车照旧把原文发出去。
+    box.appendChild(el('div', 'slash-err',
+      '命令目录读不到：' + _slashErr + '（敲回车就按原文发）'));
+    box.hidden = false;
+    _slashOpen = true;
+    return;
+  }
+  _slashItems.forEach(function (c, i) {
+    const row = el('div', 'slash-item' + (i === _slashSel ? ' sel' : ''));
+    row.appendChild(el('span', 'slash-cmd', String(c.cmd || '')));
+    row.appendChild(el('span', 'slash-desc', String(c.desc || '')));
+    if (c.implemented === false) {
+      row.appendChild(el('span', 'slash-todo', '未实现'));
+    }
+    // 用 `mousedown` 不用 `click`：`click` 之前 textarea 会先失焦，
+    //   而失焦可能触发关掉候选 —— 那样点一下等于没点。
+    row.onmousedown = function (e) { e.preventDefault(); _slashSel = i; slashAccept(); };
+    box.appendChild(row);
+  });
+  box.hidden = false;
+  _slashOpen = true;
+}
+
+function slashMove(delta) {
+  if (!_slashOpen || !_slashItems.length) return;
+  const n = _slashItems.length;
+  _slashSel = (_slashSel + delta + n) % n;
+  slashRender();
+}
+
+function slashAccept() {
+  if (!_slashOpen || !_slashItems.length) return false;
+  const cmd = String(_slashItems[_slashSel].cmd || '');
+  if (!cmd) return false;
+  const v = TXAREA.value || '';
+  const tok = slashToken();
+  const rest = (tok === null ? '' : v.slice(tok.length)).replace(/^\s+/, '');
+  TXAREA.value = cmd + ' ' + rest;
+  slashHide();
+  TXAREA.focus();
+  autoResize();
+  return true;
+}
+
+function slashHide() {
+  const box = document.getElementById('slash-popover');
+  if (box) { box.hidden = true; box.textContent = ''; }
+  _slashOpen = false;
+  _slashSel = 0;
+  _slashItems = [];
+}
+
+// ═══ Auto-resize textarea ═══
+const TXAREA = document.getElementById('chat-input');
+const TXAREA_ROW_H = 20; // approximate line-height
+const TXAREA_MIN_H = 40;
+const TXAREA_MAX_H = TXAREA_MIN_H * 4; // 4x max
+
+function autoResize() {
+  TXAREA.style.height = 'auto';
+  const sh = TXAREA.scrollHeight;
+  TXAREA.style.height = Math.min(Math.max(sh, TXAREA_MIN_H), TXAREA_MAX_H) + 'px';
+  TXAREA.style.overflowY = sh > TXAREA_MAX_H ? 'auto' : 'hidden';
+}
+
+TXAREA.addEventListener('input', autoResize);
+TXAREA.addEventListener('input', slashUpdate);   // `/` 候选层
+
+function onInputKey(e) {
+  // 候选层开着时，这四个键先给它（没开着则一个字都不动）。
+  if (_slashOpen) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); slashMove(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); slashMove(-1); return; }
+    if (e.key === 'Escape') { e.preventDefault(); slashHide(); return; }
+    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+      // 采纳成功才吃掉这个键；没得采纳就照旧发给 send()
+      if (slashAccept()) { e.preventDefault(); return; }
+    }
+  }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+}
+
+function stopGlow(btn) {
+  btn.classList.remove('btn-start-fw');
+  btn.style.boxShadow = 'none';
+  btn.style.animation = 'none';
+}
+function resetTextarea() {
+  slashHide();   // 候选层：发完就收
+  TXAREA.value = '';
+  TXAREA.style.height = TXAREA_MIN_H + 'px';
+  TXAREA.style.overflowY = 'hidden';
+}
+
+// ═══ Hide welcome on first message ═══
+let _welcomed = false;
+function hideWelcome() {
+  if (_welcomed) return;
+  _welcomed = true;
+  const el = document.getElementById('chat-welcome');
+  if (el) { el.style.display = 'none'; }
+}
+
+// ═══ Init ═══
+(async function initChat() {
+  try {
+    // Glow-once: if previously started and setting on, kill glow
+    if (localStorage.getItem('crannia-glow-done') === '1') {
+      const b = document.getElementById('btn-start');
+      if (b) stopGlow(b);
+    }
+    const s = await api('/api/status');
+    if (s.framework_running) {
+      refreshStatus();
+      subscribeEvents();
+      TXAREA.disabled = false;
+      const btn = document.getElementById('btn-start');
+      btn.textContent = '已启动';
+      btn.disabled = true;
+      stopGlow(btn);
+    } else {
+      TXAREA.disabled = true;
+      document.getElementById('btn-start').disabled = false;
+    }
+  } catch(e) {
+    TXAREA.disabled = true;
+    document.getElementById('btn-start').disabled = false;
+  }
+})();
+
+// ═══ Chat node model (v1.2.0) ═══
+//
+// 聊天区 = 一个有序的节点列表。节点创建后只做原地变更，永不重建 HTML。
+//
+// 采用节点模型的理由：用 `el.innerHTML += \`...${text}...\`` 追加字符串有两个问题 ——
+//   ① 没有节点结构，"更新最后一条"根本做不到（后面接 SSE 活动行时会刷屏）
+//   ② text 完全没转义，agent 回一句 <img src=x onerror=...> 就直接执行，
+//      而且还会被存进 sessionStorage 再注入一次（持久化 XSS）
+//
+// 规矩：所有文本走 textContent，全程不碰 innerHTML。
+const NODES = [];
+const chatEl = document.getElementById('chat-msgs');
+
+/** 创建元素。唯一的写文本入口 —— textContent 天然转义。 */
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function now() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+
+/** 时间戳（秒）→ HH:MM。ts 缺省时取当前时刻。 */
+function fmtTime(ts) {
+  const d = (ts === undefined || ts === null) ? new Date() : new Date(ts * 1000);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+function makeMsgNode(role, text, ts, images) {
+  const row = el('div', 'bubble-row ' + role);
+  const avatar = el('div', 'bubble-avatar');
+  if (role === 'user') {
+    avatar.appendChild(document.createTextNode('👤'));
+  } else {
+    const img = document.createElement('img');
+    img.src = '/static/img/logo.svg';
+    img.className = 'chat-avatar-logo';
+    avatar.appendChild(img);
+  }
+  const body = el('div', 'bubble-body');
+  // 用户自己发的那几张图 —— 在原地显示缩略图。
+  //   判据是"用户得看得见他到底发出去了什么"：模型看见的和他以为发的
+  //   不是同一张，是这种输入形态最容易出的事（裁过、降过采样）。
+  if (images && images.length) {
+    const strip = el('div', 'bubble-thumbs');
+    for (const src of images) {
+      if (typeof src !== 'string' || src.indexOf('data:image/') !== 0) continue;
+      const th = document.createElement('img');   // 零 innerHTML
+      th.className = 'bubble-thumb';
+      th.src = src;
+      strip.appendChild(th);
+    }
+    body.appendChild(strip);
+  }
+  // 换行靠 CSS 的 white-space: pre-wrap（不用 <br> 替换）——
+  // 既去掉了注入点，又能保住空行和缩进
+  const txt = el('div', 'bubble-text', text);
+  const time = el('div', 'bubble-time', fmtTime(ts));
+  body.append(txt, time);
+  row.append(avatar, body);
+  return { id: 'n' + NODES.length, kind: 'msg', role: role, el: row,
+           textEl: txt, timeEl: time, ts: ts };
+}
+
+/** 挂载节点（不滚动、不存历史）。恢复历史时用。 */
+function mountNode(node) {
+  NODES.push(node);
+  chatEl.appendChild(node.el);
+}
+
+/** 离开一段时间回来时的「我们到哪了」。
+ *
+ *  它故意不是一条 `bubble-row agent` —— 那是模型说的话的位置。
+ *    这段是框架根据会话笔记拼的（零 LLM），挂上 agent 的头像会变成
+ *    「标签在说谎」（用户会以为模型刚说了这句话）。自己的 class、没有头像。
+ *  走 `mountNode` + `saveChatHistory`（与 `appendMsg` 同一条路），刷新之后还在 ——
+ *    这正是它进 `DURABLE_TYPES` 要的东西，两个机制各管一半、缺一不可。
+ *  零 `innerHTML`：正文是会话笔记里的文本（用户/模型写的）。
+ */
+function appendRecap(text) {
+  if (!text) return null;
+  var row = el('div', 'bubble-row recap');
+  var body = el('div', 'bubble-body');
+  body.appendChild(document.createTextNode(text));
+  row.appendChild(body);
+  var node = { el: row };
+  mountNode(node);
+  maybeScroll();
+  saveChatHistory();
+  return node;
+}
+
+function appendMsg(role, text, ts, images) {
+  const node = makeMsgNode(role, text, ts, images);
+  mountNode(node);
+  maybeScroll();
+  saveChatHistory();
+  return node;
+}
+
+// ── 流式草稿（`EVT_DELTA`）────────────────────────────────────────────
+//
+// 它只是预览，不是权威文本：权威的是 `/api/chat` 的响应（带工具调用的
+//    那一轮则由 `say` 事件落成步骤行/分隔行）。所以规矩只有一条 ——
+//    谁权威谁覆盖：草稿随增量长大，权威文本一到位就整条丢掉。
+//    这条规矩让"SSE 丢一条增量"不再是正确性问题（顶多预览短一截）。
+//
+// 草稿不进历史（不调 `saveChatHistory`）—— 它是瞬时物，
+//    落进 sessionStorage 会让刷新之后看到半截话。
+let _draft = null;   // { node, text }
+
+// 「权威已到」是状态，不是一次性动作。
+//
+// 失败模式：答案显示两遍 —— 草稿气泡留下没走，下面又跟一条权威气泡；
+//    而库里只有一条，问题出在显示层。
+//
+// 根因是竞态：`dropDraft()` 在 `/api/chat` 的响应到位时调（见 `send()`），
+//    但 SSE 的 `delta` 帧是另一条通道，最后一批可能在响应之后才被派发
+//    `dropDraft()` 执行时 `_draft` 还是 null（什么也没删），紧接着那一批 delta
+//    又新建了一个草稿，而这一轮已经没有下一个权威文本来收它了。
+// 所以所以「权威到了」必须记住，让之后到的增量一律作废。
+//    规矩还是那一句：「草稿是预览，权威文本一到就整条丢掉」——
+//      丢掉的是这一刻的草稿，而"预览作废"这件事本身要一直有效到下一轮。
+let _draftClosed = false;
+
+function pushDelta(text) {
+  if (!text) return;
+  if (_draftClosed) return;      // 权威已到，这一轮的增量全部作废（竞态兜底）
+  if (!_draft) {
+    // `fmtTime(ts)` 收的是秒（它自己 `ts * 1000`），而 `Date.now()` 是毫秒。
+    //    传错会得到 `new Date(1.79e15)` = 公元 5 万多年，
+    //    显示出一个看起来很真实但毫无意义的时间。
+    //    同一个错误还让"多出来的那条草稿"看起来像是另一次对话。
+    const node = makeMsgNode('agent', '', Math.floor(Date.now() / 1000));
+    mountNode(node);
+    node.el.classList.add('bubble-draft');
+    _draft = { node: node, text: '' };
+  }
+  _draft.text += text;
+  _draft.node.textEl.textContent = _draft.text;
+  maybeScroll();
+}
+
+function dropDraft() {
+  _draftClosed = true;          // 先落状态，再删节点（`_draft` 可能是 null）
+  if (!_draft) return;
+  const i = NODES.indexOf(_draft.node);
+  if (i >= 0) NODES.splice(i, 1);
+  _draft.node.el.remove();
+  _draft = null;
+}
+
+/** 新一轮开始，预览重新开闸。挂 `turn.start`（每次 LLM 往返）与 `task.start`（每条用户消息）。 */
+function reopenDraft() {
+  _draftClosed = false;
+}
+
+// ── 交付文件（下载按钮）────────────────────────────────────────────
+//
+// deliver_file 在 Web 会话下不发邮件，而是把文件交给 /api/chat 的
+// files 字段 —— 这里渲染成可点的下载按钮（回复正文里的一行路径没法直接取用）。
+function makeFilesNode(files, ts) {
+  if (!files || !files.length) return null;
+
+  const row = el('div', 'bubble-row agent');
+  const avatar = el('div', 'bubble-avatar');
+  const img = document.createElement('img');
+  img.src = '/static/img/logo.svg';
+  img.className = 'chat-avatar-logo';
+  avatar.appendChild(img);
+
+  const body = el('div', 'bubble-body');
+  files.forEach(function (f) {
+    const a = el('a', 'file-chip');
+    a.href = '/api/download?token=' + encodeURIComponent(CHAT_TOKEN) +
+             '&path=' + encodeURIComponent(f.path || f.name || '');
+    a.setAttribute('download', f.name || '');
+    a.appendChild(el('span', 'file-icon', '📥'));
+    a.appendChild(el('span', 'file-name', f.name || '(未命名)'));
+    // 大小只有拿到确切值才显示 —— 不编
+    const kb = f.size_kb;
+    if (typeof kb === 'number' && kb > 0) {
+      a.appendChild(el('span', 'file-size',
+        (kb < 1024 ? (kb + ' KB') : ((kb / 1024).toFixed(1) + ' MB'))));
+    }
+    body.appendChild(a);
+  });
+  row.append(avatar, body);
+
+  const node = { id: 'f' + NODES.length, kind: 'msg', role: 'agent',
+                 el: row, textEl: body, ts: ts, files: files };
+  return node;
+}
+
+function appendFiles(files, ts) {
+  const node = makeFilesNode(files, ts);
+  if (!node) return null;
+  mountNode(node);
+  maybeScroll();
+  saveChatHistory();
+  return node;
+}
+
+// ── 粘底滚动 ──────────────────────────────────────────────────────
+// 节点会原地更新（SSE 活动行每 200ms 一次），每次追加都强制
+// scrollTop = scrollHeight 会在用户往上翻历史时持续把他拽回底部。
+// 规矩：只有本来就在底部附近时才跟随。
+let _stickToBottom = true;
+function nearBottom() {
+  return chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 80;
+}
+chatEl.addEventListener('scroll', function () { _stickToBottom = nearBottom(); });
+function maybeScroll() {
+  if (_stickToBottom) chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// ═══ 活动行（v1.2.0）═══════════════════════════════════════════════
+//
+// 一条「活动行」承载整轮的过程，内容是原地更新的 —— 不是每来一条
+// 事件就多一个气泡。这就是"不刷屏"的实现方式。
+//
+// 结构（两个渲染器共用，差别只在 DOM 怎么摆）：
+//   .activity-head      当前在做什么（转轮 + 标签 + 耗时 + token）
+//   .activity-detail    思考摘要（有才显示）
+//   .activity-steps     已完成的步骤，逐条往下堆
+//
+// 两档渲染（`ACTIVITY_RENDERER`）：
+//   `box`（默认）—— 有界长框。表头固定，`.activity-body` 是唯一滚动容器
+//        （`max-height:240px`），结束后整个框折叠成一行（见 `collapseActivityBox`）。
+//        `say` 落成框内的分隔行，一轮 = 一个框。
+//   `stream` —— 步骤流无限向下堆叠，`say` 把步骤流切段并
+//        推一条气泡（见 `segmentActivity`）。保留，别的 UI 可能用得上
+//        （TUI 里高频向下刷新本来就没问题，是 WebUI 的观感问题）。
+//   切法：改常量，或链接上加 `?renderer=stream` 临时对照。
+//
+// 不虚构时间：运行中显示 `~3.2s`（带 ~ 前缀，表示临时估算）；
+// 事件到达后用服务端回报的 duration_ms 原地替换成 `3.2s`。
+
+/** 当前用哪个渲染器。
+ *
+ * 只有字面量 `stream` 是退出，其它一切（含拼错）都算 `box` ——
+ * 一个拼错的参数不能静默退回正要退休的那个渲染器。
+ * 负对照：`?renderer=boox` 必须仍然是 box。
+ */
+function _readRendererMode() {
+  try {
+    var m = /[?&]renderer=([^&]*)/.exec(location.search || '');
+    if (m && m[1] === 'stream') return 'stream';
+  } catch (e) { /* 没有 location（测试夹具 / 老浏览器），默认 */ }
+  return 'box';
+}
+let ACTIVITY_RENDERER = _readRendererMode();   // `let` 而非 const：测试在两个套件之间赋值切换
+function isBoxMode() { return ACTIVITY_RENDERER !== 'stream'; }
+
+let ACTIVITY = null;
+//: 「此刻有哪几条可转后台的前台任务」。
+//: 按 `call_id` 记 —— 并发批里回头的是哪一条都知道（减一个数会漂）。
+//: 由 `tool.start.backgroundable` 维护 —— Ctrl+B 只在非空时才抢按键
+//: （否则浏览器那个 Ctrl+B 被吃掉，而用户什么也没得到，与 CC 对等）。
+let _bgableIds = new Set();
+
+function fmtMs(ms) {
+  if (ms < 1000) return Math.round(ms) + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+  var m = Math.floor(ms / 60000), s = Math.round((ms % 60000) / 1000);
+  return m + 'm' + (s < 10 ? '0' : '') + s + 's';
+}
+function fmtTok(n) {
+  if (n < 1000) return n + ' tok';
+  if (n < 1000000) return (n / 1000).toFixed(1) + 'K tok';
+  return (n / 1000000).toFixed(1) + 'M tok';
+}
+
+//: 步骤行的状态符号。只有红绿两个。
+//:
+//: 别随手加第三个 —— 四态（🔴失败 / 🟢成功 / ⚪执行中 /
+//: 🟡等待审批）里只有两个真有落点：
+//:   - ⚪「执行中」只能是表头那个转轮，不是步骤行 —— `sealHead` 只在收尾时
+//:     落行，步骤流里每一条都是已完结的。
+//:   - 🟡「等待审批」当前没有任何信号：工具返回的 JSON 里确实带
+//:     `status:"pending_approval"`，但框架只在那一轮收尾时读它
+//:     （`core/pipeline/stages/agent_loop.py:124`），没发进事件流，
+//:     前端根本收不到。要让它出现，得先给它一个信号源。
+//:
+//: CSS 里 `.activity-step.done .step-tick { color: … }` 那两条对 emoji 不再生效
+//: （emoji 有自带颜色，color 染不上）—— 留着是因为 `done` / `error` 两个类
+//: 还管着别的样式，不是死代码。
+const TICK_OK = '🟢';
+const TICK_ERR = '🔴';
+
+function makeActivityNode() {
+  var row = el('div', 'bubble-row agent activity');
+  var avatar = el('div', 'bubble-avatar');
+  var img = document.createElement('img');
+  img.src = '/static/img/logo.svg';
+  img.className = 'chat-avatar-logo';
+  avatar.appendChild(img);
+
+  var body = el('div', 'bubble-body');
+  var head = el('div', 'activity-head');
+  var spinner = el('span', 'activity-spinner');
+  var label = el('span', 'activity-label run', '准备中…');
+  var elapsed = el('span', 'activity-elapsed', '');
+  var tokens = el('span', 'activity-tokens', '');
+  // 打断按钮：在这一轮的消息旁边，不放在工具栏 —— 用户要打断的是"这条正在跑的消息"。
+  // 只有 Web 能真打断（并发）；也只保证"下一次调模型之前"停下。
+  var stopBtn = el('button', 'activity-stop', '打断');
+  stopBtn.type = 'button';
+  stopBtn.title = '停止这一轮（已完成的步骤会保留）';
+  stopBtn.onclick = function () { stopTurn(); };
+  head.append(spinner, label, elapsed, tokens, stopBtn);
+
+  var detail = el('div', 'activity-detail');
+  var steps = el('div', 'activity-steps');
+
+  // Ctrl+B 提示—— 步骤流顶上那行淡绿色小字。
+  //    只在真有可转的前台任务时出现（判据是服务端的 `tool.start.backgroundable`，
+  //    前端不按工具名猜）；步骤结束 / 转后台后 `tool.end` 一到就收起。
+  var tip = el('div', 'activity-tip', 'tips：ctrl+B 将当前任务转至后台');
+  tip.style.display = 'none';
+
+  var node = { id: 'a' + Date.now(), kind: 'activity', el: row,
+               spinnerEl: spinner, labelEl: label, elapsedEl: elapsed,
+               tokensEl: tokens, detailEl: detail, stepsEl: steps, stopEl: stopBtn,
+               tipEl: tip, steps: [], closed: false, startedAt: Date.now() };
+
+  if (isBoxMode()) {
+    // ── 长框：表头固定，`.activity-body` 是唯一滚动容器（max-height:240px），
+    //    完成后整框折叠成 `.activity-summary` 那一行（见 collapseActivityBox）。
+    //    `detail`（思考摘要）也放进滚动区 —— 它没有长度上限（服务端封顶 400 字符），
+    //    留在表头下面会把框撑高、把表头顶出视口，正是本次要消掉的那个形状。
+    row.classList.add('activity-box');
+    var summary = el('div', 'activity-summary');
+    var boxBody = el('div', 'activity-body');
+    boxBody.append(tip, detail, steps);
+    body.append(head, summary, boxBody);
+    node.summaryEl = summary;
+    node.bodyEl = boxBody;
+    node.says = [];
+    node.collapsed = false;
+    // 框内滚动不抢用户：只有本来就贴着底（24px 内）才自动跟到最新一步 ——
+    // 对照外层 `.chat-bubbles` 的 `_stickToBottom` / `nearBottom`（同一个道理：
+    // 用户往上翻的时候把他拽回底部，比不自动滚还烦）。
+    // 这条 latch 护栏覆盖不到：夹具里 `addEventListener` 是空操作、
+    //    `clientHeight` 是 undefined，只有肉眼验过。初值 true 是安全的
+    //    （刚开的框本来就在底部）。
+    node._boxStick = true;
+    boxBody.addEventListener('scroll', function () {
+      node._boxStick =
+        (boxBody.scrollHeight - boxBody.scrollTop - boxBody.clientHeight) < 24;
+    });
+    // 点整行展开/收起。生产里只有折叠态能点中 —— toggleActivityBox 会挡掉未结束的。
+    row.onclick = function () { toggleActivityBox(node); };
+  } else {
+    body.append(head, tip, detail, steps);
+  }
+
+  row.append(avatar, body);
+  return node;
+}
+
+function openActivity() {
+  if (ACTIVITY && !ACTIVITY.closed) return ACTIVITY;
+  ACTIVITY = makeActivityNode();
+  mountNode(ACTIVITY);
+  ACTIVITY.startedAt = Date.now();
+  maybeScroll();
+  return ACTIVITY;
+}
+
+/** 更新 head。复用同一个 DOM 元素，只改 textContent / className。 */
+function setHead(node, text, status, kind) {
+  node.labelEl.textContent = text;
+  node.labelEl.className = 'activity-label ' + (status || 'run');
+  node._headText = text;
+  node._headKind = kind || 'tool';
+}
+
+/** 把当前 head 压进下方的已完步骤列表，用服务端回报的耗时收尾。 */
+function sealHead(node, status, durationMs, force) {
+  var text = node._headText;
+  if (!text) return;
+  // 状态回执不是"做完了什么"。与下面的「思考中」不同 —— 它无条件跳过：
+  // 出事的那条路径恰恰是 force=true（`closeActivity` 收尾时强制落行），
+  // 所以"和 think 一样加个 !force 条件"是没有用的。
+  // 失败模式：中断时 head 上那句「已请求中断，等这一步跑完…」被压进
+  // 步骤列表，变成一条带 ✓ 的"已完成步骤"，读起来像真做完了什么。
+  if (node._headKind === 'status') {
+    node._headText = null;
+    return;
+  }
+  // 「思考中」不是一个可完成的步骤 —— 它是下一个动作的前奏。
+  // 若每轮都把它压进列表，真实日志会长成这样：
+  //     🟢 思考中 / 🔴 正在总结 / 🟢 思考中 / 🟢 正在查看 … / 🟢 思考中 …
+  // 步骤列表会被「思考中」刷满，真正做了什么的反而看不清。
+  // 只在收尾时（force）才把它落成一行。
+  if (node._headKind === 'think' && !force) {
+    node._headText = null;
+    return;
+  }
+  var st = status || 'done';
+
+  // ── 折叠连续相同的调用 ──
+  // 同名工具可能被连续调用几十次（成功与失败都有）—— 每行一条会把
+  // 步骤列表刷满，真正做了什么的完全看不见。
+  // 连续同名合并成一行：`正在撰写内容 × 40（27 失败）`。
+  var last = node.steps[node.steps.length - 1];
+  if (last && last.text === text) {
+    last.count += 1;
+    if (st === 'error') last.fails += 1;
+    last.ms += (durationMs || 0);
+    var lbl = last.text + ' × ' + last.count +
+              (last.fails ? '（' + last.fails + ' 失败）' : '');
+    last.labelEl.textContent = lbl;
+    last.timeEl.textContent = last.ms ? fmtMs(last.ms) : '';
+    // 只要这一组里出现过失败，整行按失败显示 —— 不把错误藏起来
+    last.row.className = 'activity-step ' + (last.fails ? 'error' : 'done');
+    last.tickEl.textContent = last.fails ? TICK_ERR : TICK_OK;
+    node._headText = null;
+    return;
+  }
+
+  var row = el('div', 'activity-step ' + st);
+  var tick = el('span', 'step-tick', st === 'error' ? TICK_ERR : TICK_OK);
+  var labelEl = el('span', 'step-label', text);
+  var timeEl = el('span', 'step-time',
+                  (durationMs !== undefined && durationMs !== null)
+                    ? fmtMs(durationMs) : '');
+  row.append(tick, labelEl, timeEl);
+  node.stepsEl.appendChild(row);
+  // 长框：把最新一步推进框内滚动区的可视底部。
+  // `stream` 模式下没有 `bodyEl`，这一行是死代码。
+  if (node.bodyEl && node._boxStick !== false) {
+    node.bodyEl.scrollTop = node.bodyEl.scrollHeight;
+  }
+  node.steps.push({
+    text: text, status: st, ms: durationMs || 0, count: 1, fails: (st === 'error' ? 1 : 0),
+    row: row, tickEl: tick, labelEl: labelEl, timeEl: timeEl,
+  });
+  node._headText = null;
+}
+
+/** 背景动作的回执块（`memory.saved` / `memory.organized`）—— 开一块、当场收口。
+ *
+ *  只调 `sealHead` 来收背景回执是不够的 ——
+ *  而 `sealHead` 只是把表头压进步骤列表，它不收口 —— 收口是 `closeActivity`
+ *  （撤转轮 · 撤「打断」按钮 · 停本地计时器 · 折叠）。
+ *  这两条事件在 `task.end` 之后到达，没有任何后续事件会去关它，
+ *  于是那一块永远"进行中"：转轮一直转、计时器一路涨，
+ *  「打断」按钮也不退场。
+ *
+ *  回执文字落在 `summaryEl`（折叠行）而不是步骤里：
+ *    折叠时 `.activity-head` 是 `display:none`，写进表头等于折叠后什么都看不见。
+ *  `kind='status'`：`sealHead` 对 status 型表头不落行 —— 否则回执会出现两次
+ *    （表头一次、步骤一次）。
+ *
+ *  机械读者：`tests/test_chat_fold.py` 场景 24（断言 `closed` / 转轮撤走 /
+ *  打断撤走 / 折叠行就是回执文字）。
+ */
+function receiptBlock(text) {
+  var node = openActivity();
+  setHead(node, text, 'done', 'status');
+  closeActivity(node, true, undefined, undefined, text);
+  return node;
+}
+/** 往当前活动块里补一行「框架的话」—— 不新开块、不当场收口。
+ *
+ *  与 `receiptBlock` 的区别就在收口：那条开一块 + 当场收口，是给
+ *  `task.end` 之后到达的事件用的（那时没有任何后续事件会去关它）。
+ *  本函数服务于轮内到达的事件（`task.end` 之前），收口人是现成的，
+ *  所以只补一行，把收口留给正常的轮末 —— 若在这里收口，会把整轮的活动块
+ *  提前折叠掉（用户就看不到那几个工具步骤了）。
+ *
+ *  必须用 `kind='tool'`：`sealHead` 对 `status` 型表头不落行（回执专用），
+ *  这里要的恰恰是落成一行。
+ */
+function noteLine(text) {
+  var node = openActivity();
+  setHead(node, text, 'done', 'tool');
+  sealHead(node, 'done');
+  return node;
+}
+
+function closeActivity(node, ok, durationMs, tokens, summaryText) {
+  if (!node || node.closed) return;
+  sealHead(node, ok ? 'done' : 'error', undefined, true);   // 收尾：强制落一行
+  // 这一轮结束了，「可转后台」的提示必须退场（否则它跟着折叠块留下去）。
+  _bgableIds.clear();
+  if (node.tipEl) node.tipEl.style.display = 'none';
+  node.closed = true;
+  node.spinnerEl.remove();                       // 转轮消失
+  node.labelEl.className = 'activity-label done';
+  if (node.stopEl) node.stopEl.remove();         // 已结束：打断按钮退场
+  if (tokens) renderTokens(node, tokens);
+  if (durationMs !== undefined && durationMs !== null) {
+    node.elapsedEl.textContent = fmtMs(durationMs);   // 服务端回报值，兑现"不虚构"
+  }
+  // 长框：收尾即折叠成一行（`stream` 模式下没有 summaryEl，天然 no-op）
+  if (node.summaryEl) {
+    collapseActivityBox(node, ok ? 'done' : 'error', durationMs, tokens, summaryText);
+  }
+}
+
+/** 把长框收成一行。三个终态共用：完成 / 失败 / 打断。
+ *
+ * 同步到达静止态：不加 transition、不 `setTimeout`、不 `requestAnimationFrame`。
+ * 测试夹具里定时器是空操作，靠定时器就到不了静止态 —— 而一个"测试里到不了"的
+ * 状态等于没被护栏覆盖。`.no-anim` 的约定也本来就不支持在这里加动效。
+ */
+function collapseActivityBox(node, status, durationMs, tokens, text) {
+  if (!node || !node.summaryEl) return;
+  // `text` 是给背景回执块用的自定义折叠行（见 `receiptBlock`）：
+  // 那种块的正文就是回执行本身，通用的「已完成 · Xms」会把信息吞掉。
+  if (text === undefined || text === null) {
+    if (status === 'interrupted') {
+      // 这里是状态词，不是那句话 ——
+      // 那句话由服务端说（`CANCEL_REPLY` 走 `/api/chat` 的响应），
+      // 两处都说就会显示两次「已打断」。
+      text = '已中断';
+    } else {
+      text = (status === 'error') ? '已失败' : '已完成';
+      // 两个数都是服务端回报（task.end 带回来的），不是估算
+      if (durationMs !== undefined && durationMs !== null) text += ' · ' + fmtMs(durationMs);
+      if (tokens) text += ' · ' + fmtTok(tokens);
+    }
+  }
+  node.summaryEl.textContent = text;
+  node.summaryEl.className = 'activity-summary'
+    + (status === 'interrupted' ? ' interrupted' : '')
+    + (status === 'error' ? ' error' : '');
+  node.el.classList.add('collapsed');
+  node.collapsed = true;
+}
+
+/** 展开 / 收起长框。
+ *
+ * 做成模块级命名函数而不是内联在 `row.onclick` 里，是为了让护栏能真的调它 ——
+ * 夹具里 `addEventListener` 是空操作、`onclick` 也不会被触发，点不动。
+ *
+ * `!node.closed` 那道闸：正在跑的框不该被点塌（尤其是表头右上角那个「打断」按钮，
+ * 它的点击会冒泡到 row 上）—— 顺带省掉了 `stopPropagation`，那个夹具测不了。
+ */
+function toggleActivityBox(node) {
+  if (!node || !node.summaryEl || !node.closed) return;
+  if (node.el.classList.contains('collapsed')) {
+    node.el.classList.remove('collapsed');
+    node.collapsed = false;
+  } else {
+    node.el.classList.add('collapsed');
+    node.collapsed = true;
+  }
+}
+
+/** 模型中途说的话 → 长框里的一条分隔行（`say` 的 box 分支）。
+ *
+ * 落完必须把表头重置成中性文案：`sealHead` 只清 `_headText`、不动
+ * `labelEl.textContent`。`stream` 模式下那个陈旧值看不见 —— `segmentActivity`
+ * 会用「共 N 步」把它盖掉。长框里不重置的话，表头会一直挂着上一步的
+ * 「正在查看工作区」，看起来像卡住了。这是本次改动最容易显得"坏了"的地方。
+ */
+function appendSayRow(node, text) {
+  var rowEl = el('div', 'activity-say', text);
+  node.stepsEl.appendChild(rowEl);
+  node.says.push({ text: text, el: rowEl });
+  setHead(node, '正在处理…', 'run', 'status');
+  if (node.bodyEl && node._boxStick !== false) {
+    node.bodyEl.scrollTop = node.bodyEl.scrollHeight;
+  }
+}
+
+/** 把当前活动行收口成一段（不是收尾）。
+ *
+ * 这条只在 `stream` 渲染器下跑（`box` 走过 `appendSayRow`）。
+ * 下面的理由（"气泡一条条往下冒，步骤流却始终卡在最上面"）是
+ * `stream` 特有的形状 —— 长框把 `say` 收进框内，根本不存在两边对不上这回事。
+ * 别把长框当成对它的倒退。
+ *
+ * 为什么要有它：`say` 气泡是模型在任务中途说的话，它落在活动行下面。
+ * 若所有后续步骤都挂回同一个活动行 —— 气泡一条条往下冒，
+ * 步骤流却始终卡在最上面那句"思考中"底下，两边对不上。
+ * 现在：气泡一出现就把上面那段收口，后面的步骤开新的一段
+ *，每一段步骤都紧挨着引出它的那句话。
+ *
+ * 与 `closeActivity` 的区别：这是中途的边界，不是收尾 ——
+ *  - 不传 `force`（"思考中"不是一个可完成的步骤，见 `sealHead`）
+ *  - 不写 ok/error（这一段的成败由 `task.end` 说了算）
+ *  - 转轮与「打断」按钮都要退场（否则上面留一个永远在转的假指示器）
+ */
+function segmentActivity(node) {
+  if (!node || node.closed) return;
+  sealHead(node, 'done');
+  node.closed = true;
+  node.spinnerEl.remove();
+  if (node.stopEl) node.stopEl.remove();
+  node.elapsedEl.textContent = '~' + fmtMs(Date.now() - node.startedAt);  // 定格
+  node.labelEl.textContent = node.steps.length ? ('共 ' + node.steps.length + ' 步') : '—';
+  node.labelEl.className = 'activity-label seg';
+}
+
+function renderTokens(node, tokens) {
+  if (!tokens) {                                  // 0 就不显示，不显示假的 0
+    node.tokensEl.textContent = '';
+    return;
+  }
+  node.tokensEl.textContent = fmtTok(tokens);
+}
+
+/**
+ * `context.state`：上下文占用 / 阈值 / 是否已进预警区 /
+ * 本轮压缩结果。
+ *
+ * 它落在 `core/events.py` 规矩 1 上：前端不另存一份上下文状态 ——
+ *   屏幕上的一切都是这一个纯折叠的产物。
+ * 位置在状态条、不在对话流里：它是环境读数、不是对话内容
+ *   （进对话流就成了每轮一行噪声，而它每轮都有一条）。
+ *
+ * 它必须与 `#status-metrics` 平级，理由见上面那段 HTML 注释。
+ *
+ * 「接近触发」那档是有出处的：它是 `Compressor.is_armed`
+ *   （用量越过阈值的 75%）—— 阈值是压缩闸门，不是窗口上限，
+ *   所以"83% 但阈值 85%"和"83% 而阈值 60%"是两种处境。
+ */
+/** 没有读数时也不许清空 —— 留一个占位，否则那一格没有可点区域。
+ *
+ * 失败模式：`#status-ctx` 是个空 span，
+ *   它的 `onclick` 是打开会话构成面板的唯一入口，内容为空 = 点不开。
+ *   而"没读数"是一个常见状态（整页重载之后、`/clear` 之后），
+ *，面板在那段时间里根本进不去（后端 `/api/context` 是现成的、随要随有）。
+ */
+function setContextReadoutEmpty(box) {
+  var b = box || document.getElementById('status-ctx');
+  if (!b) return;
+  b.textContent = '上下文 —';
+  b.title = '本会话还没有读数（下一轮就会出现）。点这里可以直接看会话构成面板。';
+  b.className = '';
+}
+
+function foldContextState(d) {
+  var box = document.getElementById('status-ctx');
+  if (!box) return;
+  if (typeof d.pct !== 'number') { setContextReadoutEmpty(box); return; }
+
+  var txt = '上下文 ' + d.pct + '%';
+  if (typeof d.threshold_pct === 'number') {
+    txt += ' / 阈值 ' + d.threshold_pct + '%';
+  }
+
+  var cls = '';
+  if (d.compressed) {
+    // 压过的那一轮：显示这一次的进出（`pre -> post`），不是"上次压过"。
+    // 后端保证只有"本轮真的压了"才带这一栏（否则粘住的旧值会伪装成新事实）。
+    var c = d.compressed;
+    if (typeof c.pre_tokens === 'number' && typeof c.post_tokens === 'number') {
+      txt = '本轮已压缩 ' + fmtTok(c.pre_tokens) + '→' + fmtTok(c.post_tokens)
+          + '，现 ' + d.pct + '%';
+    }
+    cls = 'ctx-just-compressed';
+  } else if (d.armed) {
+    txt += ' · 接近触发';
+    cls = 'ctx-armed';
+  }
+  box.textContent = txt;
+  box.className = cls;
+  // 「这个数、以及窗口那个数从哪儿来」放悬停 ——
+  // 只给值不给来源，读的人无从判断它是不是一个保守兜底。
+  box.title = '窗口 ' + d.window + ' tok（来源: ' + (d.window_source || '?') + '）'
+            + ' · 阈值 ' + d.threshold_tokens + ' tok'
+            + ' · 本轮消息 ' + d.messages + ' 条'
+            + ' · 校准因子 ' + d.factor;
+}
+
+// ═══ 会话构成面板 ═══════════════════════════════════════════════════
+//
+// "本会话现在装了什么、各多大、和上次比变了多少"。
+// 三条判据（全文在 `core/context_report.py` 的 docstring）：
+//   ① 每格标来源（量的还是估的、哪条链）· ② 它先是读数不是优化器 ·
+//   ③ 「与上次比」那一列才是信号 —— 单看绝对数没感觉。
+//
+// 它按需拉取（点开才拉），不进事件流 —— 一轮一条的推送是环境
+//    读数；这个是"查一次"的东西，进事件流就是每轮一行噪声。
+//    （顺带：不进事件流，不必同时改 `EVT_TYPES`，少一处会漂的地方。）
+let _ctxPanelOpen = false;
+
+function toggleContextPanel(force) {
+  const box = document.getElementById('context-panel');
+  if (!box) return;
+  _ctxPanelOpen = (force === undefined) ? !_ctxPanelOpen : !!force;
+  box.hidden = !_ctxPanelOpen;
+  if (_ctxPanelOpen) loadContextReport();
+}
+
+/** 整页重载之后把读数填回来。
+ *
+ * 失败模式：从设置页（独立路由 `web/server.py` → `security.html`）回来是
+ * 整页重载，`#status-ctx` 空到下一轮为止；而用户在上一页刚看见过读数，
+ * 会觉得它"不知道为什么消失了"。
+ * 根因不是 bug，是可达性：读数只有一个来源（轮末的 `context.state`），
+ *，`#status-ctx` 空着的时候面板打不开（见 `setContextReadoutEmpty` 的注释）——
+ *   后端 `/api/context` 随时给得出，只是没有入口。
+ *
+ *，与 `setContextReadoutEmpty` 成对：那条保证"永远有可点区域"，
+ *   这条保证"不用等下一轮就有数"。两条都是必需的（少了哪条都留着半边）。
+ *
+ * 取不到就保持占位，绝不清空 —— 清空等于把入口又拿掉了。
+ * 渲染走 `foldContextState` 同一个函数（面板与状态条不许两套渲染）。
+ */
+async function refreshContextOnLoad() {
+  try {
+    var d = await api('/api/context');
+    if (!d || typeof d !== 'object' || d.error) return;   // 503：框架还没起来
+    foldContextState(d);
+  } catch (e) {
+    /* 保持占位（`loadContextReport` 那条路会把"取不到"说出来） */
+  }
+}
+
+async function loadContextReport() {
+  const body = document.getElementById('context-panel-body');
+  const note = document.getElementById('context-panel-note');
+  if (!body) return;
+  try {
+    renderContextReport(await api('/api/context'));
+  } catch (e) {
+    // 「取不到」必须说出来，不能画一张空格子的表 ——
+    //    "没有数据"与"有数据且全为 0"看起来一样。
+    body.textContent = '';
+    if (note) note.textContent = '取不到读数：' + e.message;
+  }
+}
+
+/** 精确千分位（`fmtTok` 是 K/M 那种缩写，这里要能对得上的原值）。 */
+function fmtInt(n) {
+  if (typeof n !== 'number') return '—';
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function renderContextReport(d) {
+  const body = document.getElementById('context-panel-body');
+  const note = document.getElementById('context-panel-note');
+  if (!body) return;
+  body.textContent = '';
+  (d.cells || []).forEach(function (c) {
+    // 全部走 `el()`（textContent）—— 本页零 `innerHTML` 是一条纪律，
+    // 与用不用框架无关（它挡的是持久化 XSS）。
+    const row = el('div', 'ctx-row' + (c.subset_of ? ' ctx-sub' : ''));
+    row.appendChild(el('span', 'ctx-label',
+                       (c.subset_of ? '↳ ' : '') + c.label));
+    row.appendChild(el('span', 'ctx-val', fmtInt(c.tokens) + ' tok'));
+    // 判据 ③：读不到一律写「—」，不写 0 —— "没量到"与"量到了没变"
+    //   是两件事。第一次打开时每一格都是「—」，这是对的。
+    let dtxt = '—', dcls = 'ctx-delta';
+    if (typeof c.delta === 'number') {
+      if (c.delta > 0) { dtxt = '+' + fmtInt(c.delta); dcls += ' up'; }
+      else if (c.delta < 0) { dtxt = fmtInt(c.delta); dcls += ' down'; }
+      else { dtxt = '0'; }
+    }
+    row.appendChild(el('span', dcls, dtxt));
+    // 判据 ①：来源放悬停 —— 不占版面，但一句都不许省。
+    row.title = c.source;
+    body.appendChild(row);
+  });
+
+  if (note) {
+    note.textContent = '合计 ' + fmtInt(d.estimated_tokens) + ' tok · 窗口 '
+      + fmtInt(d.window) + '（' + (d.window_source || '?') + '）· 占 '
+      + d.pct + '% · 阈值 ' + fmtInt(d.threshold_tokens) + ' tok'
+      + ' · 校准因子 ' + d.factor + '（上表**已**乘）'
+      + '　（加总**不含**「技能索引」那一格：它是对话历史的子集）';
+  }
+}
+
+/**
+ * 事件折叠器：把一条事件折进活动行。
+ * 不变量：一轮只有一条活动行；已完成的步骤往下堆，不再变。
+ */
+// ═══ 右侧栏 diff ════════════════════════════════════════════════════
+//
+// 零 `innerHTML`：diff 正文是用户文件的内容（`core/file_history.py`
+//    留的改前副本 + 磁盘现状）—— 拼字符串就是一条持久化 XSS，逐行 `el()`。
+// `session` 来自事件（`ev.session`），不是前端猜的：后端只服务
+//   "本会话留过档的文件"，猜错会话就会得到一片空白。
+// 没有留档时说清楚为什么（`note`），不留一张空面板 ——
+//   "没有数据"与"有数据但是空的"看起来一样（读不到 ≠ 0）。
+let _DIFF_FILES = {};          // 最近一轮：`路径 -> {version, session, link, name}`
+
+function openDiff(path) {
+  var meta = _DIFF_FILES[path] || {};
+  var panel = document.getElementById('diff-panel');
+  var body = document.getElementById('diff-body');
+  var open = document.getElementById('diff-open');
+  document.getElementById('diff-title').textContent = meta.name || path;
+  while (body.firstChild) body.removeChild(body.firstChild);
+  document.getElementById('diff-note').textContent = '读取中…';
+  open.hidden = !meta.link;
+  if (meta.link) {
+    open.href = '/api/download?path=' + encodeURIComponent(path)
+              + '&token=' + encodeURIComponent(CHAT_TOKEN);
+  }
+  panel.hidden = false;
+  if (!meta.version) {
+    // 这一支是常见的（旧会话 / 留档被保留期清掉），必须有一句人话。
+    renderDiff({ok: false, note: '这个文件没有留档（留档从本会话开始，旧会话不补）'
+                                + ' —— 所以看不到 diff。改后内容仍可用「打开文件」。'});
+    return;
+  }
+  api('/api/file-diff?path=' + encodeURIComponent(path)
+      + '&version=' + encodeURIComponent(meta.version)
+      + '&session=' + encodeURIComponent(meta.session || '')).then(renderDiff)
+    .catch(function (e) {
+      renderDiff({ok: false, note: '读取失败：' + (e && e.message ? e.message : e)});
+    });
+}
+
+function renderDiff(r) {
+  var body = document.getElementById('diff-body');
+  while (body.firstChild) body.removeChild(body.firstChild);
+  document.getElementById('diff-note').textContent = (r && r.note) ? r.note : '';
+  if (!r || !r.ok || !r.diff) return;      // ▲ 没有 diff 不是错：note 已经说了
+  r.diff.split('\n').forEach(function (ln) {
+    var cls = 'diff-line';
+    if (ln.indexOf('+++') === 0 || ln.indexOf('---') === 0) cls += ' diff-fileline';
+    else if (ln.indexOf('@@') === 0) cls += ' diff-hunk';
+    else if (ln.charAt(0) === '+') cls += ' diff-add';
+    else if (ln.charAt(0) === '-') cls += ' diff-del';
+    body.appendChild(el('div', cls, ln));
+  });
+}
+
+function closeDiff() {
+  document.getElementById('diff-panel').hidden = true;
+}
+
+function foldEvent(ev) {
+  var d = ev.data || {};
+  var node;
+
+  switch (ev.type) {
+    case 'task.start':
+      reopenDraft();       // 新一轮（一条用户消息），预览重新开闸
+      // 新轮次，上一轮未消费的打断标志到此作废。
+      //    这是"标志只对一个轮次成立"的另一半（另一半是 `task.end` 的对号）。
+      _taskSeq += 1;
+      _stopRequested = 0;
+      node = openActivity();
+      // kind='status'：这是一句状态回执，不是一件"做完了的事"（见 sealHead）。
+      // 通常它随即被 thinking 的 head 顶替；但若这一轮没有 thinking 事件，
+      // 它就会以"幽灵步骤"的形式落进列表。
+      setHead(node, '正在处理…', 'run', 'status');
+      break;
+
+    case 'turn.start':
+      // 每次 LLM 往返开始（`agent_loop` 每轮发一条）。
+      // 它是"预览重新开闸"的正确粒度：`task.start` 只管到"一条用户消息"，
+      // 而一条用户消息里可能有好几轮往返（中间夹着工具调用），
+      // 每一轮各有自己的 `say`，每一轮都该有自己的预览。
+      // 它必须同时出现在 `EVT_TYPES` 里：
+      //    `to_sse()` 发的是命名事件，没订阅就收不到（折叠器认了也白认）。
+      //    机械读者：`test_chat_fold` 按「折叠器的 `case` ⊆ `EVT_TYPES`」钉着它。
+      reopenDraft();
+      break;
+
+    case 'thinking':
+      node = openActivity();
+      if (d.phase === 'start') {
+        setHead(node, '思考中…', 'run', 'think');
+      } else {
+        // reasoning_content 只在 provider 返回后整块拿到（同步路径的特性），
+        // 所以这里不是逐字流，是整块摘要
+        setHead(node, '思考中', 'done', 'think');
+        if (d.text) {
+          node.detailEl.textContent = d.text;
+        }
+      }
+      break;
+
+    case 'tool.start':
+      dropDraft();   // 开始调工具，这一轮的文本已经说完（预览交还给权威）
+      node = openActivity();
+      // 思考中的 head 在这里被直接替换掉，不进步骤列表（见 sealHead）
+      sealHead(node, 'done');
+      node.detailEl.textContent = '';             // 上一轮的思考摘要到此为止
+      setHead(node, d.activity || d.name || '执行工具', 'run', 'tool');
+      node._headCallId = d.call_id;
+      // 这一步能不能 Ctrl+B 转后台由服务端判（`d.backgroundable`）——
+      //   前端不按工具名猜（`run_command(job_id=…)` 是瞬时查询、没有执行体）。
+      if (d.backgroundable && d.call_id) _bgableIds.add(d.call_id);
+      if (node.tipEl) node.tipEl.style.display = _bgableIds.size ? '' : 'none';
+      break;
+
+    case 'tool.end':
+      node = openActivity();
+      // 这一步结束了（或已经转后台），它不再是「可转」的那一条。
+      if (d.call_id) _bgableIds.delete(d.call_id);
+      if (node.tipEl) node.tipEl.style.display = _bgableIds.size ? '' : 'none';
+      if (d.call_id && node._headCallId === d.call_id) {
+        sealHead(node, d.ok ? 'done' : 'error', d.duration_ms, true);
+        node._headCallId = null;
+      }
+      if (!d.ok && d.error) {
+        node.detailEl.textContent = d.error;
+      }
+      break;
+
+    case 'step.start':
+      node = openActivity();
+      sealHead(node, 'done');
+      setHead(node, '步骤 ' + d.idx + '/' + d.total + '：' + (d.goal || ''), 'run');
+      break;
+
+    case 'step.end':
+      node = openActivity();
+      sealHead(node, d.ok ? 'done' : 'error', d.duration_ms);
+      break;
+
+    case 'turn.end':
+      node = openActivity();
+      // 显示的是 `output_tokens`（这一轮模型写出来的量），
+      // 不是 `tokens`（那一轮含每步重发的输入的总量）。
+      // 判据：前者的口径是「一整轮累计输出」；含输入的总量是它的十几倍
+      // 所以两者不是一个东西，摆错会让用户以为我们比别人贵一个数量级。
+      // `output_tokens` 缺席时回落到 `tokens`（老事件 / 回放）——
+      //    宁可显示一个口径不同的数，也不要显示空白（入口不许凭空消失）。
+      renderTokens(node, (typeof d.output_tokens === 'number' && d.output_tokens >= 0)
+                        ? d.output_tokens : d.tokens);
+      break;
+
+    case 'context.state':
+      // 这不是"一件做过的事"，是环境读数，不 openActivity、
+      //    不落进步骤列表，只更新状态条（前端不另存一份状态）。
+      // 加了 `case` 就必须同时加进 `EVT_TYPES`
+      //    （命名事件没订阅就收不到）。机械读者：`test_chat_fold` 场景 23。
+      foldContextState(d);
+      break;
+
+    case 'memory.saved':
+      // 后台记忆抽取写进了 N 条（后台写记忆的回执）。
+      //    它是背景动作的回执，而且在 `task.end` 之后到达
+      //    所以必须自己收口（`receiptBlock` 的注释里有完整说明）。
+      // 同 `context.state`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      receiptBlock('已保存 ' + (d.count || 0) + ' 条记忆'
+                   + (d.names && d.names.length ? '：' + d.names.join('、') : ''));
+      break;
+
+    case 'memory.organized':
+      // 后台记忆巩固改动了 N 条（合并/改写/精简）。
+      //    与 `memory.saved` 分开：那一条是"抽取加了 N 条"，这一条是"整理改了 N 条"
+      //    —— 两者触发频率差两个数量级（每 3 个合格轮 vs ≥24h 且 ≥5 会话），
+      //    混成一个类型之后「整理到底跑过没有」就没法从日志里数出来了。
+      //    同 `memory.saved`：它也在 `task.end` 之后到达，走同一个 `receiptBlock`。
+      // 同 `context.state`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      receiptBlock('记忆巩固：改动 ' + (d.count || 0) + ' 条'
+                   + (d.sessions ? '（看了 ' + d.sessions + ' 个会话）' : '')
+                   + (d.names && d.names.length ? '：' + d.names.join('、') : ''));
+      break;
+
+    case 'turn.queued':
+      // 并发已满，本轮在排队等名额。
+      //    只 print 到控制台的话用户那边一片空白，界面看起来就是
+      //    "发了消息没反应"（不许静默排队）。
+      // 走 `receiptBlock`（开一块 + 当场收口）：它到达在 `task.start`
+      //    之前（名额没拿到、那一轮还没开始），开活动块会与随后的
+      //    `task.start` 打架，而且没有收口人。
+      //    正因为它当场收口，文案必须是说事实、不是说状态——
+      //       "排队中"那种进行时留在一条已闭合的行上会读成"卡住了"。
+      // 同 `memory.saved`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      // 文案跟着载荷走（`core/events.TURN_QUEUED_MESSAGE`）——
+      //    这里那份是退路（老后端 / 事件被别的生产者发出）。
+      receiptBlock(d.message
+        ? '⏳ ' + d.message + '（上限 ' + (d.limit || '?') + '）'
+        : '⏳ 并发已满（上限 ' + (d.limit || '?') + '）—— 本轮排队，拿到名额就开跑');
+      break;
+
+    case 'ice.canary':
+      // ICE 网络侧：出站那一刻发现诱饵值，已阻断。
+      //    它是安全事件，用户必须看得见 —— 只在控制台一行的话
+      //    WebUI 看不到（「跑了就得出声」）。
+      // 走 `receiptBlock`：它到达在工具调用中间（不是 `task.end` 之后），
+      //    而 `receiptBlock` 开一块 + 当场收口，不会与随后的 `tool.end` 打架，
+      //    也不会留一块"永远进行中"。文案说事实，不说状态。
+      // 同 `turn.queued`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      receiptBlock('[ICE] 金丝雀触发 —— 已阻断：'
+                   + ((d.hits && d.hits.length) ? d.hits.join('、') : '')
+                   + (d.where ? '（' + d.where + '）' : ''));
+      break;
+
+    case 'tool.neutralized':
+      // 一轮里两条调用都撞审批时，框架只能挂一条
+      //    （同一条 assistant 消息里的 tool_call 全都要拿到结果），
+      //    另一条当场被中和。而这件事原本只有模型看得见：
+      //    界面上只有一张浮窗，「另一件没执行」全靠模型的嘴在说。
+      //    判据：用户侧的事实不许凭空消失。
+      // 走 `noteLine`（不是 `receiptBlock`）：它到达在轮内、`task.end`
+      //    之前，收口人是现成的，只补一行；在这里收口会把整轮的活动块提前折叠。
+      // 同 `turn.queued`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      noteLine('本轮已有另一条待审批 —— '
+               + (d.tool ? d.tool + ' ' : '')
+               + '这次调用没有执行');
+      break;
+
+    case 'ice.downgraded':
+      // 用户选了「同意，并且本次对话内不再做这项保护」。
+      //   判据「标签不许说谎」：界面必须一直看得见"保护已降级" ——
+      //   否则用户以为还护着。落成状态条上一个常驻徽标（不是一条会滚走的消息）。
+      //   与 `recap` 那条一样不走 `openActivity`（它到达在轮内，会被折叠掉）。
+      //   同 `turn.queued`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      (function () {
+        var b = document.getElementById('status-ice');
+        if (!b) return;
+        b.textContent = '⚠️ 保护已降级';
+        b.style.color = 'var(--red)';
+      })();
+      break;
+
+    case 'ice.weak':
+      // ICE 网络侧：出站那一刻的本地启发式弱信号
+      //    （明文 http / 脚本混用 / 高熵域名）。
+      // 只报不拦 —— 设置页那一层没有它、也不该有：拦住一个正经站点，
+      //    用户会去把整个网络层关掉（误报会消耗信任）。
+      // 走 `noteLine`（不是 `receiptBlock`）：它到达在轮内、`task.end`
+      //    之前，收口人是现成的，只补一行；在这里收口会把整轮的活动块提前折叠。
+      // 同 `turn.queued`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      (function () {
+        var why = (d && d.reasons) || [];
+        if (!why.length) return;
+        noteLine('网络侧弱信号（仅供参考，**没有拦截**）：' + why.join('；'));
+      })();
+      break;
+
+    case 'recap':
+      // 离开一段时间回来时的「我们到哪了」。
+      //    判据：做了什么 + 当前状态 +
+      //    需要用户做什么 + 可关闭 —— 最后一格由设置页的开关兑现
+      //    （`recap_enabled`），
+      //    不是这一块上的 ✕。
+      // 用 `appendRecap`（不走 `openActivity`）：它到达在轮首，
+      //    而 `openActivity` 会把它并进随后那个活动框、轮末一起折叠掉 ——
+      //    那正好把"回来的第一眼"折叠走。
+      // 同 `turn.queued`：加了 `case` 就必须同时在 `EVT_TYPES` 里。
+      appendRecap(d.recap || '');
+      break;
+
+    case 'files.changed':
+      // 本轮改过哪些文件 —— 一条可展开的下拉框。
+      //    数据源是 `SecurityGuard.validate_path` 的写类 op（一处钩子，
+      //    不是一张"写工具"名单）。判据与边界在 `core/touched_files.py`。
+      // 它在 `task.end` 之后到达（调度器发完 `task.end` 才发它）
+      //    所以与 `memory.saved` 同一类，必须自己收口（`closeActivity`）。
+      //    若写在 `task.end` 之前，`openActivity()` 会把它并进上一个框 ——
+      //    而这一条要的是"该条消息下方一个独立的下拉框"。
+      // 本轮没有改动，什么都不画（不留空框：空框看起来像"坏了"）。
+      (function () {
+        var files = (d && d.files) || [];
+        if (!files.length) return;
+        var node = openActivity();
+        // 合计 `+N/-M` —— 只有全都知道时才显示。
+        //    判据：`edit_file` 给得出行数（它同时有旧串与新串），
+        //    而 office 写族 / 整篇覆盖 / 删除拿不到，那时报合计就是编。
+        //    也别拿 `0` 去补（读不到 ≠ 0）。拿不到就不显示那一格，
+        //    单行也不显示 —— 3 个文件里只有 1 个有行数的话，那个 `+2/-0` 会被
+        //    读成"三个文件一共改了这么点"。
+        var known = files.every(function (f) { return typeof f.added === 'number'; });
+        var addAll = 0, delAll = 0;
+        if (known) {
+          files.forEach(function (f) { addAll += f.added; delAll += f.removed; });
+        }
+        setHead(node, '查看改动文件' + (known && (addAll || delAll)
+                    ? '（+' + addAll + '/-' + delAll + ' 行）' : ''),
+                'done', 'status');
+        files.forEach(function (f) {
+          var row = el('div', 'activity-step done');
+          // 点文件名，开来右侧栏 diff
+          //    （点进 diff 审阅，不是直接甩文件）。
+          //    「打开文件」那个动作移到面板里了，能力没丢。
+          // `version/session` 都存在表里再交给 `openDiff` —— 它们是
+          //    那一条事件的事实，不能在打开时重取（否则翻旧消息会看到新 diff）。
+          _DIFF_FILES[f.path] = {version: f.version || 0, session: ev.session || '',
+                                 link: !!f.link, name: f.name};
+          var chip = el('button', 'file-chip file-chip-btn', f.name);
+          chip.type = 'button';
+          chip.title = f.link
+            ? '点一下看这一次改了什么'
+            : '这个文件不在工作区里（打不开），但仍可以看它的 diff';
+          chip.onclick = (function (p) {
+            return function () { openDiff(p); };
+          })(f.path);
+          row.appendChild(chip);
+          node.stepsEl.appendChild(row);
+        });
+        var total = (typeof d.count === 'number') ? d.count : files.length;
+        // 措辞是「改过」不是「写成功」—— 记录点是写权限校验，
+        //   它跑在真正落盘之前（回执不许比事实更自信）。
+        closeActivity(node, true, undefined, undefined,
+                      '本轮改过 ' + total + ' 个文件'
+                      + (total > files.length
+                         ? '（只列出前 ' + files.length + ' 个）' : ''));
+      })();
+      break;
+
+    case 'error':
+      node = openActivity();
+      setHead(node, '出错了：' + (d.message || d.exc_name || ''), 'error');
+      break;
+
+    case 'delta':
+      // 流式增量：模型正在吐字。
+      // 这里只做预览 —— 权威文本稍后由 `say` / 最终回复覆盖（见 pushDelta）。
+      pushDelta(d.text);
+      break;
+
+    case 'say':
+      // 模型在带工具调用的那一轮里说的话。它让"agent 在干什么、打算怎么干"
+      // 变成双方共享的东西 —— 用户中途插话时才有参照物。
+      if (d.text) {
+        dropDraft();          // 权威文本到位，预览整条丢掉（谁权威谁覆盖）
+        if (isBoxMode()) {
+          // 长框：一轮 = 一个框，`say` 落成框内的分隔行（时间序），
+          // 不开新段、不推气泡 —— 框本身承载整轮。
+          var bnode = openActivity();
+          sealHead(bnode, 'done');            // 引出这句话的动作算做完了
+          appendSayRow(bnode, d.text);
+        } else {
+          // ① 上面那段步骤收口 —— 引出这句话的动作已经做完了
+          segmentActivity(ACTIVITY);
+          // ② 气泡落下来（它成为下一段的起点）
+          appendMsg('agent', d.text, ev.ts);
+          // ③ 下一段等下一个事件再开。刻意不在这里 `openActivity()`：
+          //    那会留下一个空壳步骤块（模型说完话就停时尤其难看）。
+          //    代价是这一瞬没有「打断」按钮 —— 而 `say` 之后紧跟的就是
+          //    同一轮的工具派发（毫秒级），所以这个窗口可以忽略。
+          ACTIVITY = null;
+        }
+      }
+      break;
+
+    case 'task.end':
+      // 关闸：一个任务的最后一个事件，流到此为止，预览必须退场。
+      //
+      // 失败模式：任务由审批答复触发时，
+      // 下面那一支 `d.origin !== 'web'` 会亲自把权威回复落成气泡，
+      // 可没有任何地方丢掉草稿。开闸口有三个（`task.start` / `turn.start`），
+      // 关闸口只有 `tool.start` / `say` / `/api/chat` 的响应 ——
+      // 后两个在这条路上都不会发生（审批走 `/api/approval`，没有 `/api/chat` 响应）。
+      // 所以闸门开着，之后任何一条迟到的 `delta` 都会造一个草稿气泡，永远留着。
+      // 用户看到的是：同一段结论出现两次，其中一条是淡颜色的草稿气泡。
+      //
+      // 为什么挂 `task.end` 而不是 `turn.end`：它是任务的最后一个事件，
+      // 语义就是"这一轮的话说完了"；而且它已经是 durable 的（重连兜底）。
+      // `dropDraft()` 会把 `_draftClosed` 置真，之后迟到的增量被挡住，
+      //   不会又造一个新的 —— 所以这里早关是安全的。
+      dropDraft();
+      node = openActivity();
+      closeActivity(node, d.ok !== false, d.duration_ms, d.tokens);
+      // 中断之后：把话语权交还用户。
+      // 推一条气泡，不改上面那行的标题 —— 气泡在对话流里、在刚才那段步骤
+      // 的下方，用户的下一条消息天然落在它后面，就是对它的回应
+      // （不用去猜他是撤回、纠正还是补充）。标题只留一个状态词。
+      // 对号才消费 —— 标志只对它自己那个轮次成立。
+      //    （`_stopRequested &&` 那一半是必须的：两者都可以是 `0`，
+      //      而 `0 === 0` 会让"没人按过"匹配上"没见过任务"。）
+      if (_stopRequested && _stopRequested === _taskSeq) {
+        setHead(node, '已中断', 'done', 'status');
+        if (isBoxMode()) {
+          // 长框：框体自己折叠成那个状态词（展开后表头仍是「已中断」）
+          collapseActivityBox(node, 'interrupted', null, null);
+        }
+        // 不在这里推气泡。
+        //   两处说同一件事 = 用户看到两次「已打断」——
+        //   服务端那句 `CANCEL_REPLY` 是对话里的一轮回答（它进历史、
+        //   是模型的答复本体），它才是那一个产出点；本地这句只是重复。
+        //   表头那个「已中断」留着：它是块自己的状态（块必须收口），
+        //   不是一个句子，与那句话不是同一种东西。
+      }
+      // 无论上面那一支走没走，标志到此作废（它只对一个轮次成立）。
+      //    不在这里清，一个在 `task.end` 之后才落地的请求
+      //    （`stopTurn` 的 `await api('/api/stop')` 与 `task.end` 之间的竞态）
+      //    就会活到下一轮。
+      _stopRequested = 0;
+      // 面板开着就每轮收尾刷一次 —— 那正是"它长大是无声的"这句话
+      //    需要的那个读者。关着就一个字都不多花。
+      if (_ctxPanelOpen) loadContextReport();
+      // 最终回复由谁渲染：task.end 是在 scheduler 的 finally 里发的，而
+      // /api/chat 的 HTTP 响应更晚 —— 所以本页发起的对话此刻
+      // _postInFlight 仍 > 0，交给 POST 渲染（避免同一条回复出现两次）。
+      // 其它情况（IM 通道触发、或本页没发消息）由事件流兜底。
+      if (d.response && (d.origin !== 'web' || _postInFlight === 0)) {
+        appendMsg('agent', d.response, ev.ts);
+      }
+      break;
+  }
+  maybeScroll();
+}
+
+// ═══ SSE 事件流（v1.2.0）═══════════════════════════════════════════
+//
+// 传输层为什么是 SSE 而不是轮询：waitress 是同步 WSGI，每次轮询占一个线程，
+// 而进度事件的密度是"每个工具调用几条"—— 轮询要么太慢要么太费。
+//
+// 注意 EventSource 无法发自定义 header，所以鉴权只能走 ?token=。
+const CHAT_TOKEN = "{{ request.args.get('token','') }}";
+let _evtSource = null;
+let _postInFlight = 0;            // 本标签页在途的 /api/chat 请求数
+
+const EVT_TYPES = [
+  'task.start', 'thinking', 'say', 'tool.start', 'tool.end',
+  // `delta`：逐字输出的增量。
+  // `to_sse()` 发的是命名事件（帧里带 `event: <type>`），浏览器只派发给
+  //    注册了该类型名的监听器，`onmessage` 收不到。
+  //    所以往 `foldEvent` 里加 `case` 是不够的，必须同时加进这个名单 ——
+  //    漏了这一步的症状：折叠器认 `delta`，而这里没订，用户完全看不到流式。
+  'delta',
+  // `turn.start`：折叠器里加了 `case` 就必须加到这儿 ——
+  // 上面那段注释说的就是漏了这一步。机械读者：`test_chat_fold` 场景 23
+  // （按「折叠器的 `case` ⊆ `EVT_TYPES`」钉死）。
+  'turn.start',
+  'step.start', 'step.end', 'turn.end', 'error', 'task.end', 'resync',
+  // `context.state`：同一条规矩。
+  'context.state',
+  // `memory.saved`：同一条规矩 —— 折叠器里加了 case，这里必须同名登记。
+  'memory.saved',
+  // `memory.organized`：同一条规矩。
+  'memory.organized',
+  // `turn.queued`：同一条规矩 —— 折叠器里加了 `case`，
+  //   这里不登记 → 浏览器压根收不到（命名事件只派发给注册了该类型名的监听器）。
+  'turn.queued',
+  // `files.changed`：同一条规矩。
+  'files.changed',
+  // `ice.canary`（ICE 网络侧）：同一条规矩 —— 折叠器里加了 `case`，
+  //   这里不登记，浏览器压根收不到（命名事件只派发给注册了该类型名的监听器）。
+  'ice.canary',
+  // `tool.neutralized`：同一条规矩 —— 折叠器里加了 `case`，
+  //   这里不登记，浏览器压根收不到（命名事件只派发给注册了该类型名的监听器）。
+  'tool.neutralized',
+  // `recap`：同一条规矩 —— 折叠器里加了 `case`，
+  //   这里不登记，浏览器压根收不到（命名事件只派发给注册了该类型名的监听器）。
+  'recap',
+  // `ice.weak`（ICE 网络侧弱信号）：同一条规矩。
+  'ice.weak',
+  // `ice.downgraded`（ICE 保护降级）：同一条规矩。
+  'ice.downgraded',
+  // 审批：只是失效信号 —— 收到就去重取一次 state，
+  // 不从这两条事件里重建浮窗（`core/events.py` 规矩 3）。
+  'approval.request', 'approval.resolved',
+];
+
+function subscribeEvents() {
+  if (_evtSource) return;
+  if (typeof EventSource === 'undefined') return;   // 老浏览器：没有活动行，其余照常
+  _evtSource = new EventSource('/api/events?token=' + encodeURIComponent(CHAT_TOKEN));
+
+  EVT_TYPES.forEach(function (t) {
+    _evtSource.addEventListener(t, function (e) {
+      if (t === 'resync') return;      // seq 缺口过大：不重建界面
+      // 审批事件不进折叠器 —— 它们不是聊天内容，只是"去重取一次"的信号。
+      // 重取的入口是 `refreshApproval()`，渲染源是 state 不是这条事件。
+      if (t === 'approval.request' || t === 'approval.resolved') {
+        try { refreshApproval(); } catch (err) {}
+        return;
+      }
+      var ev;
+      try { ev = JSON.parse(e.data); } catch (err) { return; }
+      try { foldEvent(ev); } catch (err) { console.error('foldEvent failed:', ev.type, err); }
+    });
+  });
+  // onerror 不处理：EventSource 自带重连（服务端已发 retry: 3000）
+}
+
+// 本地计时器 —— 只刷新显示，不轮询服务端。
+// 运行中一律带 `~` 前缀：那是"已经过去多久"，不是"还差多久"。
+setInterval(function () {
+  if (!ACTIVITY || ACTIVITY.closed) return;
+  ACTIVITY.elapsedEl.textContent = '~' + fmtMs(Date.now() - ACTIVITY.startedAt);
+}, 200);
+
+async function startFramework() {
+  const btn = document.getElementById('btn-start');
+  try {
+    const hk = await api('/api/has-api-key');
+    if (!hk.has_key) {
+      alert('请先前往端配置页配置您的 API Key，否则 Agent 无法工作。');
+      return;
+    }
+  } catch(e) {}
+  btn.disabled = true;
+  btn.textContent = '启动中...';
+  appendMsg('agent', '正在初始化 Agent 框架...');
+  try {
+    const r = await api('/api/start', { method:'POST' });
+    if (r.ok) {
+      appendMsg('agent', '框架已启动，可以开始对话了。');
+      refreshStatus();
+      subscribeEvents();
+      TXAREA.disabled = false;
+      btn.textContent = '已启动';
+      stopGlow(btn);
+      if (localStorage.getItem('crannia-glow-once') === '1') {
+        localStorage.setItem('crannia-glow-done', '1');
+      }
+      checkStatus();
+    } else {
+      appendMsg('agent', '启动失败: ' + (r.error || '未知错误'));
+      btn.disabled = false;
+      btn.textContent = '重试启动';
+    }
+  } catch(e) {
+    appendMsg('agent', '启动异常: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '重试启动';
+  }
+}
+
+// ══ 图片附件 ═════════════════════════════════════════════════════════
+//
+// 判据：办公场景里「截图给我看看」是最常见的输入形态之一。
+// Windows 上截图 = Win+Shift+S → 剪贴板 → 这里 Ctrl+V，一条路。
+//
+// 三条：
+//  1. 零 innerHTML —— 缩略图走 `createElement('img')`（本仓硬规矩，
+//     正文是模型写的文本，那是持久化 XSS）。
+//  2. 进本地预览的只有 `data:` URL —— 不是 `blob:`、不是外链
+//     （外链会让浏览器替我们去取，而那绕开了出网闸）。
+//  3. 上限与后端同源：这里只做"别让界面攒一堆"（4 张），
+//     真正的判据在 `core/image_input.py`（唯一一处）——
+//     两个地方各写一个数是"两套真相源"，所以这里读的是 `/api/chat` 会拒的那个数。
+
+// 这三个数与后端对齐（`core/image_input.py` 那一组）：
+//      · 张数 20
+//      · 合计 40 MiB
+//      · 单张 5 MB（base64）
+//    这里量的是原始文件大小（浏览器给的就是原图），而后端
+//      `prepare_chain` 量的是归一化之后的 —— 两个量不同，但方向安全：
+//      归一化只会让它变小，前端放行的，后端一定也放行。
+//    前端这一层只是"别让用户白等"；真判据永远在后端（一处定义）。
+const MAX_PENDING_IMAGES = 20;
+const MAX_PENDING_TOTAL_BYTES = 40 * 1024 * 1024;
+let _pendingImages = [];        // 当前待发的图片（data: URL 字符串）
+
+/** 待发图片的大约原始字节数（data URL 长度 ≈ base64，raw ≈ ×3/4）。 */
+function _pendingBytes() {
+  let n = 0;
+  for (const u of _pendingImages) n += Math.round(String(u).length * 3 / 4);
+  return n;
+}
+
+function _humanBytes(n) {
+  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MiB';
+  if (n >= 1024) return Math.round(n / 1024) + ' KiB';
+  return n + ' B';
+}
+
+function renderAttachStrip() {
+  const strip = document.getElementById('chat-attach');
+  if (!strip) return;
+  strip.replaceChildren();      // 不用 innerHTML
+  if (!_pendingImages.length) { strip.hidden = true; return; }
+  strip.hidden = false;
+  _pendingImages.forEach(function (src, i) {
+    const box = el('div', 'attach-chip');
+    const th = document.createElement('img');
+    th.className = 'attach-thumb';
+    th.src = src;
+    th.alt = '图片 ' + (i + 1);
+    const x = el('button', 'attach-remove');
+    x.type = 'button';
+    x.textContent = '×';
+    x.title = '去掉这张';
+    x.onclick = function () { _pendingImages.splice(i, 1); renderAttachStrip(); };
+    box.append(th, x);
+    strip.appendChild(box);
+  });
+}
+
+function addPendingImage(dataUrl) {
+  if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/') !== 0) return;
+  if (_pendingImages.length >= MAX_PENDING_IMAGES) {
+    appendMsg('agent', '这一轮最多贴 ' + MAX_PENDING_IMAGES + ' 张图 —— 多的没有被收下。');
+    return;
+  }
+  // 张数管不住体积（20 张 × 5 MB = 100 MB），合计也要挡，而且在贴进来那一刻
+  //   就说，别等到发送被拒（那时用户已经打好了字）。
+  const after = _pendingBytes() + Math.round(String(dataUrl).length * 3 / 4);
+  if (after > MAX_PENDING_TOTAL_BYTES) {
+    appendMsg('agent', '这一轮贴的图合计会到 ' + _humanBytes(after)
+      + '，超过上限 ' + _humanBytes(MAX_PENDING_TOTAL_BYTES)
+      + ' —— 这一张没有被收下。少贴几张，或者先裁小。');
+    return;
+  }
+  _pendingImages.push(dataUrl);
+  renderAttachStrip();
+}
+
+// 粘贴：剪贴板里只要有图就收下（截图走的就是这条路）。
+// 不 preventDefault —— 同一次粘贴里可能既有图又有文字（截图工具常附带
+//    一句说明），把默认行为拦掉就等于把那段文字吃掉，而用户只会觉得
+//    "我明明打了字"。
+document.addEventListener('paste', function (ev) {
+  const items = (ev.clipboardData && ev.clipboardData.items) || [];
+  for (const it of items) {
+    if (it.kind !== 'file' || String(it.type).indexOf('image/') !== 0) continue;
+    const f = it.getAsFile();
+    if (!f) continue;
+    const fr = new FileReader();
+    fr.onload = function () { addPendingImage(String(fr.result)); };
+    fr.readAsDataURL(f);         // 所以`data:image/…;base64,…`
+  }
+});
+
+async function send() {
+  const text = TXAREA.value.trim();
+  const imgs = _pendingImages.slice();
+  // 只有图、一个字不打 —— 合法（后端也一样放行，见 `api_chat`）。
+  if (!text && !imgs.length) return;
+  hideWelcome();
+  appendMsg('user', text, undefined, imgs);
+  resetTextarea();
+  _pendingImages = [];
+  renderAttachStrip();
+  TXAREA.disabled = true;
+  _postInFlight++;
+
+  try {
+    const body = {text: text};
+    if (imgs.length) body.images = imgs.map(function (d) { return {data_url: d}; });
+    const r = await api('/api/chat', { method:'POST', body: JSON.stringify(body) });
+    if (r.error) { dropDraft(); appendMsg('agent', 'ERROR: ' + r.error); }
+    else {
+      dropDraft();                    // 权威回复到位，预览整条丢掉
+      // 空回复不画气泡（停在等审批时服务端回空串 —— 面板才是信号）。
+      if (r.reply) appendMsg('agent', r.reply);
+      // 本轮交付的文件 → 渲染成下载按钮
+      appendFiles(r.files);
+    }
+  } catch(e) {
+    dropDraft();
+    appendMsg('agent', '请求失败: ' + e.message);
+  } finally {
+    _postInFlight--;
+    TXAREA.disabled = false;
+    TXAREA.focus();
+  }
+}
+
+// ── 中断（刹车 1）──────────────────────────────────────────────
+// 只有 Web 能真的打断一轮：这个请求在另一个线程里跑，而 agent 循环在
+// `core/agent_loop.py` 每次迭代开头读 `core/cancellation.py` 的标志。
+// 只会"下一次调模型之前"停下 —— 正在飞的那次请求打断不了。
+// 结束后的话语权交还：`_stopRequested` 置位后，task.end 一到就把这一行
+//    换成「请告诉 crannia 应该怎么做？」—— 用户的下一条消息因此天然是
+//    对中断的回应，不需要去猜他是撤回、纠正还是补充。
+// 它不是一个裸布尔，是「为哪一个轮次按的打断」。
+//    裸布尔的病：`stopTurn` 要 `await api('/api/stop')` 之后才置位，而
+//    `task.end` 完全可能在这一段往返里就落地了，标志活到下一轮的
+//    `task.end`，把下一轮平白标成「已中断」（长框下症状更安静，因此更不容易
+//    被发现 —— 那是长框改了它的症状形状，不是长框引入的）。
+//    `0` = 没按过；其它值 = 下面 `_taskSeq` 里那个轮次的号。
+let _stopRequested = 0;
+//: 轮次序号：每次 `task.start` 自增（从 1 起，所以 `0` 天然是"还没见过任务"）。
+//: 只增不复位 —— 判据是「同一个数会不会被两条不同的任务共用」，
+//: 而复位只会引入第二个真相源。
+let _taskSeq = 0;
+
+// 打断后那句话的产出点只能有一个，正确的那一个是服务端
+//   （`core/agent_loop.py::CANCEL_REPLY`，走 `/api/chat` 的响应）。
+//   本地再写一句 = 用户看到两次「已打断」，而两份文案还会各自漂。
+//   中断标志只治"标志跨轮"，没有治"两处都说"。
+
+/** 中断标志置位 + head 上的状态回执。
+ *
+ * 必须是同步的具名函数：`stopTurn` 是 async，它的 `setHead` 在
+ * `await api(...)` 之后，而测试夹具里 `fetch` 永不落地，断言只能自己
+ * 手写一遍这行，于是漏掉参数也照样绿。抽成同步函数后，护栏调的是
+ * 生产调用本身。
+ *
+ * `_stopRequested = _taskSeq` 不能挪到 await 前面：这个标志的含义是
+ * "服务端已受理"，`await` 就是那个证据。
+ */
+function markStopRequested(node) {
+  // 记的是为哪一个轮次按的，不是"有人按过"。`task.end` 会拿
+  //    `_taskSeq` 跟它对号 —— 对不上就不消费，于是它跨不过轮次。
+  // `_taskSeq === 0`（事件流里还没有过 `task.start`：页面中途接上、
+  //    或任务早已结束），没有轮次可归属，标志不许置位 ——
+  //    置了它就一定会活到下一轮，而那正是这条要防的情况。
+  //    （`task.start` 是 durable 的，重连时事件流会把它补回来。）
+  if (_taskSeq) _stopRequested = _taskSeq;
+  if (node && !node.closed) setHead(node, '已请求中断，等这一步跑完…', 'run', 'status');
+}
+
+/** Ctrl+B：把正在前台跑的任务转到后台。
+ *
+ *  转不转得动由服务端说了算（`core/jobs.request_background` 只给真的登记过
+ *    的前台执行体置事件）；`ok:false`，说一句实话，不假装成功（同那条）。
+ */
+async function toBackground() {
+  try {
+    const d = await api('/api/background', { method:'POST' });
+    if (!d.ok) appendMsg('agent', d.note || '现在没有可转的前台任务');
+  } catch (e) {
+    appendMsg('agent', '转后台失败: ' + e.message);
+  }
+}
+
+//: Ctrl+B 只在真有可转的前台任务时才抢这个键 —— 与 CC 对等，
+//:   也免得把浏览器/系统那个 Ctrl+B 吃掉却什么也不做。
+document.addEventListener('keydown', function (e) {
+  if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
+  if (String(e.key || '').toLowerCase() !== 'b') return;
+  if (!_bgableIds.size) return;
+  e.preventDefault();
+  toBackground();
+});
+
+async function stopTurn() {
+  const node = ACTIVITY;
+  if (node && node.stopEl) { node.stopEl.disabled = true; node.stopEl.textContent = '中断中…'; }
+  try {
+    const r = await api('/api/stop', { method:'POST' });
+    markStopRequested(node);
+  } catch(e) {
+    appendMsg('agent', '中断请求失败: ' + e.message);
+    if (node && node.stopEl) node.stopEl.disabled = false;
+  }
+}
+
+function clearChat() {
+  NODES.length = 0;                 // 清空节点模型
+  chatEl.textContent = '';          // 清 DOM 子节点（textContent 赋空不会解析 HTML）
+  // 上面两行把 DOM 清空、NODES 归零，但 `ACTIVITY` 仍指着那条已经脱离 DOM
+  // 的活动行 —— `openActivity()` 的 `ACTIVITY && !ACTIVITY.closed` 依然成立
+  // 所以下一轮的每一步都写进一个看不见的框。
+  // `stream` 模式下症状是"步骤流凭空消失"，长框模式下整个框连带「打断」按钮都不可见。
+  // `_stopRequested` 同理：清空之后还留着，下一轮 task.end 会平白显示「已中断」。
+  // （`_taskSeq` 一并归零：清空 = "一切从头"，之后的第一条 `task.start` 又从 1 起。）
+  ACTIVITY = null;
+  _stopRequested = 0;
+  _taskSeq = 0;
+  _draft = null;                    // 草稿挂在已清空的 DOM 上，模型里也要断掉
+  // 闸门也要复位：`clearChat` 的语义是"一切从头"。
+  // 不复位的话，只要这一页里调过一次 `dropDraft()`，清空之后就再也看不到流式了
+  // ——而且没有任何东西会报错（增量被静默吞掉，症状只是"逐字输出好像坏了"）。
+  // 机械读者：`test_chat_fold` 场景 21（`clearChat()` 之后立刻发增量）。
+  _draftClosed = false;
+  _stickToBottom = true;
+  _welcomed = false;
+  // 上下文读数属于上一个会话 —— 不清的话，`/clear` 之后到下一轮
+  // `context.state` 到来之前，状态条上挂着一个已经不存在的会话的占用数。
+  // 与 `ACTIVITY = null` 同一条判据：说的是"一切从头"就要真的从头。
+  // 留占位、不清空 —— 清空之后那一格没有可点区域，
+  //    面板就打不开了。占位说的仍然是"这个会话还没有读数"。
+  setContextReadoutEmpty();
+  // 注意变量名不能叫 el —— 会遮蔽上面的 el() 工厂函数
+  const welcome = document.getElementById('chat-welcome');
+  if (welcome) { welcome.style.display = ''; }
+  sessionStorage.removeItem('crannia-chat-history');
+  sessionStorage.removeItem('crannia-chat-welcomed');
+}
+
+// ── Status bar (same as 端配置) ────────────────────────────────────
+async function refreshStatus() {
+  try {
+    const h = await api('/api/health');
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    const met = document.getElementById('status-metrics');
+    if (!dot || !txt || !met) return;
+    // 保护已降级的常驻徽标。
+    //   判据「标签不许说谎」+「『没有读数』不等于『可以清空』」——
+    //   这里清空等于说了一句假话（保护真的回来了才清）。
+    //   由每 5 秒这一次轮询维持，`/clear` 回收之后它会自己消失，
+    //      不需要另加一条事件路径。
+    (function () {
+      var b = document.getElementById('status-ice');
+      if (!b) return;
+      if (h.ice_downgraded) {
+        b.textContent = '⚠️ 保护已降级';
+        b.style.color = 'var(--red)';
+        b.style.fontWeight = '600';
+      } else {
+        b.textContent = '';
+      }
+    })();
+    if (h.framework_running) {
+      dot.className = 'status-dot online';
+      if (h.busy && h.task) {
+        txt.textContent = '🔵 Agent 工作中 — ';
+        txt.appendChild(el('span', 'status-task', h.task));
+        txt.style.color = 'var(--accent)';
+      } else {
+        txt.textContent = '🟢 Agent 在线';
+        txt.style.color = 'var(--accent)';
+      }
+      let parts = [];
+      parts.push('内存: ' + (h.memory_mb > 0 ? h.memory_mb + 'MB' : '...'));
+      let tkStr = h.tokens_total > 1000 ? (h.tokens_total/1000).toFixed(1)+'K' : h.tokens_total;
+      parts.push('Token: ' + tkStr);
+      parts.push('工具: ' + h.tool_count + '个');
+      parts.push(h.provider || '');
+      // 投入档常驻可见。
+      // 两个档名不一样时两个都说（同一组标签不许打两个量纲）——
+      //   只报一个就是在替用户猜哪一个是"真的在跑的"。
+      //   左侧那个是设置里写着的，括号里那个是本会话已经冻结的。
+      if (h.effort_name) {
+        let eff = '档位: ' + h.effort_name;
+        if (h.effort_session_name && h.effort_session_name !== h.effort_name) {
+          eff += '（本会话仍 ' + h.effort_session_name + '）';
+        }
+        parts.push(eff);
+      } else if (h.effort_error) {
+        // 设置里的档号"读到了但做不到" —— 说出来，别让它看起来正常
+        parts.push('档位: 设置有问题');
+      }
+      met.textContent = parts.join(' | ');
+    } else {
+      dot.className = 'status-dot offline';
+      txt.textContent = '框架未启动 — 点击下方按钮启动 Agent';
+      txt.style.color = 'var(--orange)';
+      met.textContent = '';
+    }
+  } catch(e) {}
+}
+refreshStatus();
+setInterval(refreshStatus, 5000);
+// 整页重载之后立刻补一次上下文读数 —— 否则那一格空到下一轮
+//   （而空 = 没入口 = 面板点不开）。与 `setContextReadoutEmpty` 成对。
+setContextReadoutEmpty();
+refreshContextOnLoad();
+
+// ── Chat history persistence（v2：结构化，只存纯文本）────────────
+//
+// 只存纯文本，恢复时走同一套节点构造器，恢复路径不注入 HTML。
+// （若存 innerHTML，agent 回一句 <img src=x onerror=...> 会被持久化：
+//   刷新页面后依然执行。）
+const CHAT_KEY = 'crannia-chat-history';
+const CHAT_V = 2;
+const CHAT_MAX_NODES = 200;              // 上限：只留最近 N 条
+const CHAT_MAX_BYTES = 512 * 1024;       // sessionStorage 配额约 5MB，留足余量
+
+function saveChatHistory() {
+  try {
+    // 只持久化 durable 消息。瞬时节点（活动行）描述的是"正在发生"，
+    // 刷新后重放一个已经结束的转轮是撒谎。
+    const keep = NODES.filter(function (n) { return n.kind === 'msg'; })
+                      .slice(-CHAT_MAX_NODES);
+    const payload = {
+      v: CHAT_V,
+      nodes: keep.map(function (n) {
+        var o = { role: n.role, text: n.textEl.textContent, ts: n.ts };
+        if (n.files) o.files = n.files;   // 下载按钮刷新后要还在
+        return o;
+      }),
+    };
+    let s = JSON.stringify(payload);
+    while (s.length > CHAT_MAX_BYTES && payload.nodes.length > 1) {
+      payload.nodes.shift();             // 超限就从最早开始砍，直到塞得下
+      s = JSON.stringify(payload);
+    }
+    sessionStorage.setItem(CHAT_KEY, s);
+    sessionStorage.setItem('crannia-chat-welcomed', _welcomed ? '1' : '0');
+  } catch(e) { /* 配额爆了：静默降级 */ }
+}
+
+function restoreChatHistory() {
+  try {
+    const raw = sessionStorage.getItem(CHAT_KEY);
+    if (!raw) return;
+    let data = null;
+    try { data = JSON.parse(raw); } catch(e) { data = null; }
+    if (!data || data.v !== CHAT_V || !Array.isArray(data.nodes)) {
+      // 不是 v2 格式的一律直接丢弃，绝不重新注入 ——
+      // innerHTML 字符串本身就是一段未净化的 HTML，任何"尽力还原"都是在保留 XSS 面。
+      sessionStorage.removeItem(CHAT_KEY);
+      return;
+    }
+    data.nodes.forEach(function (n) {
+      // 带 files 的是交付节点 —— 走文件构造器恢复下载按钮
+      if (n.files && n.files.length) {
+        mountNode(makeFilesNode(n.files, n.ts));
+        return;
+      }
+      mountNode(makeMsgNode(n.role, n.text, n.ts));
+    });
+    _stickToBottom = true;
+    if (sessionStorage.getItem('crannia-chat-welcomed') === '1') {
+      _welcomed = true;
+      const welcome = document.getElementById('chat-welcome');
+      if (welcome) welcome.style.display = 'none';
+    }
+  } catch(e) {}
+}
+// Save history before page unload
+window.addEventListener('beforeunload', saveChatHistory);
+// Restore on load
+restoreChatHistory();
+// 开机取一次待审批：刷新页面是"重取一次"，不是"从历史重放"。
+// 浮窗刻意不进 sessionStorage —— 它是瞬时态，重放会造出幽灵浮窗。
+refreshApproval();
+
+// 审批浮窗
+//
+// 从 state 渲染，不从事件重建。
+//   `approval.request` / `approval.resolved` 只是"去重取一次"的失效信号，
+//   真正的渲染源是 `GET /api/approval`。理由见 `core/events.py` 规矩 3：
+//   存活性只能来自当前进程的观察 —— 从事件重建的话，进程重启后日志里那两条
+//   会把一个幽灵浮窗复活出来，而对应的待审批早就不在了。
+//
+// 这里的每个函数都必须能被测试夹具直接调用（夹具里
+//   `addEventListener` 是空操作、`fetch` 永不落地）。所以：
+//     * 逻辑全在具名函数里（`approvalKey` / `approvalReply` / `approvalDock`），
+//       监听器只是转发 —— 夹具调它们，不重写一份
+//     * `fetch` 一律 try/catch：夹具里它不存在也不该炸掉聊天
+//     * 浮窗不进 `sessionStorage`：它是瞬时态，重放会造出幽灵
+
+var APPROVAL = null;        // 当前 payload（null = 没有待审批）
+var APPROVAL_SEL = '';      // 当前选中的 key
+var APPROVAL_DOCKED = false;
+var APPROVAL_SEEN = '';     // 已经提交过的 request_id —— 挡双击
+var APPROVAL_NODES = [];    // 这一批自建的节点，重画时逐个 remove()
+var APPROVAL_INPUT = null;  // 中间态的输入框（直接引用，不靠 id 找回来）
+
+function _approvalBox() {
+  try { return document.getElementById('approval-modal'); } catch (e) { return null; }
+}
+
+function _clearApprovalNodes() {
+  // 不用 `innerHTML`（本文件零 innerHTML 是硬约束），也不用 `firstChild`
+  // （夹具没有它）。记账自己建的节点，逐个 `remove()`。
+  for (var i = 0; i < APPROVAL_NODES.length; i++) {
+    try { APPROVAL_NODES[i].remove(); } catch (e) {}
+  }
+  APPROVAL_NODES = [];
+}
+
+function _hideApproval() {
+  var box = _approvalBox();
+  if (box) { box.style.display = 'none'; box.className = 'approval-modal'; }
+  APPROVAL = null; APPROVAL_SEL = ''; APPROVAL_DOCKED = false;
+  _setComposerEnabled(true);
+}
+
+// 待审批时禁用打字框
+//
+// ## 为什么
+//
+// 浮窗才是 Web 的回答通道，但用户不知道这个约定 —— 很自然地会到聊天框里
+// 打字回答（打字「不同意」时，框架不认，只认数字，
+// 于是它落进"打断 + 补充"那条分支，给模型的话是
+// 「请根据这条补充重新判断」，模型再调一次工具，浮窗又来，看着像死循环）。
+//
+// 所以修法：把那条路直接堵掉 —— 待审批期间打字框不可用，
+// 要回答就用浮窗（浮窗自己有输入框，走 `expect === 'text'` 那条中间态）。
+//
+// ## 它不是安全机制，所以失败朝"可用"倒
+//
+// 禁用一个输入框拦不住任何人（服务端的审批与授权完全不受它影响）。
+// 它的作用是"别让用户走进一条不通的路"。所以：
+//   · `/api/approval` 取失败时 → 恢复可用（宁可让用户能说话，
+//     也不要留一个解不开的死锁界面 —— 那比死循环更糟）
+//   · 任何一次 `renderApproval(null)` / `_hideApproval()` → 恢复可用
+//   · 绝不持久化这个状态（刷新页面就重新按服务端真实状态算一遍）
+var _COMPOSER_PLACEHOLDER = null;
+
+function _setComposerEnabled(on) {
+  try {
+    var ta = document.getElementById('chat-input');
+    var btn = document.getElementById('chat-send');
+    if (ta) {
+      if (_COMPOSER_PLACEHOLDER === null) _COMPOSER_PLACEHOLDER = ta.placeholder || '';
+      ta.disabled = !on;
+      ta.placeholder = on ? _COMPOSER_PLACEHOLDER
+                          : '请在上面的浮窗里回答（同意 / 不同意 / 我有别的话说）';
+      if (on) { try { ta.focus(); } catch (e) {} }
+    }
+    if (btn) btn.disabled = !on;
+  } catch (e) { /* 夹具里可能没有这两个元素 —— 不该炸掉聊天 */ }
+}
+
+/** 从服务端重取当前待审批。这是唯一的渲染入口。 */
+function refreshApproval() {
+  try {
+    fetch('/api/approval?token=' + encodeURIComponent(CHAT_TOKEN))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { renderApproval(d && d.pending ? d.pending : null); })
+      .catch(function () {
+        // 取失败，恢复打字框（`_setComposerEnabled` 的注释里那条规矩）：
+        // 宁可让用户能说话，也不要留一个解不开的死锁界面 —— 那比一个死循环
+        // 更糟，而且用户没有任何办法自己走出去。
+        _setComposerEnabled(true);
+      });
+  } catch (e) {
+    // 夹具/老浏览器里可能连 `fetch` 都没有 —— 同样要恢复打字框。
+    // 这一条不能省：只写个空 `catch` 的话，
+    // "取不到待审批"这件事会把打字框永久禁用（解不开的死锁界面）。
+    // 判据见 `_setComposerEnabled`：它不是安全机制，失败一律朝"可用"倒。
+    _setComposerEnabled(true);
+  }
+}
+
+/** 渲染一份 payload。纯渲染，不发请求。 */
+function renderApproval(p) {
+  var box = _approvalBox();
+  if (!box) return;
+  // 没有待审批，或者这个已经提交过了（双击的第二下 / 刷新后重放）
+  if (!p || !p.request_id || p.request_id === APPROVAL_SEEN) {
+    _hideApproval();
+    return;
+  }
+  // 已经过了上面那两道闸，这是一份真的要用户回答的待审批
+  // 所以打字框让位（理由与"失败朝可用倒"见 `_setComposerEnabled`）。
+  _setComposerEnabled(false);
+  if (APPROVAL && APPROVAL.request_id === p.request_id) {
+    paintApproval();          // 同一个待审批：只重画选中态，不重建 DOM
+    return;
+  }
+  APPROVAL = p;
+  APPROVAL_DOCKED = false;    // 换了新的待审批，不继承上次的停靠
+  APPROVAL_SEL = p.default_key || '';   // 默认永不是升级项
+  _buildApproval(box, p);
+  paintApproval();
+}
+
+function _buildApproval(box, p) {
+  _clearApprovalNodes();
+  var body = document.getElementById('approval-body');
+  var opts = document.getElementById('approval-options');
+  if (!body || !opts) return;
+
+  if (p.body) {
+    var b = el('div', 'approval-text', p.body);
+    body.append(b); APPROVAL_NODES.push(b);
+  }
+  if (p.expect === 'text') {
+    // 中间态（「缩小范围」/「我有话说」之后）：显示问题 + 输入框，不显示选项
+    var q = el('div', 'approval-question', p.question || '请补充：');
+    body.append(q); APPROVAL_NODES.push(q);
+    var inp = el('input', 'approval-input');
+    inp.setAttribute('id', 'approval-text');
+    inp.setAttribute('placeholder', '告诉 crannia...');
+    opts.append(inp); APPROVAL_NODES.push(inp);
+    // 留一个直接引用，提交时不去 `getElementById` 找它 ——
+    // 假 DOM 的 `_mkId` 会给任何 id 造一个空壳（不是我们 append 的那个），
+    // 于是"找回来的是另一个节点"，读到的永远是空字符串。
+    APPROVAL_INPUT = inp;
+    return;
+  }
+  for (var i = 0; i < (p.options || []).length; i++) {
+    var o = p.options[i];
+    // 升级项（第 5 项）挂一个类：CSS 给它一个呼吸框，第一次出现时主动告诉
+    // 用户"这里多了一个东西" —— 它排最后 + 永不默认选中，不加提示就会被忽略。
+    var row = el('div', 'approval-option' + (o.is_escalation ? ' escalate' : ''));
+    // 用自有属性记 key，不用 `setAttribute('data-key')` +
+    // `getAttribute`：假 DOM 只有 `setAttribute`，读不回来。
+    // （`dataset` 那条路同样走不通 —— 夹具没有它。）
+    row._key = o.key;
+    // `onclick`，不是 `addEventListener` —— 夹具里后者是空操作，
+    // 于是"选项点不动"这种 bug 一条测试都抓不到（失败模式：
+    // 浮窗出来了，鼠标点选项没反应）。`onclick` 是普通属性，
+    // 既能被断言也能被夹具直接调用。
+    row.onclick = _approvalRowClick;
+    // 画的是显示序号（连续 `1..N`），回传的仍是 `row._key`。
+    //   键位是回传语义、不许为显示重排（`EGRESS_OPTIONS` 的键位是 `1,2,3,4,6`）；
+    //   而屏幕上跳号不可接受，两者分开算（与 GUI 那边同一条判据）。
+    row.append(el('span', 'approval-key', (i + 1) + '.'));
+    row.append(el('span', 'approval-label', o.label));
+    opts.append(row); APPROVAL_NODES.push(row);
+  }
+}
+
+/** 只重画"谁被选中"和"停靠没有" —— 不重建 DOM。 */
+function paintApproval() {
+  var box = _approvalBox();
+  if (!box || !APPROVAL) return;
+  box.style.display = 'block';
+  box.className = 'approval-modal' + (APPROVAL_DOCKED ? ' docked' : '');
+
+  var title = document.getElementById('approval-title');
+  // 停靠后的标签精确是这四个字（有一条测试钉着）
+  if (title) title.textContent = APPROVAL_DOCKED ? '等待审批' : '需要确认';
+  var dock = document.getElementById('approval-dock');
+  if (dock) {
+    dock.style.display = APPROVAL_DOCKED ? 'none' : 'block';
+    // 在 JS 里挂钩而不是写 HTML 内联属性：夹具不解析 HTML，
+    // 内联属性，`dock.onclick` 永远是 undefined，冒泡那条路测不到。
+    dock.onclick = _approvalDockBtnClick;
+  }
+  // 卡片处理器常挂即可 —— 按钮那一击已经在 `_approvalDockBtnClick` 里被
+  // `stopPropagation()` 掐断了，到不了这里（见那个函数的注释：靠"挂载时机"
+  // 躲开是不行的，处理器是在冒泡那一刻才读的）。
+  // 未停靠时点卡片（比如点选项行冒泡上来）走 `_approvalCardClick` 直接返回 false。
+  var card = document.getElementById('approval-card');
+  if (card) {
+    card.className = 'approval-card' + (APPROVAL_DOCKED ? ' docked' : '');
+    card.onclick = _approvalCardClick;
+  }
+
+  var hint = document.getElementById('approval-hint');
+  if (hint) {
+    hint.textContent = (APPROVAL.expect === 'text')
+      ? '输入后回车确认'
+      : '↑↓ 或数字选择，回车确认';
+  }
+  var ok = document.getElementById('approval-ok');
+  if (ok) ok.disabled = !(APPROVAL.expect === 'text' || APPROVAL_SEL);
+
+  // 选项行的选中态：用 add/remove（夹具没有 classList.toggle）
+  for (var i = 0; i < APPROVAL_NODES.length; i++) {
+    var n = APPROVAL_NODES[i];
+    if (!n || String(n.className || '').indexOf('approval-option') !== 0) continue;
+    if (n._key && n._key === APPROVAL_SEL) n.classList.add('sel');
+    else n.classList.remove('sel');
+  }
+}
+
+/** 点选项行 —— 只选中（两步确认：再点「确认」或回车才提交）。
+ *
+ *  鼠标也走两步是刻意的设计（"鼠标勾选 + 点击确认（两步）"）。
+ *  想要"单击即提交"改这一行就行 —— 但那样键盘/鼠标两套语义就不一样了。
+ */
+function _approvalRowClick() {
+  var key = this && this._key;
+  if (!key) return false;
+  return approvalSelect(key);
+}
+
+/** 点「‹ 浏览上下文」按钮 —— 停靠。
+ *
+ *  必须在这里掐断冒泡，这是唯一可靠的做法，别改成"靠挂载时机躲开"：
+ *
+ *  「卡片处理器只在停靠态挂」看似可行（推理是"停靠时按钮被 CSS 藏了，那一击发不出来"），
+ *  但漏了过渡那一击：点按钮（此刻未停靠）→ 按钮处理器把 docked 置 true →
+ *  `paintApproval()` 立刻就把 `card.onclick` 挂上了 → 然后事件才冒泡到卡片
+ *  → 卡片处理器此刻已经是函数 → 看到 docked 是 true → 又切回去。还是零。
+ *
+ *  根本原因：处理器是在冒泡那一刻才读的，而按钮已经先把它变成函数了。
+ *  所以只能显式 `stopPropagation()`。
+ */
+function _approvalDockBtnClick(ev) {
+  if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+  return approvalDock();
+}
+
+/** 点停靠后的小窗（整张卡，含标题）—— 飘回来。
+ *
+ *  三个坑，三条都别退回去：
+ *
+ *  坑一：按钮那一击会冒泡到这里。卡片是 `.approval-dock` 按钮的祖先，
+ *  两个处理器都做 toggle，互相抵消，按钮看着像坏了。
+ *  修法只能是按钮那侧 `stopPropagation()`（见 `_approvalDockBtnClick`）。
+ *
+ *  坑二：把回飘处理器缩到标题上。躲开了坑一，但整窗只剩四个字能点。
+ *
+ *  坑三：给标题和卡片都挂一个。标题在卡片里面，点标题先触发标题的、
+ *  再冒泡触发卡片的，又是净零。
+ *
+ *，正确形状：处理器只挂在卡片上（标题在它里面，自然冒泡上来），
+ *  而按钮那一侧显式掐断冒泡。这样未停靠时点卡片也只是走到这里
+ *  直接返回 false（比如点选项行冒泡上来）。
+ */
+function _approvalCardClick() {
+  if (APPROVAL_DOCKED) return approvalDock();
+  return false;
+}
+
+/** 选中某一项。只选中，不提交 —— 两步确认是刻意的。 */
+function approvalSelect(key) {
+  if (!APPROVAL || APPROVAL.expect === 'text') return false;
+  var found = false;
+  var opts = APPROVAL.options || [];
+  for (var i = 0; i < opts.length; i++) { if (opts[i].key === key) found = true; }
+  if (!found) return false;
+  APPROVAL_SEL = key;
+  paintApproval();
+  return true;
+}
+
+/** 键盘。挂在 document 上（夹具里是空操作），所以逻辑必须能直接被调。 */
+function approvalKey(ev) {
+  if (!APPROVAL) return false;
+  var k = String((ev && ev.key) || '');
+  var opts = APPROVAL.options || [];
+  if (/^[1-9]$/.test(k)) {
+    // 按下的数字是屏幕上的编号（连续），不是键位 ——
+    //   两者今天不一样（`EGRESS_OPTIONS` 键位 `1,2,3,4,6`，屏幕 `1..5`）。
+    //   越界，`false`（什么都不做），不是"选一个相邻的项"。
+    var _o = (APPROVAL && APPROVAL.options) || [];
+    var _n = parseInt(k, 10) - 1;
+    if (_n < 0 || _n >= _o.length) return false;
+    return approvalSelect(_o[_n].key);   // ← 只选中
+  }
+  if (k === 'ArrowDown' || k === 'ArrowUp') {
+    if (APPROVAL.expect === 'text' || !opts.length) return false;
+    var idx = -1;
+    for (var i = 0; i < opts.length; i++) { if (opts[i].key === APPROVAL_SEL) idx = i; }
+    var step = (k === 'ArrowDown') ? 1 : -1;
+    var nxt = (idx + step + opts.length) % opts.length;
+    return approvalSelect(opts[nxt].key);
+  }
+  if (k === 'Enter') return approvalReply();
+  if (k === 'Escape') { approvalDock(); return true; }
+  return false;
+}
+
+/** 提交。中间态提交输入框里的文本，否则提交选中的 key。 */
+function approvalReply() {
+  if (!APPROVAL) return false;
+  if (APPROVAL.expect === 'text') {
+    // 用建的时候留下的直接引用，不 `getElementById`（见 `_buildApproval`）
+    var v = APPROVAL_INPUT ? String(APPROVAL_INPUT.value || '').trim() : '';
+    if (!v) return false;
+    _postApproval({ text: v });
+    return true;
+  }
+  if (!APPROVAL_SEL) return false;
+  _postApproval({ choice: APPROVAL_SEL });
+  return true;
+}
+
+/** 停靠 / 飘回。停靠后缩到右侧，标签精确是「等待审批」。 */
+function approvalDock() {
+  if (!APPROVAL) return false;
+  APPROVAL_DOCKED = !APPROVAL_DOCKED;
+  paintApproval();
+  return APPROVAL_DOCKED;
+}
+
+function _postApproval(body) {
+  var rid = APPROVAL ? APPROVAL.request_id : '';
+  if (!rid) return;
+  APPROVAL_SEEN = rid;     // 立刻记住 —— 双击的第二下会被 renderApproval 挡掉
+  _hideApproval();
+  body.request_id = rid;
+  try {
+    fetch('/api/approval?token=' + encodeURIComponent(CHAT_TOKEN), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function () { refreshApproval(); })
+      .catch(function () { refreshApproval(); });
+  } catch (e) { /* 夹具里没有 fetch */ }
+}
+
+try {
+  document.addEventListener('keydown', function (ev) {
+    try { if (approvalKey(ev)) { ev.preventDefault(); } } catch (e) {}
+  });
+} catch (e) {}
+</script>
+{% endblock %}

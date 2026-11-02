@@ -1,0 +1,16 @@
+kind: provider
+name: minimax
+version: 0.2.0
+description: MiniMax — M2.7 / M3 系列
+api_mode: openai_compat
+config:
+  base_url: https://api.minimax.chat/v1
+  default_model: MiniMax-M2.7
+  context_window: 131072
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: minimax
+  website: https://platform.minimaxi.com/
+env_keys:
+- MINIMAX_API_KEY

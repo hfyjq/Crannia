@@ -1,0 +1,28 @@
+﻿术语,译文_en,备注
+会话,,session（一段对话的存储/身份单位；与"对话"区分：对话偏界面里的那一条条）
+对话,,conversation / chat（界面上的"这一段对话"）
+上下文,,context
+上下文窗口,,context window
+记忆,,memory
+短期记忆,,short-term memory
+长期记忆,,long-term memory
+技能,,skill
+工具,,tool
+插件,,plugin
+审批,,approval
+接管,,takeover
+工作区,,workspace
+工作目录,,working directory
+群聊,,group chat
+主理人,,host
+定时任务,,scheduled task
+投入档,,effort level（1–6）
+回答语言,,response language
+界面语言,,interface language
+通知,,notification
+后台任务,,background task
+子代理,,subagent
+压缩,,compact
+审查器,,reviewer
+白名单,,allowlist
+出网,,network egress（动词场景可写 outbound network）

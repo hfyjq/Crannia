@@ -1,0 +1,315 @@
+kind: skill
+name: mail_parser
+version: "0.1.0"
+draft: false
+load_strategy: on_demand
+description: >
+  Email skill — IMAP收信(搜索/读取/摘要) + SMTP发信。
+  支持 QQ邮箱/163/Gmail/Outlook 等主流邮箱。
+  使用标准 IMAP/SMTP 协议，无需额外依赖。
+# 技能页卡片上那句**短简介**（与 `description` 分开）。
+summary: "邮箱连接器"
+
+tools:
+  - name: list_folders
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      列出邮箱的所有文件夹（收件箱/发件箱/草稿箱/垃圾邮件等）。
+      返回文件夹名称列表及状态标记。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        imap_server:
+          type: string
+          description: "IMAP 服务器地址，如 imap.qq.com / imap.163.com / imap.gmail.com"
+        email_address:
+          type: string
+          description: "邮箱地址"
+        password:
+          type: string
+          description: "邮箱密码或授权码（QQ/163 需使用授权码而非登录密码）"
+        port:
+          type: integer
+          default: 993
+          description: "IMAP SSL 端口，默认 993"
+      required: [imap_server, email_address, password]
+
+  - name: search_emails
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      按条件搜索邮件。可按发件人/主题/关键词/文件夹/已读未读等条件筛选。
+      返回邮件的 UID、发件人、主题、日期、摘要预览（前200字），不返回完整正文。
+      获取完整正文请使用 get_email。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        imap_server:
+          type: string
+          description: "IMAP 服务器地址"
+        email_address:
+          type: string
+          description: "邮箱地址"
+        password:
+          type: string
+          description: "邮箱密码或授权码"
+        folder:
+          type: string
+          default: "INBOX"
+          description: "搜索的文件夹，默认 INBOX（收件箱）"
+        query:
+          type: string
+          description: >
+            搜索关键词（IMAP 格式）。
+            - 发件人: FROM "name@example.com"
+            - 主题: SUBJECT "meeting"
+            - 正文: TEXT "report"
+            - 组合: FROM "boss" SUBJECT "urgent"
+            留空则返回最近邮件。
+        limit:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+          description: "返回结果数上限，默认 10，最大 50"
+        unread_only:
+          type: boolean
+          default: false
+          description: "仅搜索未读邮件"
+        port:
+          type: integer
+          default: 993
+          description: "IMAP SSL 端口"
+      required: [imap_server, email_address, password]
+
+  - name: get_email
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      获取指定邮件的完整内容（正文+附件列表）。
+      需要先通过 search_emails 获取邮件的 UID。
+      自动解析 multipart 邮件，提取纯文本和 HTML 正文。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        imap_server:
+          type: string
+          description: "IMAP 服务器地址"
+        email_address:
+          type: string
+          description: "邮箱地址"
+        password:
+          type: string
+          description: "邮箱密码或授权码"
+        uid:
+          type: string
+          description: "邮件 UID（从 search_emails 结果中获取）"
+        folder:
+          type: string
+          default: "INBOX"
+          description: "邮件所在文件夹"
+        port:
+          type: integer
+          default: 993
+          description: "IMAP SSL 端口"
+      required: [imap_server, email_address, password, uid]
+
+  - name: send_email
+    permission: write
+    destructive: true
+    # 对外发送（"回答用户 ≠ 发给别人"），要过分类器。
+    review_input: "收件人、主题、正文、附件"
+    description: >
+      通过 SMTP 发送邮件。支持纯文本/HTML 正文、抄送/密送。
+      ★ 发件邮箱已经在设置页配好了：**不要传 smtp_server / email_address / password**，
+      **更不要在对话里向用户索要授权码**。只有用户主动把凭据打出来时才用它们。
+      没配过的话，回一句让用户去「设置页 → 邮件配置」配好再来，别问他要。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        to:
+          type: string
+          description: "收件人邮箱地址，多人用逗号分隔"
+        subject:
+          type: string
+          description: "邮件主题"
+        body:
+          type: string
+          description: "邮件正文（支持纯文本，如包含 HTML 标签则作为 HTML 邮件发送）"
+        cc:
+          type: string
+          description: "抄送，多人用逗号分隔（可选）"
+        bcc:
+          type: string
+          description: "密送，多人用逗号分隔（可选）"
+        attachments:
+          type: array
+          items:
+            type: string
+          description: "附件路径列表（可选）"
+        smtp_server:
+          type: string
+          description: "（通常**不用传**）留空 = 用设置页配好的那个"
+        email_address:
+          type: string
+          description: "（通常**不用传**）发件人邮箱；留空 = 用设置页配好的那个"
+        password:
+          type: string
+          description: "（通常**不用传**）授权码；留空 = 用设置页配好的那个"
+        port:
+          type: integer
+          description: "（通常**不用传**）SMTP 端口；留空 = 用设置页配好的（QQ 465 / Gmail 587）"
+        use_tls:
+          type: boolean
+          description: "是否 TLS/SSL 加密，默认 true"
+      required: [to, subject, body]
+
+  - name: summarize_emails
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      获取最近邮件的 AI 友好摘要列表。快速了解收件箱概况，适合 agent 初次连接时调用。
+      返回发件人、主题、日期、前 300 字正文预览，已按时间倒序排列。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        imap_server:
+          type: string
+          description: "IMAP 服务器地址"
+        email_address:
+          type: string
+          description: "邮箱地址"
+        password:
+          type: string
+          description: "邮箱密码或授权码"
+        folder:
+          type: string
+          default: "INBOX"
+          description: "文件夹，默认 INBOX"
+        limit:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 30
+          description: "摘要邮件数，默认 5"
+        unread_only:
+          type: boolean
+          default: true
+          description: "是否仅摘要未读邮件，默认 true"
+        port:
+          type: integer
+          default: 993
+          description: "IMAP SSL 端口"
+      required: [imap_server, email_address, password]
+
+# ==================================================================
+# Web UI guided configuration
+# ==================================================================
+
+config:
+  # 多账号：条目列表（名字 = 账号的 `label`，键 = 内部 id）。
+  #   `entries_key` / `label_key` 让同一个浮窗也能画这一种结构
+  #   （GitHub 令牌那边用的是默认的 `entries`，没有 label）。
+  named: true
+  entries_key: "accounts"
+  label_key: "label"
+  provider_presets:
+    qq:
+      label: "QQ邮箱"
+      icon: "📮"
+      defaults:
+        imap_server: "imap.qq.com"
+        imap_port: 993
+        smtp_server: "smtp.qq.com"
+        smtp_port: 465
+    "163":
+      label: "163邮箱"
+      icon: "📮"
+      defaults:
+        imap_server: "imap.163.com"
+        imap_port: 993
+        smtp_server: "smtp.163.com"
+        smtp_port: 465
+    gmail:
+      label: "Gmail"
+      icon: "📧"
+      defaults:
+        imap_server: "imap.gmail.com"
+        imap_port: 993
+        smtp_server: "smtp.gmail.com"
+        smtp_port: 587
+    custom:
+      label: "自定义"
+      icon: "🔧"
+      defaults:
+        imap_server: ""
+        imap_port: 993
+        smtp_server: ""
+        smtp_port: 465
+
+  fields:
+    - key: email_address
+      label: "邮箱地址"
+      type: email
+      placeholder: "example@qq.com"
+      required: true
+    - key: password
+      label: "授权码"
+      type: password
+      placeholder: "16位授权码（非邮箱登录密码）"
+      required: true
+      help: "如何获取授权码？"
+
+  setup_guide:
+    zh: |
+      ### 📧 如何获取邮箱授权码？
+
+      **QQ邮箱：**
+      1. 登录 [QQ邮箱](https://wx.mail.qq.com/) → 点击 **设置** → **左侧→账号与安全**
+      2. 选择**安全设置**向下滚动找到 **POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务**
+      3. 开启 **IMAP/SMTP服务**（点击开启按钮）
+      4. 按提示发送短信验证 → 点击 **生成授权码**
+      5. 复制出现的 16 位授权码，填入"授权码"字段
+
+      **163邮箱：**
+      1. 登录 [163邮箱](https://mail.163.com/) → 上边栏**设置** → **POP3/SMTP/IMAP**
+      2. 开启 **IMAP/SMTP服务**
+      3. 按提示发送短信 → 获取授权码
+
+      **Gmail：**
+      1. 访问 [Google 账户安全](https://myaccount.google.com/security) → **两步验证**（需先开启）
+      2. 进入 **应用专用密码**（App passwords）
+      3. 选择应用 "邮件"、设备 "其他"，生成 16 位密码
+
+      > ⚠️ **注意**：国内邮箱（QQ/163）必须使用**授权码**而非登录密码，否则无法连接。
+    en: |
+      ### How to get a mail app password
+
+      **QQ Mail:**
+      1. Sign in at [QQ Mail](https://wx.mail.qq.com/) -> Settings -> Account & Security
+      2. Scroll to POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV services
+      3. Turn on IMAP/SMTP service
+      4. Verify by SMS as prompted -> click Generate authorization code
+      5. Copy the 16-character code into the field above
+
+      **163 Mail:**
+      1. Sign in at [163 Mail](https://mail.163.com/) -> Settings -> POP3/SMTP/IMAP
+      2. Turn on IMAP/SMTP service
+      3. Verify by SMS -> get the authorization code
+
+      **Gmail:**
+      1. Open [Google Account security](https://myaccount.google.com/security) -> turn on 2-Step Verification first
+      2. Open App passwords
+      3. Pick app "Mail" and device "Other", then generate a 16-character password
+
+      > Chinese providers (QQ / 163) require an **app password**, not your login password.

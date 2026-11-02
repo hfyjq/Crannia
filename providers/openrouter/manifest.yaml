@@ -1,0 +1,16 @@
+kind: provider
+name: openrouter
+version: 0.2.0
+description: OpenRouter — 300+ 模型统一网关
+api_mode: openai_compat
+config:
+  base_url: https://openrouter.ai/api/v1
+  default_model: deepseek/deepseek-chat
+  context_window: 65536
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: openrouter
+  website: https://openrouter.ai/
+env_keys:
+- OPENROUTER_API_KEY

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block header_title %}模型 API 管理{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h2>已配置的模型</h2>
+  <p>填入对应平台的 API Key，即可在端配置中切换使用。当前激活的模型带高亮边框。</p>
+</div>
+
+<div class="model-grid" id="model-grid">加载中...</div>
+
+<script>
+async function load() {
+  try {
+    const cfg = await api('/api/config');
+    const grid = document.getElementById('model-grid');
+    grid.innerHTML = cfg.models.map(m => `
+    <div class="model-card ${m.active?'active-card':''}">
+      <div class="model-name">${m.key} <span style="font-size:11px;color:var(--text-dim)">${m.active ? '● 当前' : ''}</span></div>
+      <div class="model-provider">${m.provider} / ${m.model_name}</div>
+      <div class="model-window">上下文: ${(m.context_window/1024)|0}K tokens</div>
+      <input type="password" placeholder="${m.configured?'✅ 已配置 (可修改)':'填入 API Key...'}" id="key_${m.key}">
+      <div class="model-actions">
+        <button class="btn btn-primary btn-sm" onclick="saveKey('${m.key}','${m.provider}')">💾 保存</button>
+      </div>
+    </div>
+  `).join('');
+  } catch(e) {
+    const grid = document.getElementById('model-grid');
+    grid.innerHTML = '<p style="color:var(--red)">⚠️ 加载失败: ' + e.message + '</p>';
+  }
+}
+
+async function saveKey(key, provider) {
+  const inp = document.getElementById('key_'+key);
+  const r = await api('/api/config', {
+    method:'POST',
+    body: JSON.stringify({section:'model', key, provider, api_key:inp.value}),
+  });
+  alert(r.ok ? '✅ 已保存到 .env！' : '❌ '+r.error);
+  if (r.ok) load();
+}
+
+load();
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+kind: provider
+name: anthropic
+version: 0.2.0
+description: Anthropic Claude — Sonnet/Opus/Haiku 全系列
+api_mode: anthropic_native
+config:
+  base_url: ''
+  default_model: claude-sonnet-4-5
+  context_window: 200000
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: anthropic
+  website: https://www.anthropic.com/
+env_keys:
+- ANTHROPIC_API_KEY

@@ -1,0 +1,38 @@
+{
+  "name": "crannia-gui",
+  "private": true,
+  "version": "1.0.0-beta.1",
+  "description": "Crannia desktop GUI",
+  "author": "Crannia",
+  "license": "Apache-2.0",
+  "main": "apps/desktop/main.cjs",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n renderer,desktop -c green,blue \"vite --config apps/desktop/vite.config.js --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 node node_modules/electron/cli.js apps/desktop/main.cjs\"",
+    "dev:web": "vite --config apps/desktop/vite.config.js --host 127.0.0.1",
+    "build": "vite build --config apps/desktop/vite.config.js",
+    "desktop": "node node_modules/electron/cli.js apps/desktop/main.cjs",
+    "package": "npm run build && node scripts/patch-nsis.cjs && electron-builder --config apps/desktop/electron-builder.config.mjs",
+    "package:dir": "npm run build && node scripts/patch-nsis.cjs && electron-builder --dir --config apps/desktop/electron-builder.config.mjs",
+    "patch-nsis": "node scripts/patch-nsis.cjs"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "lucide-react": "^1.52.0",
+    "mermaid": "^12.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.7.0",
+    "electron-builder": "26.15.3",
+    "jsdom": "^30.1.3",
+    "vite": "^8.3.3",
+    "wait-on": "^9.5.1"
+  }
+}

@@ -1,0 +1,2029 @@
+/* Crannia Web UI — Dark theme */
+/* `hidden` 属性会被作者样式里的 `display` 顶掉 —— 这不是特异性问题：
+   作者规则永远优先于 UA 样式表里的 `[hidden] { display: none }`。
+   所以任何组件只要写了 `display: flex/grid/…`，它的 `hidden` 就静默失效
+   —— `el.hidden = true` 一个像素都不动，面板关不掉。
+
+   失败模式：`.diff-panel`（`display:flex`）与 `.chat-attach`（`display:flex`）
+   两处中招；`.context-panel` 因为没写 `display` 而恰好没事 —— 恰好正是
+   要消灭的东西（靠"恰好没事"不是规矩）。
+
+   所以这一条把它统一救回来，不靠"记得给每个新组件补 `[hidden]`"。
+   用 `!important` 是刻意的：要压过组件自己的 `display:flex`，而同特异性的
+      后置规则只在书写顺序上赢 —— 那种依赖正是下一个 bug。
+   `el.hidden = false` 是移除属性，下面这条不再命中，显示照常。 */
+[hidden] { display: none !important; }
+
+:root {
+  --bg: #B1CA99;
+  --bg-card: #E5E0B8;
+  --bg-sidebar: #537C58;
+  --sidebar-text: rgba(255,255,255,0.9);
+  --sidebar-text-hover: #FFFFFF;
+  --border: #a0a8a0;
+  --text: #000000;
+  --text-dim: #000000;
+  --text-bright: #000000;
+  --accent: #BF7E43;
+  --accent-hover: #996536;
+  --green: #51cf66;
+  --red: #ff6b6b;
+  --orange: #ffa94d;
+  --radius: 8px;
+  /* 内嵌区的那"淡淡一层"。故意用半透明而不是某个确定的灰：
+     applyColors() 会覆写 :root、用户能改整套配色 —— 写死一个灰在深色主题下
+     会变成"浮起来"而不是"凹进去"。半透明黑在亮/暗两套配色里都读作内嵌。
+     想调深浅就改这一个数（这也是它做成变量而不是内联的原因）。 */
+  --bg-inset: rgba(0, 0, 0, 0.055);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+           "Microsoft YaHei", sans-serif;
+  --mono: "Cascadia Code", "Fira Code", "Consolas", monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+.sidebar {
+  width: 220px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  flex-shrink: 0;
+}
+.sidebar .logo {
+  padding: 0 20px 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-icon { width: 28px; height: 28px; flex-shrink: 0; }
+.logo-icon-sm { width: 16px; height: 16px; vertical-align: middle; flex-shrink: 0; }
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.sidebar nav a:hover { color: var(--sidebar-text-hover); background: rgba(255,255,255,0.1); }
+.sidebar nav a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(191, 126, 67, 0.12);
+}
+.sidebar nav a .icon { font-size: 18px; width: 24px; text-align: center; }
+
+/* ── Sidebar footer / version ──────────────────────────────────── */
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.15);
+}
+.sidebar-version {
+  font-size: 11px;
+  color: var(--sidebar-text);
+  opacity: 0.7;
+  cursor: pointer;
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  transition: all 0.15s;
+  border: 1px dashed rgba(255,255,255,0.25);
+}
+.sidebar-version:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(191,126,67,0.15);
+}
+
+/* ── Main content ─────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  color: var(--text-bright);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.header .badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.badge.online { color: var(--green); border-color: var(--green); }
+.badge.offline { color: var(--text-dim); }
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* ── Cards ────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card h2 { font-size: 16px; color: var(--text-bright); margin-bottom: 12px; }
+.card p { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+
+/* ── Platform grid ────────────────────────────────────────────── */
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.platform-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.platform-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.platform-card.active { border-color: var(--green); }
+.platform-card .icon { font-size: 32px; margin-bottom: 8px; }
+.platform-card .name { font-size: 14px; color: var(--text-bright); }
+.platform-card .status {
+  font-size: 11px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: inline-block;
+}
+.status.ready { color: var(--green); background: rgba(81,207,102,0.12); }
+.status.pending { color: var(--orange); background: rgba(255,169,77,0.12); }
+
+/* ── Forms ────────────────────────────────────────────────────── */
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-bright);
+  font-family: var(--font);
+  font-size: 13px;
+}
+.form-group input:focus { outline: none; border-color: var(--accent); }
+.form-group .hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+/* ── Model selector dropdown ─────────────────────────────────────── */
+.model-select {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  margin: 6px 0;
+  cursor: pointer;
+}
+.model-select:focus { outline: none; border-color: var(--accent); }
+.model-select option { background: var(--bg-card); color: var(--text); }
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: #1a1a1a; font-weight: 600; border: 3px solid rgba(0,0,0,0.15); }
+.btn-primary:hover { background: var(--accent-hover); color: #000000; border-color: rgba(0,0,0,0.35); }
+.btn-secondary { background: var(--bg); color: var(--text); border: 3px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); border-width: 3px; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+
+/* ── Start framework button glow ────────────────────────────────── */
+.btn-start-fw {
+  box-shadow: 0 0 0 2px var(--accent);
+  animation: btnPulse 2s ease-in-out infinite;
+}
+@keyframes btnPulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent); }
+  50% { box-shadow: 0 0 0 4px var(--accent), 0 0 12px rgba(191,126,67,0.3); }
+}
+
+/* ── Platform chip edit button ──────────────────────────────────── */
+.platform-chip { position: relative; }
+.platform-chip-edit {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  display: none;
+  transition: all 0.15s;
+}
+.platform-chip:hover .platform-chip-edit { display: block; }
+.platform-chip-edit:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Status badge accent background ─────────────────────────────── */
+.platform-chip-status.ready {
+  color: #fff;
+  background: var(--accent);
+}
+.status-badge-accent {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── API key cards ─────────────────────────────────────────────── */
+.model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.model-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.model-card.active-card { border-color: var(--accent); border-width: 2px; }
+.model-card .model-name { font-size: 15px; color: var(--text-bright); margin-bottom: 4px; }
+.model-card .model-provider { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+.model-card .model-window { font-size: 11px; color: var(--text-dim); }
+.model-card input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-bright);
+  font-size: 12px;
+  margin: 8px 0;
+}
+.model-card .model-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+/* ── Chat ──────────────────────────────────────────────────────── */
+.chat-container { display: flex; flex-direction: column; height: 100%; position: relative; }
+
+/* ── Chat bubbles (WeChat-style) ───────────────────────────────── */
+.chat-bubbles {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
+}
+.bubble-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  max-width: 85%;
+}
+.bubble-row.user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+/* 「我们到哪了」那一条 —— 不是模型说的话。
+ *
+ * 判据是"标签不许说谎"：它挂 agent 的头像就会读成"模型刚说了这句"，
+ * 而它其实是框架从会话笔记里拼的（零 LLM）。
+ *，左对齐、无头像、虚线边、比正文淡一档 —— 一眼看得出这是旁白。
+ */
+.bubble-row.recap {
+  margin-bottom: 12px;
+}
+.bubble-row.recap .bubble-body {
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.bubble-avatar {
+  width: 36px; height: 36px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+}
+.bubble-row.user .bubble-avatar { background: var(--accent); }
+.chat-avatar-logo { width: 30px; height: 30px; object-fit: contain; }
+.bubble-body { display: flex; flex-direction: column; gap: 2px; }
+.bubble-row.user .bubble-body { align-items: flex-end; }
+.bubble-text {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+  /* 换行靠这个（不用 <br> 替换）—— 既去掉注入点，
+     又能保住空行与缩进 */
+  white-space: pre-wrap;
+}
+.bubble-row.agent .bubble-text {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top-left-radius: 2px;
+}
+/* 流式草稿（`EVT_DELTA`）：只是预览 —— 权威文本一到就整条被丢掉
+   （见 chat.html 的 pushDelta/dropDraft）。所以这里刻意做得"轻"一点：
+   虚线边框 + 略淡，让用户一眼看出"这话还没定"。 */
+.bubble-row.bubble-draft .bubble-text {
+  border-style: dashed;
+  opacity: 0.75;
+}
+.bubble-row.bubble-draft .bubble-time { opacity: 0.4; }
+.bubble-row.user .bubble-text {
+  background: var(--accent);
+  color: #1a1a1a;
+  border-top-right-radius: 2px;
+}
+.bubble-time {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 0 4px;
+}
+
+/* ─── 活动行 (v1.2.0) ─────────────────────────────────────────────
+   一轮的过程在这里原地更新：head 换文本，完成的步骤往下堆。
+   这就是"不刷屏"的实现 —— 一条活动行承载整轮，而不是每条事件一个气泡。
+
+   注意：颜色全部走 var(--...)。base.html 的 applyColors() 会动态覆盖
+   :root，写死颜色会让用户的配色自定义失效。 */
+.bubble-row.activity { max-width: 100%; }
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  border-top-left-radius: 2px;
+}
+/* Ctrl+B 提示—— 步骤流顶上那行淡绿色小字。
+   只在真有可转的前台任务时出现（判据在 `chat.html` 的 `tool.start` 那一支）。 */
+.activity-tip {
+  padding: 4px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--green);
+  background: rgba(81,207,102,0.12);
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+.activity-label { flex: 1; min-width: 0; }
+.activity-label.run   { color: var(--text); }
+.activity-label.done  { color: var(--text); opacity: .7; }
+.activity-label.error { color: var(--red); }
+/* 分段收口后的标签（`say` 气泡把步骤流切段 —— 见 chat.html 的 segmentActivity）。
+   这一段已经结束、下面还接着走，所以比 `done` 更弱：行首换成中性的段摘要
+   （"共 N 步"），不抢下一段的注意力。 */
+.activity-label.seg   { color: var(--text); opacity: .55; }
+
+/* 次要信息用 opacity 而不是 --text-dim —— 默认配色里 --text-dim 与
+   --text 都是 #000000，用它等于没有层级。opacity 能和任意配色合成。 */
+.activity-elapsed,
+.activity-tokens {
+  flex-shrink: 0;
+  opacity: .55;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;   /* 数字跳动时不抖 */
+}
+
+/* 中断按钮：长在正在跑的那条消息旁边（不是工具栏）—— 用户要打断的是它。
+   颜色一律走 var()：base.html 的 applyColors() 会覆写 :root。 */
+.activity-stop {
+  flex-shrink: 0;
+  margin-left: auto;                    /* 推到行尾，不挤标签 */
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+  opacity: .75;
+}
+.activity-stop:hover { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.activity-stop:disabled { opacity: .45; cursor: default; }
+.activity-tokens:empty { display: none; }
+
+.activity-spinner {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: lv-spin .8s linear infinite;
+}
+@keyframes lv-spin { to { transform: rotate(360deg); } }
+
+.activity-detail {
+  margin-top: 4px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  opacity: .6;
+  white-space: pre-wrap;
+}
+.activity-detail:empty { display: none; }
+
+.activity-steps { margin-top: 4px; padding-left: 10px; }
+.activity-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 1px 0;
+  opacity: .6;
+}
+.activity-step .step-tick { flex-shrink: 0; }
+.activity-step.done .step-tick  { color: var(--green); }
+.activity-step.error .step-tick { color: var(--red); }
+.activity-step .step-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-step .step-time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+/* ─── 长框：有界 + 可折叠的活动区 ─────────────────────────────────────
+   为什么：步骤流若无限向下堆叠，一个 40 步的回合会撑高整个
+   `.chat-bubbles`（唯一的滚动容器）。TUI 里高频向下刷新本来没问题，
+   WebUI 的观感不行（TUI 上合适不代表可以直接挪用）。
+   现在：表头固定、`.activity-body` 是唯一滚动容器（240px 上限）、
+   结束后整框折叠成 `.activity-summary` 那一行。
+
+   另一个渲染器 `stream`（无限堆叠那一套）一行没删，见 chat.html 的
+   `ACTIVITY_RENDERER`。下面这些选择器只在 box 模式命中 —— 那些元素只在
+   box 分支里创建（`.activity-box` 是标记类，测试与 DevTools 靠它分辨，
+   本身不挂样式）。 */
+.activity-body {
+  max-height: 240px;             /* 展开态与折叠前共用这一个上限，只写一处 */
+  overflow-y: auto;
+  overscroll-behavior: contain;  /* 滚到底别把外层 .chat-bubbles 带着滚 */
+  /* 步骤流本体加一层内嵌底色 —— 表头是 --bg-card，下面这块要能一眼分出来
+     （不加分层会看不清）。 */
+  background: var(--bg-inset);
+  border-radius: 0 0 var(--radius) var(--radius);  /* 上沿与表头齐平，只圆下面两角 */
+  padding: 4px 6px;
+}
+
+.activity-summary {
+  display: none;                 /* 只有折叠态露脸 */
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  border-top-left-radius: 2px;
+  opacity: .7;
+  font-variant-numeric: tabular-nums;
+}
+/* 表头与下面那块拼成一个整体：表头去掉下面两个圆角，否则两个圆角相切
+   会在中间咬出一个缺口，反而更"看不清"。 */
+.activity-box .activity-head { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+/* `:not(:empty)` 不能省：裸的 `.activity-summary:empty` 特异性是 (0,2,0)，
+   低于 `.activity.collapsed .activity-summary` 的 (0,3,0)，会被覆盖，
+   折叠时冒出一个空条。加上 `:not(:empty)` 才是 (0,4,0)。 */
+.activity.collapsed .activity-summary:not(:empty) { display: block; }
+/* 展开提示：用 CSS 生成，不进 summaryEl.textContent —— 那串文字是护栏按精确串
+   断言的（「已完成 · 17.2s · 162.2K tok」），不该混进装饰字符。
+   \25B8 = ▸ */
+.activity-summary::before { content: '\25B8  '; opacity: .55; }
+.activity-summary:hover { opacity: 1; border-color: var(--accent); }
+.activity.collapsed .activity-head,
+.activity.collapsed .activity-body { display: none; }
+.activity-summary.interrupted { color: var(--accent); opacity: .9; }
+.activity-summary.error       { color: var(--red);    opacity: .9; }
+
+/* 模型在轮中的话 → 框内的时间序分隔行（不是一步操作，所以没有 ✓ 与耗时）*/
+.activity-say {
+  padding: 3px 0 3px 8px;
+  margin: 4px 0;
+  border-left: 2px solid var(--border);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;         /* say 里可能有换行 —— 与 .bubble-text 同规矩 */
+  word-break: break-word;
+  opacity: .75;
+}
+
+/* 尊重"禁用动画"设置（chat.html 在 html 根挂 .no-anim）与系统偏好 */
+html.no-anim .activity-spinner { animation: none; border-top-color: var(--border); }
+@media (prefers-reduced-motion: reduce) {
+  .activity-spinner { animation: none; border-top-color: var(--border); }
+}
+
+/* ─── 交付文件下载按钮 (v1.2.0) ─────────────────────────────────
+   deliver_file 在 Web 会话下不再发邮件，文件交到这里渲染成可点的按钮。
+   颜色全部走 var(--...)：applyColors() 会动态覆盖 :root。 */
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.file-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #1a1a1a;
+}
+.file-chip .file-icon { flex-shrink: 0; }
+.file-chip .file-name {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-chip .file-size {
+  flex-shrink: 0;
+  opacity: .55;
+  font-variant-numeric: tabular-nums;
+}
+/* ── 图片输入：待发缩略图条 + 气泡里的缩略图 ── */
+.chat-attach {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 8px 0 0;
+}
+.attach-chip {
+  position: relative; width: 64px; height: 64px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; background: var(--bg);
+}
+.attach-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.attach-remove {
+  position: absolute; top: 0; right: 0;
+  width: 18px; height: 18px; line-height: 16px; padding: 0;
+  border: none; border-radius: 0 0 0 6px;
+  background: rgba(0, 0, 0, .62); color: #fff;
+  font-size: 13px; cursor: pointer;
+}
+.attach-remove:hover { background: rgba(200, 40, 40, .85); }
+.bubble-thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.bubble-thumb {
+  max-width: 180px; max-height: 180px;
+  border-radius: var(--radius); border: 1px solid var(--border); display: block;
+}
+
+/* ── `/` 候选层 ───────────────────────────────────────────────────────────
+   它紧贴输入框上方，宿主 `.chat-input-row` 要 `position: relative`
+   （就是下面这一行）；自己 `position: absolute`，从 flex 流里退出去，
+   不参与排版（否则它会变成一个 flex item，把发送按钮挤走）。
+
+   `display: flex` 不会顶掉 `hidden` —— 文件顶部那条
+   `[hidden] { display: none !important; }` 就是为这一类立的（`.diff-panel` 写了
+   `display:flex` 之后"面板关不掉"）。别在这里去掉它。
+
+   `z-index` 给 60：审批浮窗那一套是 200 级 —— 这一层不该盖住审批
+   （它只是输入区里弹一下的东西）。 */
+.chat-input-row { position: relative; }
+.slash-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 60;
+  min-width: 320px;
+  max-width: 560px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+.slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.slash-item.sel { background: var(--bg-inset); }
+.slash-cmd {
+  flex: 0 0 auto;
+  color: var(--text-bright);
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.slash-desc {
+  flex: 1 1 auto;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.slash-todo { flex: 0 0 auto; color: var(--orange); font-size: 11px; }
+.slash-err {
+  padding: 6px 10px;
+  color: var(--red);
+  font-size: 12px;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.chat-input-row textarea {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-bright);
+  font-family: var(--font);
+  font-size: 13px;
+  resize: none;
+  line-height: 1.5;
+  min-height: 40px;
+  max-height: 160px;
+  overflow-y: hidden;
+}
+.chat-input-row textarea:focus { outline: none; border-color: var(--accent); }
+
+/* ── Welcome screen ────────────────────────────────────────────────── */
+.chat-welcome {
+  position: absolute;
+  top: 40%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+}
+.chat-welcome-logo {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 28px;
+  margin-top: 12px;
+  transition: opacity 0.6s ease;
+}
+.chat-welcome-greeting {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+  transition: opacity 0.5s ease;
+}
+.chat-welcome-hint {
+  font-size: 15px;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+/* ── Welcome skill tags ────────────────────────────────────────────── */
+.chat-welcome-tags {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.welcome-tag {
+  display: inline-block;
+  padding: 10px 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  font-size: 14px;
+  color: var(--text);
+  opacity: 0;
+  animation: tagPopIn 0.35s ease forwards;
+}
+@keyframes tagPopIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Disable animations ──────────────────────────────────────────── */
+html.no-anim .chat-welcome-logo,
+html.no-anim .chat-welcome-greeting,
+html.no-anim .chat-welcome-hint,
+html.no-anim .chat-welcome-tags { transition: none !important; opacity: 1 !important; }
+html.no-anim .chat-welcome-tags { display: none !important; }
+html.no-anim .welcome-tag { animation: none !important; opacity: 0 !important; }
+html.no-anim .model-card { animation: none !important; opacity: 1 !important; }
+html.no-anim .skill-card { animation: none !important; opacity: 1 !important; }
+
+/* ── Model card row animation ─────────────────────────────────────── */
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Skill card row animation ─────────────────────────────────────── */
+@keyframes skillFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Status Bar (小白日志) ────────────────────────────────────── */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.status-left { display: flex; align-items: center; gap: 10px; }
+.status-right { font-size: 12px; color: var(--text-dim); }
+.status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.status-dot.online { background: var(--green); box-shadow: 0 0 6px rgba(81,207,102,0.5); }
+.status-dot.offline { background: var(--text-dim); }
+
+/* 上下文占用读数 —— 轮末 `context.state` 事件折叠的产物。
+   它必须与 `#status-metrics` 平级（见 `chat.html` 里那段注释）：
+   那一格的 `refreshStatus()` 每 5 秒整块重写，嵌进去会被静默擦掉。 */
+#status-ctx { margin-right: 12px; cursor: pointer; }
+#status-ctx.ctx-armed { color: var(--orange); }
+#status-ctx.ctx-just-compressed { color: var(--accent); }
+
+/* ── 会话构成面板 ─────────────────────────────────────────────────
+   "本会话现在装了什么、各多大、和上次比变了多少" —— 点状态条上的上下文读数打开。
+   三列：名称 / 值 / 与上次比。「与上次比」那一列才是信号
+   （绝对数 16.5k 还是 29.5k 肉眼分不出来）—— 所以它单独占一列、带颜色。 */
+.context-panel {
+  position: absolute; right: 12px; top: 40px; z-index: 40;
+  min-width: 380px; max-width: 560px;
+  background: var(--bg-card, #fff); border: 1px solid var(--border, #ddd);
+  border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.14);
+  padding: 10px 12px; font-size: 13px;
+}
+.ctx-head { display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px; font-weight: 600; }
+.ctx-row { display: flex; align-items: baseline; gap: 8px;
+           padding: 3px 0; border-bottom: 1px dashed var(--border, #eee); }
+.ctx-row:last-child { border-bottom: none; }
+/* 子集（技能索引）：缩进 + 变淡 —— 它不参与加总，样子上也要看得出来 */
+.ctx-sub { padding-left: 14px; opacity: .75; }
+.ctx-label { flex: 1; }
+.ctx-val { font-variant-numeric: tabular-nums; color: var(--fg-muted, #666); }
+.ctx-delta { width: 72px; text-align: right; font-variant-numeric: tabular-nums;
+             color: var(--fg-muted, #999); }
+.ctx-delta.up { color: var(--orange); }
+.ctx-delta.down { color: var(--accent); }
+.ctx-note { margin-top: 8px; font-size: 12px; color: var(--fg-muted, #777);
+            line-height: 1.5; }
+.btn-ctx-close { padding: 1px 8px; font-size: 12px; }
+
+/* ── Platform row (compact) ───────────────────────────────────── */
+.platform-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.platform-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  min-width: 110px;
+  flex: 1;
+  max-width: 160px;
+}
+.platform-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+.platform-chip.active { border-color: var(--accent); border-width: 2px; background: rgba(191,126,67,0.15); }
+.platform-chip-icon { font-size: 24px; margin-bottom: 4px; }
+.platform-chip-name { font-size: 13px; color: var(--text-bright); font-weight: 500; }
+.platform-chip-status {
+  font-size: 10px;
+  margin-top: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  display: inline-block;
+}
+.platform-chip-status.ready { color: var(--green); background: rgba(81,207,102,0.12); }
+.platform-chip-status.pending { color: var(--orange); background: rgba(255,169,77,0.12); }
+
+/* ── Skill cards ───────────────────────────────────────────────── */
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.skill-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  transition: all 0.15s;
+}
+.skill-card:hover { border-color: var(--accent); }
+.skill-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.skill-name { font-size: 15px; color: var(--text-bright); font-weight: 600; }
+.skill-version { font-size: 11px; color: var(--text-dim); }
+.skill-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: auto;
+}
+.skill-badge.draft { color: var(--orange); background: rgba(255,169,77,0.15); }
+.skill-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.skill-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.skill-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.skill-badge.configured {
+  color: var(--green);
+  background: rgba(81,207,102,0.15);
+}
+.skill-badge.needs-config {
+  color: var(--accent);
+  background: rgba(191,126,67,0.15);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ── Config button ───────────────────────────────────────────────── */
+.btn-sm {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.btn-config { font-size: 11px; }
+
+/* ── Website link on provider cards ──────────────────────────────── */
+.website-link {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+  margin-left: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+.website-link:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Setup Wizard ──────────────────────────────────────────────── */
+.setup-step { display: none; }
+.setup-step.active { display: block; }
+.step-indicator {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.step-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.step-dot.done { background: var(--green); }
+.step-dot.current { background: var(--accent); }
+.step-actions { display: flex; gap: 8px; margin-top: 20px; }
+
+/* ── Status bar task label ─────────────────────────────────────── */
+.status-task {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ── Settings button ───────────────────────────────────────────── */
+.btn-icon {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+.btn-icon:hover { color: var(--text-bright); border-color: var(--accent); }
+
+/* ── Modal ─────────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.modal-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 440px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  color: var(--text-bright);
+}
+.modal-body { padding: 20px; }
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.modal-close:hover { color: var(--text-bright); }
+
+/* ── Modal show animation ─────────────────────────────────────────── */
+.modal-overlay.show {
+  display: flex;
+  opacity: 1;
+}
+.modal-overlay > .modal-content {
+  display: none;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.modal-overlay.show > .modal-content {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  z-index: 1001;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+}
+
+/* ── Key Floater (small popup for name + key) ─────────────────────── */
+.keyfloater-box {
+  width: 420px;
+  max-width: 92vw;
+}
+
+/* ── Key Manager (list saved keys) ────────────────────────────────── */
+.keymgr-box {
+  width: 560px;
+  max-width: 94vw;
+  max-height: 76vh;
+  overflow-y: auto;
+}
+.keymgr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+.keymgr-row:last-child { border-bottom: none; }
+.keymgr-row:hover { background: var(--bg-hover); }
+.keymgr-row-active {
+  background: rgba(191,126,67,0.08);
+  border-left: 3px solid var(--accent);
+}
+.keymgr-info {
+  flex: 1;
+  min-width: 0;
+}
+.keymgr-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 2px;
+}
+.keymgr-masked {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+.keymgr-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-delete-key {
+  color: var(--red) !important;
+  border-color: var(--red) !important;
+}
+.btn-delete-key:hover {
+  background: rgba(220,53,69,0.15) !important;
+}
+
+/* ── Config Modal (wider) ────────────────────────────────────────── */
+.config-modal-panel {
+  width: 640px;
+  max-width: 95vw;
+}
+
+/* ── Config sections ─────────────────────────────────────────────── */
+.config-section {
+  margin-bottom: 20px;
+}
+.config-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Preset selector ─────────────────────────────────────────────── */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.preset-card:hover { border-color: var(--accent); background: rgba(191,126,67,0.05); }
+.preset-card.selected {
+  border-color: var(--accent);
+  background: rgba(191,126,67,0.1);
+}
+.preset-icon { font-size: 24px; }
+.preset-label { font-size: 12px; color: var(--text); }
+.preset-check {
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+/* ── Account tabs (multi-account management) ─────────────────────── */
+.account-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.account-tab-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.account-tab-row:hover { background: rgba(191,126,67,0.04); }
+.account-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  flex: 1;
+}
+.account-tab:hover { border-color: var(--accent); background: rgba(191,126,67,0.05); }
+.account-tab.selected {
+  border-color: var(--accent);
+  background: rgba(191,126,67,0.12);
+  color: var(--text-bright);
+}
+.account-tab-label { white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.account-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.account-tab-del {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 0 2px;
+  border-radius: 50%;
+  line-height: 1;
+}
+.account-tab-del:hover {
+  color: var(--red);
+  background: rgba(255,107,107,0.15);
+}
+
+/* ── Guide box ───────────────────────────────────────────────────── */
+.guide-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  max-height: 300px;
+  overflow-y: auto;
+}
+.guide-box h3 { color: var(--text-bright); font-size: 14px; margin: 12px 0 6px; }
+.guide-box h4 { color: var(--text); font-size: 13px; margin: 10px 0 4px; }
+.guide-box strong { color: var(--text); }
+.guide-box code {
+  background: var(--bg-card);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.guide-box a { color: var(--accent); text-decoration: none; }
+.guide-box a:hover { text-decoration: underline; }
+.guide-box ul { padding-left: 18px; margin: 4px 0; }
+.guide-box li { margin: 2px 0; }
+.guide-box blockquote {
+  border-left: 3px solid var(--orange);
+  margin: 8px 0;
+  padding: 4px 10px;
+  color: var(--orange);
+  background: rgba(255,169,77,0.08);
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Memory continuity selector ──────────────────────────────────── */
+.continuity-selector {
+  display: flex;
+  gap: 10px;
+}
+.continuity-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  text-align: center;
+}
+.continuity-option:hover {
+  border-color: var(--accent);
+  background: rgba(191,126,67,0.05);
+}
+.continuity-option.selected {
+  border-color: var(--accent);
+  background: rgba(191,126,67,0.1);
+}
+.continuity-option.selected .continuity-label {
+  color: var(--accent);
+}
+.continuity-icon { font-size: 24px; }
+.continuity-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.continuity-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ── Config actions ──────────────────────────────────────────────── */
+.config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Settings rows ─────────────────────────────────────────────── */
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row:last-of-type { border-bottom: none; }
+.setting-label { font-size: 14px; color: var(--text-bright); margin-bottom: 2px; }
+.setting-hint { font-size: 11px; color: var(--text-dim); }
+
+/* ── Toggle switch ─────────────────────────────────────────────── */
+.toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--border);
+  border-radius: 24px;
+  transition: all 0.2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute; height: 18px; width: 18px;
+  left: 3px; bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.toggle input:checked + .toggle-slider { background: var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* ── Color picker ────────────────────────────────────────────────── */
+.color-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.color-pick-row:last-of-type { border-bottom: none; }
+.color-pick-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+  color: var(--text);
+}
+.color-pick-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+.color-pick-swatch {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+  background: var(--bg-card);
+}
+.color-pick-hex {
+  width: 80px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ── Onboarding wizard ──────────────────────────────────────────── */
+.onboard-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+.onboard-overlay.show { display: flex; }
+body.onboarding-active .sidebar,
+body.onboarding-active .main { display: none !important; }
+.onboard-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 580px;
+  max-width: 92vw;
+  max-height: 85vh;
+  min-height: 380px;
+  overflow-y: auto;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.35);
+  padding: 32px 36px;
+  text-align: center;
+  transition: height 0.25s ease;
+}
+.onboard-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.onboard-step-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.3s;
+}
+.onboard-step-dot.done { background: var(--accent); }
+.onboard-step-dot.current { background: var(--accent); box-shadow: 0 0 0 3px rgba(191,126,67,0.3); }
+
+.onboard-body { min-height: 260px; }
+
+.onboard-logo { width: 72px; height: 72px; margin-bottom: 16px; }
+.onboard-title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.onboard-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; }
+.onboard-version { font-size: 12px; color: var(--text-dim); opacity: 0.5; margin-bottom: 4px; }
+
+.onboard-btn-next {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  font-size: 22px;
+  color: var(--text);
+  transition: all 0.2s;
+  margin-top: 16px;
+}
+.onboard-btn-next:hover { border-color: var(--accent); color: var(--accent); background: var(--bg-card); }
+
+.onboard-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  text-align: center;
+}
+.onboard-input:focus { outline: none; border-color: var(--accent); }
+
+.onboard-input-row {
+  display: flex;
+  gap: 8px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+.onboard-input-row .onboard-input { flex: 1; }
+.onboard-btn-browse {
+  padding: 10px 16px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.onboard-btn-browse:hover { border-color: var(--accent); }
+
+.onboard-warn {
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+  display: none;
+}
+
+.onboard-provider-link {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-decoration: none;
+  margin-left: 2px;
+  opacity: 0.6;
+}
+.onboard-provider-link:hover { color: var(--accent); opacity: 1; }
+
+.onboard-platform-grid {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.onboard-platform-chip {
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  min-width: 90px;
+}
+.onboard-platform-chip:hover { border-color: var(--accent); }
+.onboard-platform-chip.selected { border-color: var(--accent); background: rgba(191,126,67,0.08); }
+.onboard-platform-chip img { width: 32px; height: 32px; margin-bottom: 6px; display: block; margin-left: auto; margin-right: auto; }
+.onboard-platform-chip .chip-label { font-size: 13px; color: var(--text); font-weight: 500; }
+
+.onboard-config-form { margin-top: 16px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; }
+.onboard-config-form .form-group { margin-bottom: 10px; }
+.onboard-config-form label { font-size: 12px; color: var(--text-dim); }
+.onboard-config-form input {
+  width: 100%; padding: 8px 12px; margin-top: 3px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 13px;
+}
+
+.onboard-help-link {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+.onboard-help-link:hover { text-decoration: underline; }
+
+.onboard-success-icon {
+  font-size: 56px;
+  margin-bottom: 12px;
+  animation: onboardPopIn 0.5s ease;
+}
+@keyframes onboardPopIn {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.onboard-btn-primary {
+  display: inline-block;
+  padding: 12px 32px;
+  background: var(--accent);
+  color: #1a1a1a;
+  font-weight: 700;
+  font-size: 15px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: all 0.2s;
+}
+.onboard-btn-primary:hover { filter: brightness(0.9); }
+
+.onboard-provider-grid {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.onboard-provider-chip {
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.onboard-provider-chip:hover { border-color: var(--accent); }
+.onboard-provider-chip.selected { border-color: var(--accent); background: rgba(191,126,67,0.1); font-weight: 600; }
+.onboard-provider-chip img { width: 20px; height: 20px; }
+
+/* ── Responsive ────────────────────────────────────────────────── */
+.hidden { display: none !important; }
+.row { display: flex; gap: 16px; }
+.col { flex: 1; }
+.col-right { width: 380px; flex-shrink: 0; }
+
+/* ── Provider icon (SVG) ──────────────────────────────────────────── */
+.provider-icon-svg {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.provider-icon-emoji {
+  font-size: 20px;
+  vertical-align: middle;
+}
+
+/* ── Channel icon (SVG) ─────────────────────────────────────────────── */
+.channel-icon-svg {
+  width: 28px;
+  height: 28px;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Workspace v2 — security settings UI
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Setting sections ───────────────────────────────────────────────── */
+.setting-section { }
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+.setting-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 2px;
+}
+.setting-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ── Toggle switch ──────────────────────────────────────────────────── */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.toggle-switch input { display: none; }
+.toggle-slider {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--border);
+  border-radius: 24px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; top: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* ── Workspace table ────────────────────────────────────────────────── */
+.workspace-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+.workspace-table th {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 2px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.workspace-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.workspace-table tr:hover { background: rgba(191,126,67,0.04); }
+
+/* ── Forbidden list ─────────────────────────────────────────────────── */
+.forbidden-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.forbidden-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-family: monospace;
+}
+.forbidden-list li:last-child { border-bottom: none; }
+
+/* ── Permission editor ──────────────────────────────────────────────── */
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.perm-row:last-child { border-bottom: none; }
+.perm-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+
+/* ── Category toggle (blue clickable text) ─────────────────────────── */
+.category-toggle {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: none;
+  user-select: none;
+}
+.category-toggle:hover { text-decoration: underline; }
+.category-list {
+  display: none;
+  margin: 6px 0 10px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.category-list.show { display: flex; }
+
+/* ── Extension checkbox ─────────────────────────────────────────────── */
+.ext-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.ext-check:hover { background: rgba(191,126,67,0.1); }
+.ext-check input { cursor: pointer; }
+
+/* ── Warning banner ─────────────────────────────────────────────────── */
+.warning-banner {
+  background: rgba(255,107,107,0.12);
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--red);
+  margin: 4px 0 10px;
+  line-height: 1.5;
+}
+
+/* ── Watcher dot ────────────────────────────────────────────────────── */
+.watcher-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.watcher-dot.running { background: var(--green); box-shadow: 0 0 4px rgba(81,207,102,0.5); }
+.watcher-dot.stopped { background: var(--border); }
+
+/* ── Modal panel wide variant ───────────────────────────────────────── */
+.modal-panel-wide { width: 600px; max-width: 95vw; }
+
+/* ── Notification banner (watcher sync) ─────────────────────────────── */
+.notification-banner {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  z-index: 900;
+  animation: slideInRight 0.3s ease, fadeOut 0.5s ease 4.5s forwards;
+  max-width: 400px;
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fadeOut { to { opacity: 0; } }
+
+/* ── Update notification ─────────────────────────────────────────────── */
+#update-dot {
+  animation: updatePulse 2s ease-in-out infinite;
+}
+@keyframes updatePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.update-toast {
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  cursor: pointer;
+  pointer-events: auto;
+  line-height: 1.5;
+  animation: toastIn 0.3s ease;
+}
+.update-progress-bar {
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.update-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   审批浮窗
+
+   居中浮窗；`.docked` = 靠到右边缩小（左上角「‹ 浏览上下文」切换）。
+   停靠态的标签文字精确是「等待审批」（有测试钉着），
+      所以这里只负责藏起正文与选项，不改字。 */
+.approval-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: none;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.35);
+}
+.approval-card {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, 88vw);
+  max-height: 76vh;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.approval-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.approval-title { font-weight: 600; font-size: 15px; }
+.approval-dock {
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 8px; cursor: pointer;
+  font-size: 12px; color: var(--text);
+}
+.approval-text { font-size: 13px; line-height: 1.5; margin-bottom: 10px; white-space: pre-wrap; }
+.approval-question { font-size: 13px; margin-bottom: 8px; }
+.approval-options { display: flex; flex-direction: column; gap: 6px; }
+.approval-option {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.approval-option.sel {
+  border-color: var(--accent);
+  background: rgba(191, 126, 67, 0.14);
+}
+.approval-key { font-weight: 600; min-width: 16px; }
+.approval-input {
+  width: 100%; padding: 8px 10px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); color: var(--text);
+}
+.approval-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 12px;
+}
+.approval-hint { font-size: 11px; color: var(--text-dim); }
+
+/* 停靠态：缩到左侧边栏上，只留标题行
+   位置刻意放在偏下（不是顶部）：顶部是状态栏和活动流的地盘，
+   放那儿会跟内容混在一起。偏下的位置 + 琥珀色描边 + 呼吸动画，
+   是为了让"还有一个待审批"这件事一眼可见（位置要显得突兀，提醒用户在这里）。
+   放在左侧而不是右侧（设计选择）：左侧边栏宽 220px，塞得下；
+   而且底色是深绿 `--bg-sidebar`，卡片是浅奶油 `--bg-card` ——
+   对比度比压在右侧的内容区上强得多，一眼就能看见。
+   点击整张卡都要能飘回来 —— 处理函数在 `_approvalCardClick`，
+   且只在停靠态挂着。`.approval-dock` 按钮停靠时被藏掉，这里是唯一的回路。 */
+.approval-modal.docked { background: transparent; pointer-events: none; }
+.approval-modal.docked .approval-card {
+  top: 46%; left: 12px; right: auto;
+  transform: none;
+  width: 196px;                 /* 220 - 12*2 = 196：贴边栏但不撑满 */
+  max-height: none;
+  padding: 12px 14px;
+  pointer-events: auto;
+  cursor: pointer;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px rgba(83, 124, 88, 0.55),
+              0 6px 24px rgba(0, 0, 0, 0.35);
+  animation: approval-breathe 1.6s ease-in-out infinite;
+}
+/* 停靠态下标题是唯一的点击目标（回飘入口），给它铺满整张卡 */
+.approval-modal.docked .approval-title {
+  display: block;
+  color: var(--accent);
+  font-size: 14px;
+  text-align: center;
+  padding: 2px 0;
+}
+.approval-modal.docked .approval-body,
+.approval-modal.docked .approval-options,
+.approval-modal.docked .approval-foot,
+.approval-modal.docked .approval-dock { display: none; }
+
+/* 呼吸：在左侧边栏的深绿底上做，所以用外扩的光晕而不是投影 —— 投影在深色
+   底上几乎看不见（这正是"一眼可见"要解决的那个问题）。 */
+@keyframes approval-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(191, 126, 67, 0.25),
+                         0 6px 20px rgba(0, 0, 0, 0.30); }
+  50%      { box-shadow: 0 0 0 6px rgba(191, 126, 67, 0.70),
+                         0 6px 26px rgba(0, 0, 0, 0.40); }
+}
+
+/* 升级项（第 3 次起才出现的「本次对话内自动放行」）：主动提示"这里多了一个东西"。
+   它排最后 + 永不默认选中，不加提示就会被整个忽略 ——
+   而它恰恰是范围最大的那一项。 */
+.approval-option.escalate {
+  border-color: var(--accent);
+  border-width: 2px;
+  animation: approval-blink 1.1s ease-in-out infinite;
+}
+@keyframes approval-blink {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(191, 126, 67, 0.0); }
+  50%      { box-shadow: 0 0 0 4px rgba(191, 126, 67, 0.35); }
+}
+
+/* 尊重系统的"减弱动态效果" —— 呼吸/闪烁一律停掉，但保留描边，
+   否则关心的那两条视觉线索就一起没了。 */
+@media (prefers-reduced-motion: reduce) {
+  .approval-modal.docked .approval-card,
+  .approval-option.escalate { animation: none; }
+}
+
+/* ═══ 右侧栏 diff ═══════════════════════════════════════════════════
+   逐行渲染（零 innerHTML），每一行是一个 div，靠前缀类上色。
+   等宽字体是判据的一部分：diff 对齐要靠它。 */
+.diff-panel {
+  position: fixed; top: 0; right: 0; height: 100vh; width: min(52vw, 780px);
+  background: var(--bg-card, #fff); border-left: 1px solid var(--border, #ddd);
+  box-shadow: -8px 0 24px rgba(0,0,0,0.14); z-index: 60;
+  display: flex; flex-direction: column;
+}
+.diff-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border, #ddd);
+}
+.diff-title {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.diff-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.diff-open { font-size: 13px; }
+.diff-note {
+  padding: 8px 14px; font-size: 13px; color: var(--text-dim, #000);
+  border-bottom: 1px solid var(--border, #ddd);
+}
+.diff-note:empty { display: none; }
+.diff-body {
+  flex: 1; overflow: auto; padding: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12.5px; line-height: 1.5;
+}
+.diff-line { padding: 0 14px; white-space: pre; }
+.diff-fileline { color: var(--text-dim, #000); }
+.diff-hunk { color: var(--accent, #996536); }
+.diff-add { background: rgba(63,185,80,0.20); }
+.diff-del { background: rgba(248,81,73,0.20); }
+
+/* 「查看改动文件」里的文件名 —— 按钮（点开右侧栏 diff）。 */
+.file-chip-btn {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+  text-decoration: underline;
+}

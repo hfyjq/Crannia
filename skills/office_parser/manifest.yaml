@@ -1,0 +1,3060 @@
+kind: skill
+name: office_parser
+version: "0.5.0"
+draft: false
+load_strategy: on_demand
+#: 技能级分类器声明：这一族的工具只写得到工作区（`SecurityGuard` 挡着），
+#: 而第 ② 层（工作区内的写）在运行期已经把它们放行了。逐个抄 70 遍 `none`
+#: 不是做过 70 个决定，是把同一个决定抄 70 遍。所以：技能级默认 + 工具级覆盖
+#: （见下面的 delete_files）。
+review_input: none
+description: "Full Office suite — Word/PowerPoint/Excel parsing, creation, formatting, charts, pivot tables, Excel tables, sheet management, PDF conversion, and AI-driven SVG-to-DrawingML PPT generation."
+
+tools:
+  - name: parse_docx
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      Stream-parse a Word (.docx) file paragraph by paragraph, extract tables,
+      and chunk the content. Returns metadata only — use search_chunks to
+      query specific content or summarize_document for a full summary.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the .docx file. If relative, resolved under workspace/"
+      required: ["file_path"]
+
+  - name: parse_pptx
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      Extract text from a PowerPoint (.pptx) file slide by slide.
+      Each slide is treated as one page. Text from all shapes (titles,
+      text boxes, tables) is collected and chunked.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the .pptx file. If relative, resolved under workspace/"
+      required: ["file_path"]
+
+  - name: parse_xlsx
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      Stream-read an Excel spreadsheet (.xlsx or .xls).
+      .xlsx uses openpyxl read_only mode; .xls (Excel 97–2003) uses xlrd.
+      Rows are read one at a time, accumulated into pages (100 rows each), and chunked.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the .xlsx or .xls file. If relative, resolved under workspace/"
+        sheet_name:
+          type: string
+          description: "Optional: specific sheet name to read. Defaults to the active sheet."
+      required: ["file_path"]
+
+  # ==================================================================
+  # v0.8.5: Document structure extraction
+  # ==================================================================
+
+  - name: extract_document_structure
+    permission: read
+    destructive: false
+    description: >
+      Extract document outline/structure from Word (.docx) or PowerPoint
+      (.pptx) files without full text parsing. For Word: returns heading
+      hierarchy with levels, text, and paragraph positions. For PowerPoint:
+      returns slide numbers, layout types, and titles.
+      Use to quickly understand document organization before deciding
+      whether to do a full parse.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the .docx or .pptx file. If relative, resolved under workspace/"
+      required: ["file_path"]
+
+  # ==================================================================
+  # v0.2.0: Write operations
+  # ==================================================================
+
+  - name: create_document
+    permission: write
+    destructive: false
+    description: >
+      创建 Word 文档 / PPT 会话 / 纯文本。
+
+      Word 与 TXT【推荐】：整篇正文放进 `content`，再给 `output_name` ——
+      「创建→写入→导出」= 1 次调用。content 支持轻量 Markdown：
+      `#`/`##`/`###` 标题(1-3 级) · `-`/`*`/`1.` 列表 · 空行分段。
+      用户说"输出到 txt / 存成 txt / 要文字版"时用 doc_type="txt"。
+
+      ⚠️ 不要"一个段落调一次 add_block" —— 每多一次调用就多一次完整 LLM
+      往返，写一次摘要会因此膨胀到 ~40 次调用 / 23 万 tokens。
+      add_block 只用于图片这类结构化块（它有 20 块上限）。
+
+      PPT：建会话后用 add_slide 逐步构建，export_document 渲染。
+      Excel：直接用 write_excel_data（无需 session）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        doc_type:
+          type: string
+          enum: ["word", "ppt", "ppt_svg", "txt"]
+          description: "txt=纯文本，content 原样写入、不做 Markdown 解析"
+        title:
+          type: string
+          description: "可选标题"
+        content:
+          type: string
+          description: >
+            【推荐】整篇正文，一次写完。
+            **支持的 Markdown 子集**：`#`/`##`/`###` 标题 · `- ` 或 `1. ` 列表 ·
+            空行分段 · `**加粗**` · **管道表格**（`| a | b |` 后接一行
+            `| --- | --- |` 分隔 ⇒ 建成真表格）。
+            · **指标卡** `:::kpi`…`:::`：行内 `标签 | 数值 | 增减`（后两列可省）——
+              **3-4 个**核心数字用卡片，再多就用表格。
+            · **提示框**：注意事项 `> [!NOTE]`、风险警告 `[!WARNING]`、禁止/危险 `[!CAUTION]`；
+              光 `>` 是引用块。
+            · **分隔线** `---`（单独一行，用在**章节之间**）。
+            ⚠️ 图片仍不在里面 —— 走 `add_block(block_type="image", image_path=...)`。
+        output_name:
+          type: string
+          description: "给了它就在同一次调用里导出成最终文件名（省掉 export_document）"
+        source_file:
+          type: string
+          description: >
+            ★★ **长报告走这条**：内容**引用一个文件**（`.md` / `.txt`），
+            不必把正文塞进这次调用。先把内容分几次 `write_file` / `edit_file`
+            写进一个文件，再 `create_document(source_file="报告.md")` 一次成形。
+            ⚠️ 正文**很长时优先用它** —— 一次调用塞不下的长内容会被上游截断，
+            那会掉进「参数为空」那条路（工具会拒并告诉你怎么改，但白跑一趟）。
+            `content` 与它同时给 ⇒ **`content` 优先**。
+      required: ["doc_type"]
+
+  - name: add_block
+    permission: write
+    destructive: false
+    description: >
+      向 Word 文档追加**一个**内容块，立即写盘（块类型见 block_type 枚举）。
+
+      ⚠️ 只用于表格 / 图片这类**结构化块** —— 纯文字的整篇内容走
+      create_document(content=)，一次写完。
+
+      ⚠️ 硬上限 20 块，超过直接失败。session_id 必须是 create_document
+      返回的那个 .docx 路径，不要自己拼。
+      ★★ **报告很长（>20 块）时别用它** —— 走
+      `create_document(source_file=…)`：先把正文写成文件，一次成形。
+      逐块加出来的长文档**会丢掉标题层级**（到上限就只能压成大段落）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "From create_document()"
+        block_type:
+          type: string
+          enum: ["heading", "paragraph", "table", "list", "image", "page_break"]
+        content:
+          type: string
+          description: "Text content (for heading/paragraph/list)"
+        level:
+          type: integer
+          description: "Heading level 1-3 (for heading block_type)"
+        rows:
+          type: array
+          items:
+            type: array
+            items: {type: string}
+          description: "List of row lists for table block_type"
+        image_path:
+          type: string
+          description: "Path to image file (relative to workspaces)"
+        ordered:
+          type: boolean
+          description: "True for ordered/numbered list"
+      required: ["session_id", "block_type"]
+
+  - name: add_slide
+    permission: write
+    destructive: false
+    description: >
+      Append a slide to a PowerPoint presentation under construction.
+      Slide types: title (title+subtitle), content (title+bullets),
+      image (title+picture), table (title+data rows).
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+      【中文】往一个正在制作的 PPT 里加一页（简版路线，4 种版式）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "From create_document(doc_type='ppt')"
+        slide_type:
+          type: string
+          enum: ["title", "content", "image", "table"]
+        title:
+          type: string
+          description: "Slide title"
+        bullets:
+          type: array
+          items: {type: string}
+          description: "Bullet points (for content slide)"
+        image_path:
+          type: string
+          description: "Image path (for image slide)"
+        rows:
+          type: array
+          items:
+            type: array
+            items: {type: string}
+          description: "Row data (for table slide)"
+      required: ["session_id", "slide_type"]
+
+  - name: export_document
+    permission: write
+    destructive: false
+    description: >
+      Word: 重命名工作文件为最终文件名（add_block 已实时写盘，无需渲染）。
+      ★ 目标文件**已存在**时必须先读过它（`get_document_text`）—— 这一步是**整本覆盖**，盖掉一份你没读过的文件会被拒。
+      PPT/PPT_SVG: 从累积的幻灯片渲染为 .pptx 文件并保存到磁盘。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+      ★ **生成完还能继续改**：背景 / 裁剪 / 音频 / 母版样式 / 隐藏母版图形交给**幻灯片美化**那五件（`set_ppt_background` · `set_ppt_background_graphics` · `crop_ppt_picture` · `add_ppt_audio` · `set_ppt_master_text_style`）—— 那些是 SVG 表达不了的东西。
+      【中文】把会话里的内容**渲染成最终文件**（Word 是重命名，PPT 是从累积的幻灯片导出 .pptx）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "Word: 文件路径。PPT: create_document() 返回的 session_id"
+        output_name:
+          type: string
+          description: "输出文件名 (e.g. 'report.docx', 'slides.pptx')"
+      required: ["session_id"]
+
+  # ==================================================================
+  # v0.5.0: Full Excel manipulation suite (ported from excel-mcp-server)
+  # ==================================================================
+
+  - name: get_workbook_metadata
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      获取 Excel 工作簿的元数据：工作表列表、数量、文件大小。
+      可选 include_ranges=true 获取每个工作表的已使用范围。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        include_ranges:
+          type: boolean
+          default: false
+          description: "是否包含每个工作表的已使用范围"
+      required: ["file_path"]
+
+  - name: read_excel_data
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      读取 Excel 单元格区域。三种读法：(1) 看一小块 —— 默认，逐格回地址/值/行列号；
+      (2) 大表翻页 —— compact=true 配 max_rows/offset，回二维数组，走流式；
+      (3) ★ 同一块区域 × 全簿 —— sheet_name="*"，一次把每张表的同一区域都读回来，
+      回 blocks 每表一段。这是"逐月对比 / 跨表汇总"的正确读法（别一张张表调 9 次）。
+      公式默认回**缓存值**（不是公式串），所以累计/环比这类算出来的数能直接看到。
+      合并单元格里的分组标签默认只出现在左上角那一格，merge_mode="fill" 可把它铺满。
+      ★★ **做汇总时**：表里若已有 `累计` / `合计` / `小计` / `年计划`
+      这类列，**优先用它的数**（那是这张表的权威口径）；**若你自己算了，
+      必须跟表里那个数对一次账，对不上要告诉用户** —— 对不上通常意味着
+      表里有调整，而那正是用户最需要知道的。
+      ⚠️ 你只读了某个范围时，回执会告诉你**范围之外还有什么**
+      （只读 A5:H12 会漏掉 累计完成 / 年计划 / 完成进度 / 上年度累计 那几列）——
+      **看到它就先去看那边，别急着自己加**。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx / .xls 文件路径"
+        sheet_name:
+          type: string
+          description: >
+            工作表名；**"*" = 全部工作表**（跨表读）；省略 = 第一张表。
+            用于"1-9月对比"这类：给 "*" 配 columns 一次拿全。
+        start_cell:
+          type: string
+          default: "A1"
+        end_cell:
+          type: string
+          description: >
+            结束单元格。不提供则自动向下扩展（有行数安全上限，撞到会在 notes 里说）。
+            ★ 跨表读时**给出它**很重要，否则每张表都按同一块区域读，容易顶穿预算。
+        columns:
+          type: array
+          items: {type: string}
+          description: >
+            只保留这几列（**列字母**，如 ["B","E","F"]）。跨表读时几乎必需 ——
+            9 张表 × 全宽很容易超出单次上限。用字母不用列名：表里的名字常带空格
+            或前后不一致（"花  鲢" / "黄桑鱼" vs "黄颡鱼"），只有位置可靠。
+        compact:
+          type: boolean
+          default: false
+          description: "true = 回二维数组，**首列是表内行号**（其余才是值），省一半以上字符；大表分页时配 max_rows/offset 用"
+        offset:
+          type: integer
+          default: 0
+          description: "从区域第几行开始（配合 compact 翻页）"
+        max_rows:
+          type: integer
+          description: "最多回几行（配合 compact 翻页）"
+        merge_mode:
+          type: string
+          enum: ["raw", "fill"]
+          default: "raw"
+          description: >
+            "raw" = 原样（合并区非左上角是空）；"fill" = 把分组标签铺到成员格并标
+            merged_from。纵向合并的报表（分组小计那种）要用 "fill"，否则看不出
+            后面几行属于哪个组。
+        formula_mode:
+          type: string
+          enum: ["auto", "cached", "formula"]
+          default: "auto"
+          description: >
+            "auto"（默认）= 有缓存值给值、没有给公式串，并标出哪些格是公式；
+            "cached" = 只要值；"formula" = 只要公式串（一般不需要）。
+            默认给**值**是有意的：跨表累计/环比全靠公式，给公式串就读不到数。
+        include_validation:
+          type: boolean
+          default: false
+          description: "附带每格的数据验证规则（下拉列表等）；会关掉流式快路"
+      required: ["file_path"]
+
+  - name: write_excel_data
+    permission: write
+    destructive: false
+    description: >
+      直接向 Excel 工作表写入数据（无需 session）。文件不存在时会自动创建。
+      ★ 文件**已存在**时必须先读过它（`read_excel_data`）—— 写的是**模型给的那块数据**，盖掉一份你没读过的表会被拒。
+      data 为二维列表，每行是一个列表。
+      ★ 以 `=` 开头的值**默认按文本写**（它们不会变成公式）。要写真公式：用 `apply_formula`，或传 `allow_formula=true`。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+          description: "目标工作表名称"
+        data:
+          type: array
+          items:
+            type: array
+            items: {}
+          description: "要写入的数据，每行为一个列表"
+        start_cell:
+          type: string
+          default: "A1"
+        allow_formula:
+          type: boolean
+          default: false
+          description: >
+            `=` 开头的值按什么写。false（默认）= 按**字面文本**写；
+            true = 当公式写，并过公式禁形检查（DDE / 外部工作簿引用会被拒）。
+      required: ["file_path", "sheet_name", "data"]
+
+  - name: apply_formula
+    permission: write
+    destructive: false
+    description: >
+      向单元格应用 Excel 公式（如 SUM/AVERAGE/VLOOKUP/IF 等）。
+      先验证公式语法再写入。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+        cell:
+          type: string
+          description: "目标单元格，如 'D5'"
+        formula:
+          type: string
+          description: "Excel 公式，如 '=SUM(A1:A10)'"
+      required: ["file_path", "sheet_name", "cell", "formula"]
+
+  - name: validate_formula_syntax
+    permission: write
+    destructive: false
+    description: >
+      验证 Excel 公式语法（括号匹配、单元格引用合法性），不实际写入。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+        cell:
+          type: string
+        formula:
+          type: string
+      required: ["file_path", "sheet_name", "cell", "formula"]
+
+  - name: format_excel_range
+    permission: write
+    destructive: false
+    description: >
+      对单元格区域应用格式：字体（加粗/斜体/下划线/大小/颜色）、
+      背景色、边框（样式/颜色）、数字格式、对齐方式、自动换行、
+      合并单元格、条件格式（色阶/数据条/图标集/公式规则）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+        start_cell:
+          type: string
+          description: "起始单元格，如 'A1'"
+        end_cell:
+          type: string
+          description: "结束单元格（可选，不提供则只格式化起始格）"
+        bold:
+          type: boolean
+          default: false
+        italic:
+          type: boolean
+          default: false
+        underline:
+          type: boolean
+          default: false
+        font_size:
+          type: integer
+          description: "字体大小（磅）"
+        font_color:
+          type: string
+          description: "字体颜色，6位hex如 'FF0000'"
+        bg_color:
+          type: string
+          description: "背景色，6位hex如 'FFFF00'"
+        border_style:
+          type: string
+          enum: ["thin", "medium", "thick", "double", "dashed", "dotted"]
+        border_color:
+          type: string
+          description: "边框颜色，6位hex"
+        number_format:
+          type: string
+          description: "数字格式，如 '#,##0.00' 或 'YYYY-MM-DD'"
+        alignment:
+          type: string
+          enum: ["left", "center", "right", "justify"]
+        wrap_text:
+          type: boolean
+          default: false
+        merge_cells:
+          type: boolean
+          default: false
+          description: "是否合并该区域"
+        conditional_format:
+          type: object
+          description: >
+            条件格式规则，例如 {"type":"color_scale","params":{...}}
+            支持: color_scale, data_bar, icon_set, formula, cell_is
+        column_width:
+          type: number
+          description: "列宽（Excel 的字符数单位）。区域跨 B:D 就给这三列都设一遍。"
+        row_height:
+          type: number
+          description: "行高（磅）。区域里的每一行都设一遍。"
+        auto_width:
+          type: boolean
+          default: false
+          description: >
+            按每列**最长的内容**自动估列宽（中文按两倍宽算）。表格内容宽窄不一时用这个，
+            比手填 column_width 省事；两者都给时以 column_width 为准。
+      required: ["file_path", "sheet_name", "start_cell"]
+
+  - name: create_excel_chart
+    permission: write
+    destructive: false
+    description: >
+      在工作表中创建图表，锚定到指定单元格。**data_range 的首列当类别轴**，
+      其余每列一条序列。类型：line(折线) bar(柱状) pie(饼图) scatter(散点)
+      area(面积) doughnut(圆环) radar(雷达) bubble(气泡) surface(曲面)
+      stock(**股价图**，要 4 列：开/高/低/收) projectedpie(复合饼图)。
+      ★ **组合图**：主图给 chart_type + data_range，其余每条腿放 combo 里
+      （每条腿自带 chart_type 与 data_range）—— 「柱形 + 折线同图」就用它。
+      ★ 子类型用 grouping（clustered/stacked/percentStacked，柱/线/面积）；
+      bar_dir 区分柱('col')与条('bar')；marker=true 给折线加数据标记。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        data_range:
+          type: string
+          description: "数据范围，如 'A1:B10'（首列是类别）"
+        chart_type:
+          type: string
+          enum: ["line", "bar", "pie", "scatter", "area", "doughnut",
+                 "radar", "bubble", "surface", "stock", "projectedpie"]
+        target_cell:
+          type: string
+          description: "图表左上角锚定单元格，如 'D1'"
+        title:
+          type: string
+          description: "图表标题"
+        x_axis:
+          type: string
+          description: "X轴标签"
+        y_axis:
+          type: string
+          description: "Y轴标签"
+        show_data_labels:
+          type: boolean
+          default: true
+          description: "是否显示数据标签"
+        show_legend:
+          type: boolean
+          default: true
+          description: "是否显示图例"
+        grouping:
+          type: string
+          enum: ["clustered", "standard", "stacked", "percentStacked"]
+          description: "分组方式（柱/线/面积）：堆积折线图 = stacked"
+        bar_dir:
+          type: string
+          enum: ["col", "bar"]
+          description: "柱状图的方向：col 是柱，bar 是条"
+        marker:
+          type: boolean
+          default: false
+          description: "折线/散点是否每条序列都带数据标记"
+        style:
+          type: integer
+          description: "图表预设样式 1~48（0 = 默认）"
+        legend_position:
+          type: string
+          enum: ["r", "l", "t", "b", "tr"]
+          description: "图例位置：t 是顶部"
+        gridlines:
+          type: boolean
+          default: true
+          description: "是否保留主要网格线（false = 删掉）"
+        combo:
+          type: array
+          description: "组合图的其余各条腿"
+          items:
+            type: object
+            properties:
+              chart_type: {type: string}
+              data_range: {type: string}
+              grouping: {type: string}
+              bar_dir: {type: string}
+              marker: {type: boolean}
+              y_axis: {type: string}
+            required: ["chart_type", "data_range"]
+      required: ["file_path", "sheet_name", "data_range", "chart_type", "target_cell"]
+
+  - name: create_excel_pivot
+    permission: write
+    destructive: false
+    description: >
+      创建透视汇总表（新工作表）。按 rows 字段分组，对 values 字段
+      执行聚合（sum/average/count/min/max）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+          description: "源数据工作表"
+        data_range:
+          type: string
+          description: "源数据范围，如 'A1:D100'"
+        rows:
+          type: array
+          items: {type: string}
+          description: "分组字段列表"
+        values:
+          type: array
+          items: {type: string}
+          description: "聚合值字段列表"
+        columns:
+          type: array
+          items: {type: string}
+          description: "可选的列分组字段"
+        agg_func:
+          type: string
+          enum: ["sum", "average", "count", "min", "max"]
+          default: "sum"
+      required: ["file_path", "sheet_name", "data_range", "rows", "values"]
+
+  - name: create_excel_table
+    permission: write
+    destructive: false
+    description: >
+      将指定区域转换为原生 Excel 表格，带条纹样式和筛选器。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        data_range:
+          type: string
+          description: "表格数据范围，如 'A1:D20'"
+        table_name:
+          type: string
+          description: "表格名称（可选，自动生成）"
+        table_style:
+          type: string
+          default: "TableStyleMedium9"
+          description: "表格样式名，如 TableStyleMedium9"
+      required: ["file_path", "sheet_name", "data_range"]
+
+  - name: copy_worksheet
+    permission: write
+    destructive: false
+    description: >
+      在同一工作簿内复制工作表。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        source_sheet:
+          type: string
+          description: "源工作表名称"
+        target_sheet:
+          type: string
+          description: "目标工作表名称（不能已存在）"
+      required: ["file_path", "source_sheet", "target_sheet"]
+
+  - name: delete_worksheet
+    permission: write
+    destructive: false
+    description: >
+      从工作簿中删除工作表（不能删除唯一的工作表）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+      required: ["file_path", "sheet_name"]
+
+  - name: rename_worksheet
+    permission: write
+    destructive: false
+    description: >
+      重命名工作簿中的工作表。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        old_name:
+          type: string
+          description: "当前工作表名称"
+        new_name:
+          type: string
+          description: "新工作表名称"
+      required: ["file_path", "old_name", "new_name"]
+
+  - name: merge_excel_cells
+    permission: write
+    destructive: false
+    description: >
+      合并单元格区域。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_cell:
+          type: string
+        end_cell:
+          type: string
+      required: ["file_path", "sheet_name", "start_cell", "end_cell"]
+
+  - name: unmerge_excel_cells
+    permission: write
+    destructive: false
+    description: >
+      取消合并单元格区域。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_cell:
+          type: string
+        end_cell:
+          type: string
+      required: ["file_path", "sheet_name", "start_cell", "end_cell"]
+
+  - name: get_merged_cells
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      获取工作表中所有已合并的单元格区域列表。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+      required: ["file_path", "sheet_name"]
+
+  - name: copy_excel_range
+    permission: write
+    destructive: false
+    description: >
+      将单元格区域复制到另一个位置（同工作表或跨工作表）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        source_start:
+          type: string
+          description: "源起始单元格"
+        source_end:
+          type: string
+          description: "源结束单元格"
+        target_start:
+          type: string
+          description: "目标起始单元格"
+        target_sheet:
+          type: string
+          description: "目标工作表（可选，默认同工作表）"
+      required: ["file_path", "sheet_name", "source_start", "source_end", "target_start"]
+
+  - name: delete_excel_range
+    permission: write
+    destructive: false
+    description: >
+      删除单元格区域并移动剩余单元格（向上或向左）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_cell:
+          type: string
+        end_cell:
+          type: string
+        shift_direction:
+          type: string
+          enum: ["up", "left"]
+          default: "up"
+      required: ["file_path", "sheet_name", "start_cell", "end_cell"]
+
+  - name: insert_excel_rows
+    permission: write
+    destructive: false
+    description: >
+      在指定行之前插入一行或多行。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_row:
+          type: integer
+          description: "在此行之前插入"
+        count:
+          type: integer
+          default: 1
+          description: "插入行数"
+      required: ["file_path", "sheet_name", "start_row"]
+
+  - name: insert_excel_columns
+    permission: write
+    destructive: false
+    description: >
+      在指定列之前插入一列或多列。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_col:
+          type: integer
+          description: "在此列之前插入"
+        count:
+          type: integer
+          default: 1
+          description: "插入列数"
+      required: ["file_path", "sheet_name", "start_col"]
+
+  - name: delete_excel_rows
+    permission: write
+    destructive: false
+    description: >
+      从指定行开始删除一行或多行。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_row:
+          type: integer
+          description: "起始行号"
+        count:
+          type: integer
+          default: 1
+      required: ["file_path", "sheet_name", "start_row"]
+
+  - name: delete_excel_columns
+    permission: write
+    destructive: false
+    description: >
+      从指定列开始删除一列或多列。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        sheet_name:
+          type: string
+        start_col:
+          type: integer
+          description: "起始列号"
+        count:
+          type: integer
+          default: 1
+      required: ["file_path", "sheet_name", "start_col"]
+
+  # ==================================================================
+  # v0.5.0: Full Word manipulation suite (ported from Office-Word-MCP-Server)
+  # ==================================================================
+
+  # -- Document management --
+
+  - name: get_document_info
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      获取 Word 文档的元数据：标题、作者、段落数、表格数、文件大小。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".docx 文件路径"
+      required: ["file_path"]
+
+  - name: get_document_text
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      提取 Word 文档的全部文本内容（按段落分行）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+      required: ["file_path"]
+
+  - name: get_document_outline
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      提取 Word 文档的大纲结构（所有标题的级别、文本、段落索引）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+      required: ["file_path"]
+
+  - name: list_available_documents
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      列出指定目录中的所有 .docx 文件及其大小。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        directory:
+          type: string
+          default: "."
+          description: "搜索目录（默认 workspace）"
+
+  - name: copy_document
+    permission: write
+    destructive: false
+    description: >
+      创建 Word 文档的副本。
+      ★ 目标文件**已存在**时必须先读过它（`get_document_text`）—— 副本是**整本覆盖**，盖掉一份你没读过的文件会被拒。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        source_file:
+          type: string
+          description: "源文档路径"
+        destination_file:
+          type: string
+          description: "目标路径（可选，默认自动生成）"
+      required: ["source_file"]
+
+  - name: merge_documents
+    permission: write
+    destructive: false
+    description: >
+      将多个 Word 文档合并为一个文档。可选择在文档间插入分页符。自动复制表格。
+      ★ 目标文件**已存在**时必须先读过它（`get_document_text`）—— 本工具是**整本覆盖**，盖掉一份你没读过的文件会被拒。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        target_file:
+          type: string
+          description: "输出文件名"
+        source_files:
+          type: array
+          items: {type: string}
+          description: "要合并的源文件列表"
+        add_page_breaks:
+          type: boolean
+          default: true
+          description: "是否在文档间插入分页符"
+      required: ["target_file", "source_files"]
+
+  # -- Enhanced content creation --
+
+  - name: add_word_heading
+    permission: write
+    destructive: false
+    description: >
+      向 Word 文档添加带格式的标题。支持字体/大小/加粗/斜体/底部边框。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        text:
+          type: string
+          description: "标题文本"
+        level:
+          type: integer
+          default: 1
+          description: "标题级别 (1-9)"
+        font_name:
+          type: string
+          description: "字体（如 黑体）"
+        font_size:
+          type: integer
+          description: "字体大小（磅）"
+        bold:
+          type: boolean
+        italic:
+          type: boolean
+        border_bottom:
+          type: boolean
+          default: false
+          description: "是否添加底部边框（分区标题）"
+      required: ["file_path", "text"]
+
+  - name: add_word_paragraph
+    permission: write
+    destructive: false
+    description: >
+      向 Word 文档添加带格式的段落。支持字体/大小/加粗/斜体/颜色/样式。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        text:
+          type: string
+        style:
+          type: string
+          description: "可选的段落样式名"
+        font_name:
+          type: string
+        font_size:
+          type: integer
+        bold:
+          type: boolean
+        italic:
+          type: boolean
+        color:
+          type: string
+          description: "字体颜色，hex 如 'FF0000' 或颜色名如 'red'"
+      required: ["file_path", "text"]
+
+  - name: apply_table_of_contents
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      插入**目录** / **图目录** / **表目录** —— 写的是**真域**（`TOC`），
+      Word/WPS 打开时可以更新，不是一张死清单。
+      ★ `kind`：`toc`=正文目录（按标题样式收，`max_level` 管显示级别）/
+      `figure`=**图目录** / `table`=**表目录**（后两个按**题注标签**收）。
+      ★ 放在哪儿：给 `replace_text` 就**就地替换**那段占位文字
+      （如「请在此插入目录」）；给 `paragraph_index` 就插在**那一段之后**；
+      都不给就插在正文最前。
+      ★★ **图目录 / 表目录的前提是那些图标题已经是题注** ——
+      手写的 `图1 系统架构` 收不进来，得先用 `replace_manual_captions` 换掉编号。
+      ★ 域要有内容得让引擎算一次：Word/WPS 打开时会提示更新（我们开了
+      `updateFields`），LibreOffice 自己重算；在那之前那处显示占位符。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        kind:
+          type: string
+          enum: ["toc", "figure", "table", "目录", "图目录", "表目录"]
+          default: "toc"
+          description: "toc=正文目录 / figure=图目录 / table=表目录"
+        label:
+          type: string
+          description: "题注标签（kind=figure/table 时），默认 图 / 表"
+        paragraph_index:
+          type: integer
+          description: "插在**这一段之后**（0 起）；与 replace_text 二选一"
+        replace_text:
+          type: string
+          description: "就地**替换**这段占位文字，如「请在此插入目录」"
+        max_level:
+          type: integer
+          default: 3
+          description: "显示级别（只对 kind=toc 生效）"
+        hyperlink:
+          type: boolean
+          default: true
+          description: "目录条目用超链接（卷子里「不使用超链接」就传 false）"
+        title:
+          type: string
+          description: "非空则在域之前另起一段放这行标题文字"
+      required: ["file_path"]
+
+  - name: delete_paragraph
+    permission: write
+    destructive: false
+    description: >
+      按索引删除 Word 文档中的段落（0-based）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        paragraph_index:
+          type: integer
+          description: "段落索引（从 0 开始）"
+      required: ["file_path", "paragraph_index"]
+
+  - name: search_and_replace_text
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      在 Word 文档中搜索并替换文本（全文+表格）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        find_text:
+          type: string
+          description: "要查找的文本"
+        replace_text:
+          type: string
+          description: "替换为"
+      required: ["file_path", "find_text", "replace_text"]
+
+  - name: insert_content_near_text
+    permission: write
+    destructive: false
+    description: >
+      在包含指定文本的段落之前或之后插入新段落。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        target_text:
+          type: string
+          description: "定位文本"
+        content:
+          type: string
+          description: "要插入的内容"
+        position:
+          type: string
+          enum: ["before", "after"]
+          default: "after"
+        style:
+          type: string
+          description: "可选样式名"
+      required: ["file_path", "target_text", "content"]
+
+  # -- Rich text formatting --
+
+  - name: format_paragraph_text
+    permission: write
+    destructive: false
+    description: >
+      格式化段落内指定范围的文本（加粗/斜体/下划线/颜色/字体/大小）。
+      按字符位置指定范围，不影响范围外文本。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        paragraph_index:
+          type: integer
+          description: "段落索引（0-based）"
+        start_pos:
+          type: integer
+          description: "起始字符位置"
+        end_pos:
+          type: integer
+          description: "结束字符位置（不含）"
+        bold:
+          type: boolean
+        italic:
+          type: boolean
+        underline:
+          type: boolean
+        color:
+          type: string
+          description: "字体颜色，hex 或颜色名"
+        font_size:
+          type: integer
+          description: "字体大小（磅）"
+        font_name:
+          type: string
+          description: "字体名"
+      required: ["file_path", "paragraph_index", "start_pos", "end_pos"]
+
+  - name: create_custom_style
+    permission: write
+    destructive: false
+    description: >
+      在文档中创建自定义段落样式（字体/大小/加粗/斜体/颜色/继承基样式）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        style_name:
+          type: string
+          description: "新样式名称"
+        bold:
+          type: boolean
+        italic:
+          type: boolean
+        font_size:
+          type: integer
+        font_name:
+          type: string
+        color:
+          type: string
+        base_style:
+          type: string
+          description: "继承自哪个样式（默认 Normal）"
+      required: ["file_path", "style_name"]
+
+  # -- Table formatting (Word) --
+
+  - name: format_word_table
+    permission: write
+    destructive: false
+    description: >
+      对 Word 表格应用边框样式（single/double/thick/none）和表头加粗。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+          description: "表格索引（0-based）"
+        has_header_row:
+          type: boolean
+          default: false
+        border_style:
+          type: string
+          enum: ["single", "double", "thick", "none"]
+      required: ["file_path", "table_index"]
+
+  - name: set_table_cell_shading
+    permission: write
+    destructive: false
+    description: >
+      为 Word 表格指定单元格设置背景色。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        row_index:
+          type: integer
+        col_index:
+          type: integer
+        fill_color:
+          type: string
+          description: "背景色 hex，如 'FF0000'"
+      required: ["file_path", "table_index", "row_index", "col_index", "fill_color"]
+
+  - name: apply_table_alternating_rows
+    permission: write
+    destructive: false
+    description: >
+      为 Word 表格应用交替行颜色（斑马条纹）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        color1:
+          type: string
+          default: "FFFFFF"
+          description: "奇数行颜色 hex"
+        color2:
+          type: string
+          default: "F2F2F2"
+          description: "偶数行颜色 hex"
+      required: ["file_path", "table_index"]
+
+  - name: highlight_table_header
+    permission: write
+    destructive: false
+    description: >
+      高亮 Word 表格的表头行（背景色+白色粗体文字）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        header_color:
+          type: string
+          default: "4472C4"
+          description: "表头背景色 hex（默认蓝色）"
+        text_color:
+          type: string
+          default: "FFFFFF"
+          description: "表头文字颜色 hex（默认白色）"
+      required: ["file_path", "table_index"]
+
+  - name: merge_table_cells
+    permission: write
+    destructive: false
+    description: >
+      合并 Word 表格的矩形区域单元格。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        start_row:
+          type: integer
+        start_col:
+          type: integer
+        end_row:
+          type: integer
+        end_col:
+          type: integer
+      required: ["file_path", "table_index", "start_row", "start_col", "end_row", "end_col"]
+
+  - name: merge_table_cells_horizontal
+    permission: write
+    destructive: false
+    description: >
+      水平合并 Word 表格同一行中的多个单元格。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        row_index:
+          type: integer
+        start_col:
+          type: integer
+        end_col:
+          type: integer
+      required: ["file_path", "table_index", "row_index", "start_col", "end_col"]
+
+  - name: merge_table_cells_vertical
+    permission: write
+    destructive: false
+    description: >
+      垂直合并 Word 表格同一列中的多个单元格。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        col_index:
+          type: integer
+        start_row:
+          type: integer
+        end_row:
+          type: integer
+      required: ["file_path", "table_index", "col_index", "start_row", "end_row"]
+
+  - name: set_table_cell_alignment
+    permission: write
+    destructive: false
+    description: >
+      设置 Word 表格指定单元格的文本对齐方式（水平+垂直）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        row_index:
+          type: integer
+        col_index:
+          type: integer
+        horizontal:
+          type: string
+          enum: ["left", "center", "right", "justify"]
+          default: "left"
+        vertical:
+          type: string
+          enum: ["top", "center", "bottom"]
+          default: "top"
+      required: ["file_path", "table_index", "row_index", "col_index"]
+
+  - name: set_table_alignment_all
+    permission: write
+    destructive: false
+    description: >
+      设置 Word 表格所有单元格的对齐方式。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        horizontal:
+          type: string
+          enum: ["left", "center", "right", "justify"]
+          default: "left"
+        vertical:
+          type: string
+          enum: ["top", "center", "bottom"]
+          default: "top"
+      required: ["file_path", "table_index"]
+
+  - name: set_table_column_width
+    permission: write
+    destructive: false
+    description: >
+      设置 Word 表格指定列的宽度。支持 points/inches/cm/percent/auto。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        col_index:
+          type: integer
+        width:
+          type: number
+          description: "列宽值"
+        width_type:
+          type: string
+          enum: ["points", "inches", "cm", "percent", "auto"]
+          default: "points"
+      required: ["file_path", "table_index", "col_index", "width"]
+
+  - name: set_table_width
+    permission: write
+    destructive: false
+    description: >
+      设置 Word 表格的整体宽度。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        width:
+          type: number
+          description: "表格宽度值"
+        width_type:
+          type: string
+          enum: ["points", "inches", "cm", "percent"]
+          default: "percent"
+      required: ["file_path", "table_index", "width"]
+
+  - name: auto_fit_table
+    permission: write
+    destructive: false
+    description: >
+      设置 Word 表格列宽为自适应（根据内容自动调整）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+      required: ["file_path", "table_index"]
+
+  - name: format_table_cell_text
+    permission: write
+    destructive: false
+    description: >
+      格式化 Word 表格指定单元格的文本（内容/加粗/斜体/下划线/颜色/字体/大小）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        row_index:
+          type: integer
+        col_index:
+          type: integer
+        text_content:
+          type: string
+          description: "可选的新文本内容"
+        bold:
+          type: boolean
+        italic:
+          type: boolean
+        underline:
+          type: boolean
+        color:
+          type: string
+        font_size:
+          type: integer
+        font_name:
+          type: string
+      required: ["file_path", "table_index", "row_index", "col_index"]
+
+  - name: set_table_cell_padding
+    permission: write
+    destructive: false
+    description: >
+      设置 Word 表格指定单元格的内边距（上/下/左/右），支持 points/percent。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        table_index:
+          type: integer
+        row_index:
+          type: integer
+        col_index:
+          type: integer
+        top:
+          type: number
+        bottom:
+          type: number
+        left:
+          type: number
+        right:
+          type: number
+        unit:
+          type: string
+          enum: ["points", "percent"]
+          default: "points"
+      required: ["file_path", "table_index", "row_index", "col_index"]
+
+  # -- Comments --
+
+  - name: get_all_comments
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      提取 Word 文档中的所有批注/评论（作者/日期/文本/ID）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+      required: ["file_path"]
+
+  - name: get_comments_by_author
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      按作者名筛选 Word 文档中的批注。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        author:
+          type: string
+          description: "作者名称"
+      required: ["file_path", "author"]
+
+  - name: get_comments_for_paragraph
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      获取 Word 文档中指定段落的批注。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        paragraph_index:
+          type: integer
+          description: "段落索引（0-based）"
+      required: ["file_path", "paragraph_index"]
+
+  # -- Footnotes --
+
+  - name: add_footnote
+    permission: write
+    destructive: false
+    description: >
+      向 Word 文档指定段落添加脚注。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        paragraph_index:
+          type: integer
+          description: "段落索引（0-based）"
+        footnote_text:
+          type: string
+          description: "脚注文本"
+      required: ["file_path", "paragraph_index", "footnote_text"]
+
+  # ==================================================================
+  # v0.3.0: PDF format conversion (merged from AstroShim test_office)
+  # ==================================================================
+
+  - name: convert_to_pdf
+    permission: write
+    destructive: false
+    description: >
+      把 Office 文件转换为 PDF。支持 .docx/.doc、.xlsx/.xls、.pptx/.ppt。
+      使用 LibreOffice 无头模式进行跨平台转换。输出保存至 workspace/。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        filename:
+          type: string
+          description: "要转换的 Office 文件名，例如 report.docx。"
+      required: [filename]
+
+  - name: convert_from_pdf
+    permission: write
+    destructive: false
+    description: >
+      把 PDF 文件转换为 Word (.docx) 或 Excel (.xlsx) 格式。
+      使用 docvortex 进行 PDF→Word 转换，pdfplumber 进行 PDF→Excel 转换。
+      输出保存至 workspace/。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        filename:
+          type: string
+          description: "要转换的 PDF 文件名，例如 document.pdf。"
+        target_format:
+          type: string
+          enum: ["word", "excel"]
+          default: "word"
+          description: "目标格式，word 或 excel。"
+      required: [filename]
+
+  # ==================================================================
+  # v0.4.0: AI-driven PPT generation (SVG → native DrawingML)
+  # ==================================================================
+
+  - name: mock_image
+    permission: write
+    destructive: false
+    description: >
+      Generate a placeholder image file (solid color + optional text label)
+      for use as a stand-in when a multimodal image model is not available.
+      Returns the file path for embedding in SVG slides via <image> tags.
+      Uses Pillow for PNG output when available; falls back to raw BMP
+      (zero dependencies, universally readable).
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        width:
+          type: integer
+          description: "Image width in pixels (16-3840, default 800)"
+          default: 800
+        height:
+          type: integer
+          description: "Image height in pixels (16-2160, default 600)"
+          default: 600
+        color_hex:
+          type: string
+          description: "Background color as hex RRGGBB or RGB (default #CCCCCC)"
+          default: "#CCCCCC"
+        label:
+          type: string
+          description: "Optional text label rendered centered on the image. Max 100 chars."
+        output_name:
+          type: string
+          description: "Output filename (e.g. 'chart_placeholder.png'). Saved under workspace/"
+      required: ["output_name"]
+
+  - name: create_svg_slide
+    permission: write
+    destructive: false
+    description: >
+      Write a validated SVG slide definition to the session's SVG directory
+      for later conversion to native PPTX shapes. The SVG content is validated
+      for XML well-formedness, viewBox presence, and safe tag usage before
+      writing. Slides accumulate until export_document or svgs_to_pptx is called.
+
+      **Layout Library**: Before generating SVG, read references/layout_library.md
+      to pick a pre-validated layout skeleton. Copy the skeleton and replace
+      only the <!-- SLOT:... --> blocks with real content. Never invent SVG
+      structure from scratch — always start from a library layout.
+
+      **Design Lock**: Read references/spec_lock.md and call get_design_context()
+      before each slide to get the active color/font/layout contract. Every hex
+      color and font-family must match spec_lock values exactly.
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+      ★ **生成完还能继续改**：背景 / 裁剪 / 音频 / 母版样式 / 隐藏母版图形交给**幻灯片美化**那五件（`set_ppt_background` · `set_ppt_background_graphics` · `crop_ppt_picture` · `add_ppt_audio` · `set_ppt_master_text_style`）—— 那些是 SVG 表达不了的东西。
+      【中文】往当前 PPT 会话里写一页幻灯片（用 SVG 描述版面）。「做一份 PPT」「生成演示文稿」「新建幻灯片」走这里 —— 逐页调用，最后用 `svgs_to_pptx` 合成出 .pptx 文件。⚠️ 它只写**版面**，出来的还是 SVG，**不是最终文件**。
+      ★ **动手前先读**：`references/ppt-master/SKILL.md`（七步主流程）· `references/ppt-master/references/visual-styles/_index.md`（**19 种视觉风格**）。手上**已经有一份 pptx** 要改造时，看 `references/ppt-master/workflows/`：`beautify-pptx.md`（重排版）· `native-enhance-pptx.md`（原生增强）· `template-fill-pptx.md`（套模板换内容）· `customize-animations.md`（动画）。⚠️ 这批文档来自上游 **PPT Master**（MIT）—— **哪些能用、哪些我们没搬**见 `references/ppt-master/SOURCE.md`，**别照着做**。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "From create_document(doc_type='ppt_svg')"
+        svg_content:
+          type: string
+          description: >
+            Raw SVG XML content for one slide. Must include viewBox="0 0 960 540"
+            and xmlns attributes. Pick a layout from references/layout_library.md,
+            copy the skeleton, replace <!-- SLOT:... --> blocks with real content.
+            Use only spec_lock hex colors (no custom colors). Max 100KB.
+            Do NOT use: script, foreignObject, iframe, event handlers.
+        page_number:
+          type: integer
+          description: "Slide number (1-based). Slides are ordered by page_number."
+        segment_summary:
+          type: string
+          description: >
+            Optional JSON for multi-segment generation. Pass after the LAST slide
+            of each segment to record visual fingerprint for tiered context, e.g.:
+            {"segment":1,"pages":"1-3","slides":[{"page":1,"fingerprint":"title slide..."}]}
+      required: ["session_id", "svg_content", "page_number"]
+
+  - name: svgs_to_pptx
+    permission: write
+    destructive: false
+    description: >
+      Convert all accumulated SVG slides in a ppt_svg session to a native PPTX
+      file using the vendored SVG-to-DrawingML converter. Each SVG element becomes
+      a native PowerPoint shape (editable text, movable objects, real fills/gradients).
+      The session is finalized and exported in one step.
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+      ★ **生成完还能继续改**：背景 / 裁剪 / 音频 / 母版样式 / 隐藏母版图形交给**幻灯片美化**那五件（`set_ppt_background` · `set_ppt_background_graphics` · `crop_ppt_picture` · `add_ppt_audio` · `set_ppt_master_text_style`）—— 那些是 SVG 表达不了的东西。
+      【中文】把本会话累积的幻灯片**合成为 .pptx 文件**（「生成 PPT 文件」「导出演示文稿」走这里）。
+      ★ 本仓的 **PPT 制作指南**（来自上游 PPT Master，MIT）在 `references/ppt-master/`：主流程 `SKILL.md` · 视觉风格 `references/visual-styles/` · 改造已有 pptx 的四种做法在 `workflows/`。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "From create_document(doc_type='ppt_svg')"
+        output_name:
+          type: string
+          description: "Output filename (e.g. 'presentation.pptx'). Defaults to '<title>.pptx'"
+      required: ["session_id"]
+
+  - name: set_slide_design
+    permission: write
+    destructive: false
+    description: >
+      Set or update the design specification (spec_lock) for a ppt_svg session.
+      Choose from presets in references/spec_lock.md: Dark Professional,
+      Light Professional, Warm/Human, or Minimal Corporate. This spec is injected
+      into the LLM context at the start of each generation segment to maintain
+      visual consistency across slides. Each JSON field is optional — only
+      provided fields are changed (partial update).
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+      【中文】设定本次演示文稿的**整体视觉风格**（配色/字体/版式基调），在写第一页之前调一次，之后每一页都按它来。
+      ★ 本仓的 **PPT 制作指南**（来自上游 PPT Master，MIT）在 `references/ppt-master/`：主流程 `SKILL.md` · 视觉风格 `references/visual-styles/` · 改造已有 pptx 的四种做法在 `workflows/`。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "From create_document(doc_type='ppt_svg')"
+        colors_json:
+          type: string
+          description: >
+            JSON object with color palette. Known keys: primary, secondary,
+            accent, background, text, text_light. Values are hex colors.
+            Example: {"primary":"#1A73E8","background":"#FFFFFF","text":"#202124"}
+        fonts_json:
+          type: string
+          description: >
+            JSON object with font specs. Known keys: title, body, title_size,
+            body_size. Example: {"title":"Arial","body":"Arial","title_size":"48px","body_size":"24px"}
+        layout_json:
+          type: string
+          description: >
+            JSON object with layout conventions. Known keys: margins, title_area,
+            content_flow. Example: {"margins":"60 80","title_area":"top","content_flow":"top-down"}
+        canvas_format:
+          type: string
+          enum: ["ppt169", "ppt43", "ppt1610"]
+          description: "Slide dimensions. ppt169=16:9(default), ppt43=4:3, ppt1610=16:10"
+        target_pages:
+          type: integer
+          description: "Target number of slides. When set, LLM will plan its outline to hit this count. 0 = auto-determined from content."
+          default: 0
+      required: ["session_id"]
+
+  - name: get_design_context
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      Return the current design specification (spec_lock) as formatted text
+      ready for injection into the LLM's system prompt. Call this at the start
+      of each tiered generation segment to ensure consistent colors, fonts,
+      and layout across all slides. Previous segment summaries are included
+      when available.
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        session_id:
+          type: string
+          description: "From create_document(doc_type='ppt_svg')"
+      required: ["session_id"]
+
+  - name: extract_archive
+    permission: write
+    destructive: false
+    description: >
+      [WRITE] 解压工作区中的压缩包（.zip / .7z / .rar）到工作区。
+      解压后的文件统一放在 workspace/<压缩包名>/ 文件夹下，保持内部目录结构。
+      仅允许解压工作区目录内的压缩包。如果压缩包在跨区位置，请先用 copy_to_workspace 复制到工作区。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "压缩包路径。必须位于工作区目录下。"
+      required: ["file_path"]
+
+  # ==================================================================
+  # 2026-09-29 新增：Excel 收尾三件 + Word 表格行列增删四件
+  # （用户点名的办公工具批；描述一律**中文** —— 见 file_parser 里那段同款说明）
+  # ==================================================================
+
+  - name: freeze_excel_panes
+    permission: write
+    destructive: false
+    description: >
+      冻结 Excel 的窗格（滚动时表头/首列不动）。
+      rows=1, cols=0（默认）就是"冻结首行"。两个都给则同时冻结左上角区域。
+      rows=0, cols=0 表示**取消**冻结。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Excel 文件路径（相对路径在 workspace/ 下解析；不存在会自动新建）"
+        sheet_name:
+          type: string
+          description: "工作表名称"
+        rows:
+          type: integer
+          default: 1
+          description: "冻结前几行"
+        cols:
+          type: integer
+          default: 0
+          description: "冻结前几列"
+      required: ["file_path", "sheet_name"]
+
+  - name: set_excel_conditional_format
+    permission: write
+    destructive: false
+    description: >
+      给 Excel 单元格区域加条件格式 —— 也就是「**大于 / 小于 / 等于**某个数就
+      **标红**、标绿、标黄」，或按数值区间上色、按公式高亮。
+      规则三种：cellIs（比较数值）· formula（自定义公式）· colorScale（色阶）。
+      cellIs 的 operator 取 greaterThan/lessThan/greaterThanOrEqual/
+      lessThanOrEqual/equal/notEqual/between/notBetween，formula 给 1~2 个比较值；
+      formula 的 formula[0] 形如 "$A1>100"；colorScale 不需要 formula。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Excel 文件路径"
+        sheet_name:
+          type: string
+          description: "工作表名称"
+        cell_range:
+          type: string
+          description: "作用区域，如 B2:B20"
+        rule_type:
+          type: string
+          enum: ["cellIs", "formula", "colorScale"]
+          default: "cellIs"
+          description: "规则类型"
+        operator:
+          type: string
+          default: "greaterThan"
+          description: "仅 cellIs 用：比较运算符"
+        formula:
+          type: array
+          items:
+            type: string
+          description: "比较值 / 公式 / 色阶边界"
+        fill_color:
+          type: string
+          default: "FFC7CE"
+          description: "填充色（6 或 8 位十六进制，不带 #）"
+        font_color:
+          type: string
+          description: "文字颜色（可选，同格式）"
+      required: ["file_path", "sheet_name", "cell_range"]
+
+  - name: add_excel_data_validation
+    permission: write
+    destructive: false
+    description: >
+      给 Excel 单元格区域加数据验证（下拉列表 / 整数 / 小数 / 日期 / 文本长度）。
+      list 类型时 formula1 是逗号分隔的选项（如 "合格,不合格"）或区域（如 "=$E$1:$E$5"）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Excel 文件路径"
+        sheet_name:
+          type: string
+          description: "工作表名称"
+        cell_range:
+          type: string
+          description: "作用区域，如 C2:C50"
+        validation_type:
+          type: string
+          enum: ["list", "whole", "decimal", "date", "time", "textLength", "custom"]
+          default: "list"
+          description: "验证类型"
+        formula1:
+          type: string
+          description: "选项串 / 区域 / 下界"
+        formula2:
+          type: string
+          description: "上界（between 那类才需要）"
+        allow_blank:
+          type: boolean
+          default: true
+          description: "是否允许留空"
+        error_message:
+          type: string
+          description: "输入不合规时弹出的提示文字"
+      required: ["file_path", "sheet_name", "cell_range", "formula1"]
+
+  # ==================================================================
+  # Excel 读侧查询三件
+  # 判据来自一张真表（9 张月表的经营总结）—— 见 excel_query.py 的模块说明
+  # ==================================================================
+
+  - name: profile_excel_data
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      给表格的每一列做**画像**：类型分布 / 非空数 / 空值数 / 唯一值数 /
+      最小最大 / 求和 / 均值 / 标准差。先画像再决定读哪一块，比先读整表省得多。
+      **它答的是「这张表长什么样、每列什么分布、某个聚合是多少」** ——
+      要看表里某段**文字**在说什么，用 parse_xlsx + search_chunks / summarize_document。
+      流式扫描（不会把整表读进内存）。唯一值数有上限：超了会回 null + distinct_at_least
+      （那表示"至少这么多"，不是"就这么多"）。数值列没有数字时统计量回 null 而不是 0。
+      撞到扫描预算会停下并**明说**只覆盖了已扫的部分。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+          description: "工作表名；\"*\" = 全部工作表；省略 = 第一张"
+        header_row:
+          type: integer
+          default: 1
+          description: "哪一行是列名（用来给列起名）；0 = 不用列名，只回列字母"
+        cell_range:
+          type: string
+          description: "只画像这块区域，如 A1:M60（省略 = 整表）"
+        max_scan_rows:
+          type: integer
+          default: 200000
+          description: "最多扫多少行（撞到会停下并说明）"
+        time_budget_s:
+          type: number
+          default: 20.0
+          description: "扫描时间上限（秒）；大表上先到哪个算哪个"
+        distinct_cap:
+          type: integer
+          default: 1000
+          description: "每列唯一值最多数到多少；超了回 null + distinct_at_least"
+        include_quantiles:
+          type: boolean
+          default: false
+          description: "是否给中位数/分位数（采样近似值，会标 approximate）"
+        max_columns:
+          type: integer
+          default: 200
+          description: "最多扫到第几列"
+      required: ["file_path"]
+
+  - name: find_excel_value
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      在表格里**按值定位**，回命中单元格的地址（工作表 + 地址 + 值）。
+      用于「某个值在哪」「哪几行提到了关键词」。match 可选 contains（子串，默认）/
+      equals（整格相等）/ regex（正则）。命中数有上限，撞到时回 matches_truncated
+      并说明还有没列出来的命中。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+          description: "工作表名；\"*\" = 全部工作表；省略 = 第一张"
+        value:
+          type: string
+          description: "要找的内容"
+        match:
+          type: string
+          enum: ["contains", "equals", "regex"]
+          default: "contains"
+        cell_range:
+          type: string
+          description: "只在这块区域内找，如 A1:Z100（省略 = 整表）"
+        max_matches:
+          type: integer
+          default: 200
+          description: "最多回多少条命中"
+        case_sensitive:
+          type: boolean
+          default: false
+          description: "是否区分大小写（只对英文有意义）"
+      required: ["file_path", "value"]
+
+  - name: get_excel_comments
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      读 Excel 的**单元格批注**（工作表 + 地址 + 作者 + 正文）。
+      批注经常是**脚注**：写着「这行不含某某费用」「同比增加的原因」这类话 ——
+      **不读它就可能把数据总结错**，所以总结表格前值得先看一眼。
+      要读的批注在哪些表：sheet_name 给 "*" 读全簿。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: ".xlsx 文件路径"
+        sheet_name:
+          type: string
+          description: "工作表名；\"*\" = 全部工作表（默认）；省略 = 第一张"
+      required: ["file_path"]
+
+  # ==================================================================
+  # Excel 写侧九件
+  # 写侧一律 permission: write；两件如实声明 destructive: true（见各自说明）
+  # ==================================================================
+
+  - name: sort_excel_range
+    permission: write
+    destructive: false
+    description: >
+      按一列或多列**排序**一块区域（原地改）。sort_keys 给多键，如
+      [{"column": "C", "order": "desc"}, {"column": "A", "order": "asc"}]；
+      也可以只给 key_column + descending。has_header=true 时首行不参与排序。
+      只动这块区域里的行，区域外一个字节不动。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string, description: ".xlsx 文件路径"}
+        sheet_name: {type: string, description: "工作表名称"}
+        cell_range: {type: string, description: "要排序的区域，如 A2:E100"}
+        sort_keys:
+          type: array
+          items:
+            type: object
+            properties:
+              column: {type: string, description: "列字母，如 C"}
+              order: {type: string, enum: ["asc", "desc"]}
+            required: ["column"]
+        key_column: {type: string, description: "单键简写：按哪一列排"}
+        descending: {type: boolean, default: false, description: "单键简写用"}
+        has_header: {type: boolean, default: true, description: "首行是不是表头（是则不参与排序）"}
+      required: ["file_path", "sheet_name", "cell_range"]
+
+  - name: filter_excel_data
+    permission: write
+    destructive: false
+    description: >
+      筛选，两种模式用途完全不同：mode="extract" 按 criteria 把命中的行**抄到新表**
+      （原表一个字节不动）；mode="auto_filter" 在区域上挂**原生自动筛选器**（下拉箭头，
+      不删任何行）。criteria 形如 [{"column":"C","op":"gt","value":60}]，多个条件是"全部满足"。
+      op 取 eq/ne/gt/ge/lt/le/contains/not_contains。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string}
+        cell_range: {type: string, description: "要筛的区域，如 A1:E100"}
+        mode: {type: string, enum: ["extract", "auto_filter"], default: "extract"}
+        criteria:
+          type: array
+          items:
+            type: object
+            properties:
+              column: {type: string}
+              op: {type: string, enum: ["eq","ne","gt","ge","lt","le","contains","not_contains"]}
+              value: {}
+            required: ["column", "op"]
+        output_sheet: {type: string, description: "extract 模式：结果写到哪张新表（默认 xxx_筛选）"}
+        has_header: {type: boolean, default: true}
+        include_header: {type: boolean, default: true, description: "extract 时结果里带不带表头"}
+      required: ["file_path", "sheet_name", "cell_range"]
+
+  - name: remove_excel_duplicates
+    permission: write
+    destructive: true
+    description: >
+      按 key_columns 去重（保留第一次出现的那行），把结果写回原区域。
+      key_columns 省略就是整行比较。⚠️ 这是**不可逆**操作 —— 丢掉的列回不来，
+      所以调用前会请用户确认一次。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string}
+        cell_range: {type: string, description: "去重范围，如 A1:E100"}
+        key_columns:
+          type: array
+          items: {type: string}
+          description: "按哪几列判重（列字母），省略 = 整行"
+        has_header: {type: boolean, default: true}
+      required: ["file_path", "sheet_name", "cell_range"]
+
+  - name: protect_excel_sheet
+    permission: write
+    destructive: false
+    description: >
+      给工作表加/解保护（防误改，不是加密）。protect=false 加同一密码即解除。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string}
+        protect: {type: boolean, default: true, description: "true 加保护 / false 解除"}
+        password: {type: string, description: "可选密码"}
+      required: ["file_path", "sheet_name"]
+
+  - name: set_excel_hyperlink
+    permission: write
+    destructive: false
+    description: >
+      给某个单元格挂外部链接（网址 / 文件 / 邮件）。display 省略时显示链接本身。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string}
+        cell: {type: string, description: "单元格，如 B2"}
+        target: {type: string, description: "链接目标"}
+        display: {type: string, description: "显示文字（可选）"}
+      required: ["file_path", "sheet_name", "cell", "target"]
+
+  - name: export_excel_to_csv
+    permission: write
+    destructive: false
+    description: >
+      把一张工作表**流式**导出成 CSV，默认 utf-8-sig（带 BOM）——
+      不带 BOM 的话 Excel 打开中文会乱码，而"导出给 Excel 用"正是这个工具最常见的用途。
+      只导点名的那张表（省略 = 第一张）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string, description: "哪张表（省略 = 第一张）"}
+        output_name: {type: string, description: "输出 csv 文件名（默认 <源名>_<表名>.csv）"}
+        delimiter: {type: string, default: ",", description: "分隔符（一个字符）"}
+        encoding: {type: string, default: "utf-8-sig"}
+      required: ["file_path"]
+
+  - name: merge_excel_workbooks
+    permission: write
+    destructive: false
+    description: >
+      把多个工作簿合并成一个。mode="sheets" 每个来源原样搬成一张表（重名自动加后缀）；
+      mode="append_rows" 把各簿的第一张表叠行（表头只留第一份）。
+      ★ 输出文件**已存在**时必须先读过它（`read_excel_data`）—— 产出是**一个全新工作簿**，盖掉一份你没读过的表会被拒。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_paths:
+          type: array
+          items: {type: string}
+          description: "要合并的文件列表"
+        output_name: {type: string, default: "merged.xlsx"}
+        mode: {type: string, enum: ["sheets", "append_rows"], default: "sheets"}
+        has_header: {type: boolean, default: true, description: "append_rows 用"}
+      required: ["file_paths"]
+
+  - name: recalculate_excel_formulas
+    permission: write
+    destructive: true
+    description: >
+      用 LibreOffice 无头模式**重算公式**并把缓存值写回。什么时候需要它：我们自己用
+      apply_formula 写进去的公式 openpyxl 不算值，读回来永远没有缓存值 —— 这时跑一次
+      就有了。真 Excel 存过的文件本来就有缓存值，不需要它。
+      ⚠️ 这是**不可逆**操作：LibreOffice 往返**可能丢掉图表 / 条件格式 / 数据验证 /
+      透视表**（它按自己的理解重新序列化整个文件）⇒ 调用前会请用户确认。
+      需要机器上装了 LibreOffice；没装会明确告诉你并给替代路线。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string, description: "保留参数（重算是整簿的）"}
+      required: ["file_path"]
+
+  - name: plot_excel_data
+    permission: write
+    destructive: false
+    description: >
+      **把表格数据画成图**（PNG，存进工作区），支持折线/柱状/饼图/散点/面积。
+      两种读法：(1) 单表 —— cell_range 是一块矩形，首行是各条线的名字、首列是 X 标签、
+      其余每列一条线；(2) ★ 跨表（sheet_name="*"）—— **X 轴 = 工作表顺序**，
+      cell_range 里的每一行是一条线，线名取自 label_column 那一列。
+      画"1-9月走势"用第 (2) 种：一次调用把每张月表的同一块区域连起来。
+      出图后用 deliver_file 发给用户。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string, description: "工作表名；\"*\" = 跨表（X 轴变成工作表顺序）"}
+        cell_range: {type: string, description: "数据区域。跨表时给**数值那一列**，如 E54:E60"}
+        chart_type: {type: string, enum: ["line", "bar", "pie", "scatter", "area"], default: "line"}
+        label_column: {type: string, description: "跨表时：哪一列是每条线的名字，如 B"}
+        value_column: {type: string, description: "单表时可选：只画哪一列"}
+        header_row: {type: integer, default: 1, description: "单表时：第几行是线名（0 = 没有）"}
+        series_names:
+          type: array
+          items: {type: string}
+          description: "覆盖默认的线名（按顺序）"
+        title: {type: string}
+        x_label: {type: string}
+        y_label: {type: string}
+        output_name: {type: string, description: "输出 png 名（默认 <源名>_图.png）"}
+      required: ["file_path", "cell_range"]
+
+  - name: add_table_rows
+    permission: write
+    destructive: false
+    description: >
+      给 Word 表格**追加**若干行（加在最后）。新行是空的，
+      要用 format_table_cell_text 填内容。行列坐标都是 0 基。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Word 文档路径（.docx）"
+        table_index:
+          type: integer
+          description: "第几个表格（0 基）"
+        count:
+          type: integer
+          default: 1
+          description: "加几行（1-100）"
+      required: ["file_path", "table_index"]
+
+  - name: add_table_columns
+    permission: write
+    destructive: false
+    description: >
+      给 Word 表格**追加**若干列（加在最后）。
+      ⚠️ 表里有**横向合并**的单元格时会拒 —— 那会让表格结构对不上（Word 会报损坏）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Word 文档路径（.docx）"
+        table_index:
+          type: integer
+          description: "第几个表格（0 基）"
+        count:
+          type: integer
+          default: 1
+          description: "加几列（1-50）"
+      required: ["file_path", "table_index"]
+
+  - name: delete_table_rows
+    permission: write
+    destructive: false
+    description: >
+      删除 Word 表格的若干行（0 基）。
+      ⚠️ 被删的行若属于**纵跨多行**的合并区会拒（那会连带删掉别行的格子）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Word 文档路径（.docx）"
+        table_index:
+          type: integer
+          description: "第几个表格（0 基）"
+        row_index:
+          type: integer
+          description: "从哪一行开始删（0 基）"
+        count:
+          type: integer
+          default: 1
+          description: "删几行"
+      required: ["file_path", "table_index", "row_index"]
+
+  - name: delete_table_columns
+    permission: write
+    destructive: false
+    description: >
+      删除 Word 表格的若干列（**0 基网格列**，与 parse_docx 打出的 cN 同一套编号）。
+      ⚠️ 表里有**横向合并**时会拒（结构会对不上）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；表里已有
+      合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Word 文档路径（.docx）"
+        table_index:
+          type: integer
+          description: "第几个表格（0 基）"
+        col_index:
+          type: integer
+          description: "从哪一列开始删（0 基网格列）"
+        count:
+          type: integer
+          default: 1
+          description: "删几列"
+      required: ["file_path", "table_index", "col_index"]
+
+  # ================================================================
+  # "库本来就有、我们没接" 的那一批
+  # 下面这 11 件的共同点是 `openpyxl` / `python-docx` / `python-pptx`
+  #   本来就有 API，而这张 manifest 里一条都没有，和 `create_excel_chart`
+  #   那 5 种图表是同一件事：不是做不到，是没接。
+  # 它们全部 `on_demand`（office_parser 整族都是），所以加这些 schema
+  #   不花每请求的钱（只有模型 `search_tools` 拉到的那一轮才进 `tools=`）。
+
+  - name: set_excel_print_setup
+    permission: write
+    destructive: false
+    description: >
+      设置工作表的**打印选项**：纸张 / 方向 / 每页都打印的标题行与列 /
+      页眉页脚 / 打印区域 / 按页宽缩放。
+      ★ 页码用 OOXML 的原生域写：`第 &[Page] 页，共 &[Pages] 页`
+      （`&D` = 日期，`&F` = 文件名）—— 由**打开它的软件**渲染，我们不算页数。
+      ★ 「每页都打印表标题和列名称」= print_title_rows="1:1" + print_title_cols。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；
+      表里已有 合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string}
+        orientation:
+          type: string
+          enum: ["portrait", "landscape"]
+          description: "portrait 纵向 / landscape 横向"
+        paper_size:
+          type: string
+          description: "a3 / a4 / a5 / b4 / b5 / letter / legal / tabloid，或 OOXML 数字"
+        print_title_rows:
+          type: string
+          description: "每页都打印的行，如 '1:1'（第 1 行）或 '1:2'"
+        print_title_cols:
+          type: string
+          description: "每页都打印的列，如 'A:A'"
+        header_left: {type: string}
+        header_center: {type: string}
+        header_right: {type: string}
+        footer_left: {type: string}
+        footer_center:
+          type: string
+          description: "页脚正中；页码域如 '第 &[Page] 页，共 &[Pages] 页'"
+        footer_right: {type: string}
+        print_area:
+          type: string
+          description: "打印区域，如 'A1:F20'"
+        fit_to_width:
+          type: integer
+          description: "按 N 页宽缩放（0 = 不缩放）"
+      required: ["file_path", "sheet_name"]
+
+  - name: set_excel_outline
+    permission: write
+    destructive: false
+    description: >
+      给工作表设**分级显示**（outlineLevel）—— 分类汇总那套的"级别"那一半。
+      rows=[{"start":2,"end":10,"level":1}]（单行写 {"row":5,"level":1}），cols 同形。
+      ★ level=0 是**取消这一行的分组**（不是"第 0 级"）。
+      ⚠️ 它**只标级别**，**不替你把明细行变成汇总行** —— 算出汇总值是引擎的事。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍；
+      表里已有 合计/累计/年计划 就照用它的原值，别自己加算一堆。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        sheet_name: {type: string}
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              row: {type: integer}
+              start: {type: integer}
+              end: {type: integer}
+              level: {type: integer}
+        cols:
+          type: array
+          items:
+            type: object
+            properties:
+              col: {type: integer}
+              start_col: {type: integer}
+              end_col: {type: integer}
+              level: {type: integer}
+        summary_below:
+          type: boolean
+          default: true
+          description: "明细在汇总行下方（Excel 默认）"
+        summary_right:
+          type: boolean
+          default: false
+      required: ["file_path", "sheet_name"]
+
+  - name: set_word_page_setup
+    permission: write
+    destructive: false
+    description: >
+      Word **页面设置**（按节）：纸张 / 方向 / 上下左右边距 / 装订线 / 页眉页脚距边界。
+      ★ 给 orientation=landscape 会**同时把宽高对调** —— 只设方向不改宽高，
+      在 Word/WPS 里纸还是竖的（用户看到"设了没反应"的常见原因）。
+      ★ 非标尺寸直接给 page_width_cm / page_height_cm（如宣传册 14.8 × 21）。
+      ⚠️ 边距**不给 = 不动它**；**给了负数会报错**（不是当成"没给"）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        section_index: {type: integer, default: 0}
+        orientation: {type: string, enum: ["portrait", "landscape"]}
+        page_size:
+          type: string
+          description: "a4 / a3 / a5 / b5 / letter / legal"
+        page_width_cm: {type: number}
+        page_height_cm: {type: number}
+        top_cm: {type: number}
+        bottom_cm: {type: number}
+        left_cm: {type: number}
+        right_cm: {type: number}
+        gutter_cm: {type: number, description: "装订线"}
+        header_distance_cm: {type: number}
+        footer_distance_cm: {type: number}
+      required: ["file_path"]
+
+  - name: add_word_section
+    permission: write
+    destructive: false
+    description: >
+      在文档**末尾**加一节。start_type = new_page / continuous / even_page / odd_page。
+      ★ 新节**继承上一节的页面设置**；要设成横向就同时给 orientation=landscape。
+      ⚠️ 它是"**加一节**"，不是"把文档切成若干节" —— 现有分节符本工具不碰。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        start_type:
+          type: string
+          enum: ["new_page", "continuous", "even_page", "odd_page"]
+          default: "new_page"
+        orientation: {type: string, enum: ["portrait", "landscape"]}
+      required: ["file_path"]
+
+  - name: set_word_header_footer
+    permission: write
+    destructive: false
+    description: >
+      某一节的**页眉 / 页脚**（含页码域）· 首页不同 · 奇偶页不同。
+      ★ 页码是域（&P 当前页 / &N 总页数），由 Word/WPS **打开时渲染** —— 我们不算页数。
+      ★ footer_page_number=true + page_number_format="第 &P 页" 就是"页脚正中插页码"。
+      ⚠️ different_odd_even 是**文档级**开关（对整篇生效）；开了之后 header 写进的是
+      **奇数页**那一支。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        section_index: {type: integer, default: 0}
+        header: {type: string}
+        footer: {type: string}
+        header_page_number: {type: boolean, default: false}
+        footer_page_number: {type: boolean, default: false}
+        page_number_format:
+          type: string
+          default: "第 &P 页"
+          description: "页码域的写法；&P = 当前页，&N = 总页数"
+        different_first_page: {type: boolean, default: false}
+        different_odd_even: {type: boolean, default: false}
+        clear:
+          type: boolean
+          default: false
+          description: "先清空该节的页眉/页脚再写"
+      required: ["file_path"]
+
+  - name: set_document_properties
+    permission: write
+    destructive: false
+    description: >
+      **文档属性**：标题 / 作者 / 主题 / 关键词 / 类别 / 备注。
+      ⚠️ 「单位 / 公司」**不在标准属性里**（那是 app.xml），本工具写不了。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        title: {type: string}
+        author: {type: string}
+        subject: {type: string}
+        keywords: {type: string}
+        category: {type: string}
+        comments: {type: string}
+      required: ["file_path"]
+
+  - name: set_ppt_background
+    permission: write
+    destructive: false
+    description: >
+      ★ 这是**幻灯片美化**工具：**它不生成幻灯片**，只改**已经存在**的 .pptx—— **刚用 `create_svg_slide`→`svgs_to_pptx` 生成的那份**、**或用户自己给的那份**都行。要「做一份新的 PPT」请先走那两个。
+      给若干页设**背景**。kind = solid（纯色）/ gradient（渐变）/ texture（图片填充）。
+      ★ slides="all" 或页号（**1 起**）或页号列表。
+      ⚠️ 设的是**这一页自己的背景**，不是母版 —— "应用至全部页面"用 slides="all"。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        slides:
+          type: string
+          description: "all / 单个页号 / 逗号隔开的页号，如 '1' 或 '1,3,5'（**1 起**）"
+        kind: {type: string, enum: ["solid", "gradient", "texture"]}
+        color_hex: {type: string, description: "6 位十六进制，如 1F4E79"}
+        color_hex2: {type: string, description: "渐变的第二个色"}
+        texture_path: {type: string, description: "kind=texture 时的图片路径"}
+        angle: {type: integer, description: "渐变角度 0~359"}
+      required: ["file_path", "kind"]
+
+  - name: set_ppt_background_graphics
+    permission: write
+    destructive: false
+    description: >
+      ★ 这是**幻灯片美化**工具：**它不生成幻灯片**，只改**已经存在**的 .pptx—— **刚用 `create_svg_slide`→`svgs_to_pptx` 生成的那份**、**或用户自己给的那份**都行。要「做一份新的 PPT」请先走那两个。
+      显示 / 隐藏某几页的**背景图形**（母版上那些形状，比如右上角的 LOGO）。
+      ★ "只标题页不显示 LOGO"就是 slides=1, show=false（因为 LOGO 插在母版上，
+      只能在**这一层**关）。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        slides:
+          type: string
+          description: "all / 单个页号 / 逗号隔开的页号，如 '1' 或 '1,3,5'（**1 起**）"
+        show: {type: boolean, default: false}
+      required: ["file_path"]
+
+  - name: crop_ppt_picture
+    permission: write
+    destructive: false
+    description: >
+      ★ 这是**幻灯片美化**工具：**它不生成幻灯片**，只改**已经存在**的 .pptx—— **刚用 `create_svg_slide`→`svgs_to_pptx` 生成的那份**、**或用户自己给的那份**都行。要「做一份新的 PPT」请先走那两个。
+      裁剪某张幻灯片上的第 N 张图片。四个方向是 **0~1 的比例**（0.1 = 裁掉 10%）。
+      ★ to_shape="circle" = 裁成**内切圆**（四边各裁约 14.64%）。
+      ⚠️ 只做**裁剪比例**；"圆形边框 / 柔化边缘 / 倒影"那类**效果**本工具不做。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        slide_index: {type: integer, description: "第几张（1 起）"}
+        picture_index: {type: integer, default: 1, description: "这一张上的第几张图（1 起）"}
+        left: {type: number}
+        right: {type: number}
+        top: {type: number}
+        bottom: {type: number}
+        to_shape: {type: string, enum: ["circle"]}
+      required: ["file_path", "slide_index"]
+
+  - name: add_ppt_audio
+    permission: write
+    destructive: false
+    description: >
+      ★ 这是**幻灯片美化**工具：**它不生成幻灯片**，只改**已经存在**的 .pptx—— **刚用 `create_svg_slide`→`svgs_to_pptx` 生成的那份**、**或用户自己给的那份**都行。要「做一份新的 PPT」请先走那两个。
+      往某张幻灯片插一个**音频**（背景音乐）。★ 文件是**嵌进**包里的，
+      所以共享出去仍然能播（链接一换机器就断）。
+      ⚠️ autoplay 只写播放时机；"跨页播放"那类开关在 timing 里，本工具不做。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        slide_index: {type: integer, description: "第几张（1 起）"}
+        media_path: {type: string}
+        left_cm: {type: number, default: 1.0}
+        top_cm: {type: number, default: 1.0}
+        autoplay: {type: boolean, default: true}
+      required: ["file_path", "slide_index", "media_path"]
+
+  - name: set_ppt_master_text_style
+    permission: write
+    destructive: false
+    description: >
+      ★ 这是**幻灯片美化**工具：**它不生成幻灯片**，只改**已经存在**的 .pptx—— **刚用 `create_svg_slide`→`svgs_to_pptx` 生成的那份**、**或用户自己给的那份**都行。要「做一份新的 PPT」请先走那两个。
+      改**母版**上的文字样式（对所有用这套版式的页生效）。
+      kind="title" 改标题样式；kind="body" + level=1..9 改正文第 N 级。
+      ★ 中文字体会**同时**写 latin 与 ea 两个字型 —— 只写 latin 的话中文会退回默认字体。
+      ⚠️ 改母版影响**所有**页；只改某一页的文本框用别的工具。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        kind: {type: string, enum: ["title", "body"]}
+        level: {type: integer, description: "kind=body 时的级别 1~9"}
+        font_name: {type: string}
+        size_pt: {type: number}
+        color_hex: {type: string}
+        bold: {type: boolean}
+        align: {type: string, enum: ["left", "center", "right", "justify"]}
+      required: ["file_path"]
+
+  # ================================================================
+  # 读侧两件 —— "重排用户给的那份 pptx"缺的入口
+  # 上游那条美化流程的第一步就是这两件（`ppt_to_md` 提取内容 +
+  #   `beautify_identity` 继承视觉身份），而我们两样都没有 —— 见
+  #   `references/ppt-master/SOURCE.md` §5 那张映射表。
+  #
+  # 没照搬上游那两个脚本（理由写在 `ppt_tools.py` 里）：一个自带
+  #   "pin python-pptx<0.7" 而我们装的是 1.0.2；另一个依赖一整套 `pptx_to_svg`
+  #   子系统。所以按我们的口径重写。
+  #
+  # 两件都是"读来的内容"（第三方写的 pptx），所以 `output_kind: prose`，
+  #   进隔离包裹。别改成 structured —— 那是在说"这份内容可信"。
+
+  - name: extract_pptx_identity
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      ★ 这是**幻灯片读工具**（不改文件）。读一份 .pptx 的**视觉身份**：
+      主题自带的 12 色（dk1/lt1/dk2/lt2/accent1-6/hlink/folHlink）·
+      major/minor 字体（latin 与 ea 都读，中文在 ea）·
+      以及文档里**实际用过**的字号和颜色。
+      ★ 用途：**把用户给的 PPT 重排**时让它长得像原来那份 ——
+      拿这些值去填 `set_slide_design` 的 spec_lock。
+      ⚠️ 主题色是**调色板**，`observed` 才是这份稿子**实际长的样子** —— 重排时优先照后者。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "要读的 .pptx"
+        max_sizes:
+          type: integer
+          default: 12
+          description: "实际用量里最多报几个字号"
+        max_colors:
+          type: integer
+          default: 12
+          description: "实际用量里最多报几个颜色"
+      required: ["file_path"]
+
+  - name: pptx_to_outline
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      ★ 这是**幻灯片读工具**（不改文件）。把一份 .pptx 摊成**结构化的逐页大纲**
+      —— 每页给：序号 · 版式名 · 标题 · 正文 · **备注** · 图片数 · 表格尺寸 · 超链接。
+      ★ 用途：**重排一份用户给的 PPT** 的原料 —— 拿到大纲之后逐页 `create_svg_slide`，
+      配色/字体用 `extract_pptx_identity` 读出来的那套。
+      ⚠️ 它与 `parse_pptx` **分工不同**：那件喂检索（切块进向量/BM25），
+      这件保结构（页码、备注、图、链接）—— 要看的是内容结构就用它。
+      ⚠️ 有字符上限（默认 12000），**超了回执里会说还有几页没列**。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "要摊开的 .pptx"
+        max_chars:
+          type: integer
+          default: 12000
+          description: "大纲的字符上限"
+        include_notes:
+          type: boolean
+          default: true
+          description: "要不要带每页备注"
+      required: ["file_path"]
+
+  # ================================================================
+  # 题注 + 交叉引用 —— 手写 OOXML 域那两件
+  # 它与上面那一批不是同一类活：`python-docx` 没有 domain API
+  #   （`Run.add_field` 不存在），这两件是手写 `w:fldChar` / `w:instrText` /
+  #   `w:bookmarkStart`。
+  #
+  # "引擎认不认"这件事验过，验法记在 `word_tools.py` 那段 docstring 里：
+  #   写一份带 SEQ/REF 的 docx，用 LibreOffice 打开，读回算出来的值。
+  #   第一版那个结果不可信（缓存值恰好就是 "1"，分不出"算了"与"回显"），
+  #   所以把缓存值故意写成 99/88 再跑，读回来仍然是 1，说明引擎真的重算了。
+  #
+  # 两者的缓存值是近似值：写进去的是域，Word/WPS 打开时重算
+  #   （我们顺手打开了 `w:updateFields`），LibreOffice 自己重算；
+  #   而没有排版引擎的地方（本仓的 `get_document_text`、某些预览器）
+  #   看到的就是那个近似值 —— 这一点在回执里如实说了。
+
+  - name: add_word_caption
+    permission: write
+    destructive: false
+    description: >
+      给某个段落末尾（或开头）加一个**题注** —— 形状是「图 1 系统架构」，
+      其中编号是 **`SEQ` 域**、并且被一个书签包着 ⇒ 后面可以用
+      `add_word_cross_reference` 引用它。
+      ★★ 它做的是「**编号可以自动排序和更新**」：中间插一张图，后面的编号**自己会变**。
+      ★ 回执里给 `bookmark` —— 引用它就把那个名字交给 `add_word_cross_reference`。
+      ★ 「图标题里的手动编号换成题注」这类要求就是它（先删掉手写的编号，再加一次）。
+      ⚠️ 写进去的是**域**不是死文本：Word/WPS 打开时会重算（会提示一下），
+      而没有排版引擎的地方看到的是**近似值**。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        paragraph_index:
+          type: integer
+          description: "第几段（0 起）"
+        label:
+          type: string
+          default: "图"
+          description: "题注前缀，如 图 / 表 / Figure / Table"
+        text:
+          type: string
+          description: "题注正文，如「系统架构」"
+        at_end:
+          type: boolean
+          default: true
+          description: "true 加在段落末尾，false 加在开头"
+      required: ["file_path", "paragraph_index"]
+
+  - name: add_word_cross_reference
+    permission: write
+    destructive: false
+    description: >
+      在某个段落末尾加一个**交叉引用**（`REF` 域），指向 `add_word_caption` 给的书签。
+      ★★ 它做的是「**引用能在编号变化时自动更新**」：插一张图之后，
+      正文里那句「见图 1」**自己会变**。
+      kind：number 只要编号 / text 只要文字 / full 整条题注。
+      ⚠️ 书签必须**真的存在**（指向空气的引用在 Word 里是「错误！未找到引用源」）
+      —— 所以先 `add_word_caption` 拿名字。
+      ⚠️ 与题注同一套边界：写进去是域，重算靠引擎，没引擎的地方看到的是近似值。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string}
+        paragraph_index:
+          type: integer
+          description: "第几段（0 起）"
+        bookmark:
+          type: string
+          description: "`add_word_caption` 回执里的那个书签名，如 _Ref1"
+        kind:
+          type: string
+          enum: ["number", "text", "full"]
+          default: "number"
+        hyperlink:
+          type: boolean
+          default: true
+          description: "加 \\h —— 按住 Ctrl 点它能跳到题注"
+      required: ["file_path", "paragraph_index", "bookmark"]
+
+  - name: replace_manual_captions
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      把文档里**已有的手写编号**就地换成**题注域**（`SEQ`），一个段落一个，
+      并给每个加书签（回执给书签名，交给 `add_word_cross_reference` 引用）。
+      ★★ 它做的是「**按顺序全部替换**」那一半：卷子上写「将 7 个图标题中的编号
+      全部替换为题注」「将所有图标题中的**手动编号**按照顺序全部替换」——
+      换完之后，中间插一张图，后面那些编号**自己会重排**。
+      ★ `label`：`图` / `表` / `Figure` / `Table` 都行，一次只换一种。
+      ★ `chapter_level=1` = **包含章节号**（如 `图1-1`）：章号取自
+      `标题1` 样式的**自动编号**。⚠️ 标题若还是**手写编号**，章号取不到 ——
+      回执会说出来，先把手动编号换成自动多级编号再重跑。
+      ★ `separator` 是章号与序号之间的那一个字符（默认 `-`）。
+      ⚠️ **它会改文档里已有的文字**，判据是启发式的 ⇒ 拿不准先 `dry_run=true`
+      看一眼（回执列出「要改的」与「跳过并给了理由的」两张表，
+      `skipped` 里那些**不会**被静默丢掉）。点名的用 `paragraph_indices`。
+      ★ 产出里若含算出来的数：交回前**逐条回到来源**核一遍。核不下来先说出来，别交。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+        label:
+          type: string
+          default: "图"
+          description: "题注前缀：图 / 表 / Figure / Table"
+        chapter_level:
+          type: integer
+          default: 0
+          description: "0=不带章节号（图 1）；1=包含章节号（图 1-1，章号取自标题1）"
+        separator:
+          type: string
+          default: "-"
+          description: "章节号与序号之间的分隔符，如 - 或 ."
+        paragraph_indices:
+          type: array
+          items: {type: integer}
+          description: "只改这几段（0 起）；越过自动判据。不给就扫全部"
+        dry_run:
+          type: boolean
+          default: false
+          description: "true = 只看不改（先看一眼到底会动哪几段）"
+      required: ["file_path"]

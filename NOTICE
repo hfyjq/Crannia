@@ -1,0 +1,45 @@
+Crannia
+Copyright 2026 Crannia
+
+This product includes software developed by third parties.
+
+The complete inventory, licenses and required notices are shipped with the
+product and are also available in the repository:
+
+  - THIRD-PARTY.md          Human-readable notices: assets, LGPL / MPL obligations
+  - THIRD-PARTY-PYTHON.md   Every bundled Python distribution and its license
+  - THIRD-PARTY-FRONTEND.md Every npm package bundled into the frontend, with
+                            its license text
+  - sbom.json               CycloneDX software bill of materials
+  - licenses/               Full texts: LGPL-3.0, LGPL-2.1, GPL-3.0, MPL-2.0,
+                            MIT-chat-on-wechat, MIT-deepseek-harness,
+                            Molio-LICENSE
+
+Notable components:
+
+| Component | License |
+|---|---|
+| Electron | MIT, plus the third-party notices it ships. The packaged app ships LICENSE.electron.txt next to the executable. |
+| Chromium | BSD-3-Clause and third-party notices; see LICENSES.chromium.html next to the executable. |
+| CPython | PSF-2.0. |
+| Tcl/Tk | Tcl/Tk license. |
+| PDFium | Apache-2.0 / BSD-3-Clause / CC-BY-4.0 (bundled with pypdfium2). |
+| FFmpeg | LGPL-2.1 (bundled with opencv-python-headless). |
+| python-telegram-bot | LGPL-3.0-only. |
+| pystray | LGPLv3. |
+| py7zr, inflate64, multivolumefile, pybcj, pyppmd | LGPL-2.1-or-later. |
+| certifi | MPL-2.0. |
+| rank_bm25 | Apache-2.0 (直接依赖：本地检索层). |
+| DocVortex | MIT AND Apache-2.0 AND BSD-3-Clause (native core). |
+| resvg | Apache-2.0 OR MIT (via resvg_py). |
+
+The LGPL Python packages (python-telegram-bot, pystray, py7zr and its
+dependencies) are distributed as unmodified, separately installed packages
+under the bundled Python runtime (site-packages), so they can be replaced
+by the user. Their complete license texts are in licenses/ and in each
+package's .dist-info/licenses/ directory.
+
+FFmpeg differs in shape: it is a native library inside the
+opencv-python-headless wheel (under cv2/), not a separate package, so
+replacing it means replacing that wheel. Its third-party notices ship at
+cv2/LICENSE-3RD-PARTY.txt.

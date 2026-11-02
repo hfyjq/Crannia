@@ -1,0 +1,394 @@
+{
+  "deepseek": {
+    "label": "DeepSeek",
+    "website": "https://deepseek.com/",
+    "models": {
+      "deepseek-v4-flash": {
+        "label": "V4 Flash",
+        "context_window": 65536
+      },
+      "deepseek-v4-pro": {
+        "label": "V4 Pro",
+        "context_window": 65536
+      }
+    }
+  },
+  "zhipu": {
+    "label": "智谱 GLM",
+    "website": "https://open.bigmodel.cn/",
+    "models": {
+      "glm-4.5-flash": {
+        "label": "GLM-4.5 Flash",
+        "context_window": 131072
+      },
+      "glm-4.5": {
+        "label": "GLM-4.5",
+        "context_window": 131072
+      },
+      "glm-4.5-air": {
+        "label": "GLM-4.5 Air",
+        "context_window": 131072
+      },
+      "glm-4.5-airx": {
+        "label": "GLM-4.5 AirX",
+        "context_window": 131072
+      },
+      "glm-4.5v": {
+        "label": "GLM-4.5V",
+        "context_window": 131072
+      },
+      "glm-4.6": {
+        "label": "GLM-4.6",
+        "context_window": 131072
+      },
+      "glm-4.6v": {
+        "label": "GLM-4.6V",
+        "context_window": 131072
+      },
+      "glm-4.6v-flash": {
+        "label": "GLM-4.6V Flash",
+        "context_window": 131072
+      },
+      "glm-4.6v-flashx": {
+        "label": "GLM-4.6V FlashX",
+        "context_window": 131072
+      },
+      "glm-4": {
+        "label": "GLM-4",
+        "context_window": 131072
+      },
+      "glm-4.7": {
+        "label": "GLM-4.7",
+        "context_window": 131072
+      }
+    }
+  },
+  "siliconflow": {
+    "label": "硅基流动",
+    "website": "https://www.siliconflow.cn/",
+    "models": {
+      "Qwen/Qwen3-8B": {
+        "label": "Qwen3 8B",
+        "context_window": 32768
+      },
+      "DeepSeek-V3.2": {
+        "label": "DeepSeek V3.2",
+        "context_window": 65536
+      }
+    }
+  },
+  "minimax": {
+    "label": "MiniMax",
+    "website": "https://platform.minimaxi.com/",
+    "models": {
+      "MiniMax-M2.7": {
+        "label": "M2.7",
+        "context_window": 131072
+      },
+      "MiniMax-M2.7-highspeed": {
+        "label": "M2.7 HighSpeed",
+        "context_window": 131072
+      },
+      "MiniMax-M3": {
+        "label": "M3",
+        "context_window": 131072
+      }
+    }
+  },
+  "moonshot": {
+    "label": "月之暗面 Kimi",
+    "website": "https://www.moonshot.cn/",
+    "models": {
+      "kimi-k2.5": {
+        "label": "Kimi K2.5",
+        "context_window": 131072
+      },
+      "kimi-k2.6": {
+        "label": "Kimi K2.6",
+        "context_window": 131072
+      },
+      "kimi-k2.7-code": {
+        "label": "Kimi K2.7 Code",
+        "context_window": 131072
+      }
+    }
+  },
+  "anthropic": {
+    "label": "Anthropic",
+    "website": "https://www.anthropic.com/",
+    "models": {
+      "claude-sonnet-4-5": {
+        "label": "Claude Sonnet 4.5",
+        "context_window": 200000
+      },
+      "claude-haiku-4-5": {
+        "label": "Claude Haiku 4.5",
+        "context_window": 200000
+      },
+      "claude-opus-4-5": {
+        "label": "Claude Opus 4.5",
+        "context_window": 200000
+      },
+      "claude-opus-4-6": {
+        "label": "Claude Opus 4.6",
+        "context_window": 200000
+      },
+      "claude-sonnet-4-6": {
+        "label": "Claude Sonnet 4.6",
+        "context_window": 200000
+      },
+      "claude-opus-4-7": {
+        "label": "Claude Opus 4.7",
+        "context_window": 200000
+      }
+    }
+  },
+  "openai": {
+    "label": "OpenAI",
+    "website": "https://openai.com/",
+    "models": {
+      "gpt-5": {
+        "label": "GPT-5",
+        "context_window": 128000
+      },
+      "gpt-5-pro": {
+        "label": "GPT-5 Pro",
+        "context_window": 128000
+      },
+      "gpt-5-chat": {
+        "label": "GPT-5 Chat",
+        "context_window": 128000
+      },
+      "gpt-5.1": {
+        "label": "GPT-5.1",
+        "context_window": 128000
+      },
+      "gpt-5.2": {
+        "label": "GPT-5.2",
+        "context_window": 128000
+      },
+      "gpt-5.2-pro": {
+        "label": "GPT-5.2 Pro",
+        "context_window": 128000
+      },
+      "gpt-5.4": {
+        "label": "GPT-5.4",
+        "context_window": 128000
+      },
+      "gpt-5.4-pro": {
+        "label": "GPT-5.4 Pro",
+        "context_window": 128000
+      }
+    }
+  },
+  "azure": {
+    "label": "Azure AI Foundry",
+    "website": "https://azure.microsoft.com/en-us/products/ai-foundry/models/openai/",
+    "models": {
+      "gpt-4o": {
+        "label": "GPT-4o",
+        "context_window": 128000
+      },
+      "gpt-4o-mini": {
+        "label": "GPT-4o Mini",
+        "context_window": 128000
+      }
+    }
+  },
+  "gemini": {
+    "label": "Google Gemini",
+    "website": "https://gemini.google.com/",
+    "models": {
+      "gemini-2.5-flash": {
+        "label": "Gemini 2.5 Flash",
+        "context_window": 1048576
+      },
+      "gemini-2.5-pro": {
+        "label": "Gemini 2.5 Pro",
+        "context_window": 2097152
+      },
+      "gemini-2.5-flash-image": {
+        "label": "Gemini 2.5 Flash Image",
+        "context_window": 1048576
+      },
+      "gemini-3-pro-image-preview": {
+        "label": "Gemini 3 Pro Image Preview",
+        "context_window": 1048576
+      },
+      "gemini-3-pro-preview": {
+        "label": "Gemini 3 Pro Preview",
+        "context_window": 1048576
+      },
+      "gemini-3.1-pro-preview": {
+        "label": "Gemini 3.1 Pro Preview",
+        "context_window": 1048576
+      }
+    }
+  },
+  "grok": {
+    "label": "Grok (xAI)",
+    "website": "https://x.ai/",
+    "models": {
+      "grok-4.3": {
+        "label": "Grok 4.3",
+        "context_window": 131072
+      },
+      "grok-4": {
+        "label": "Grok 4",
+        "context_window": 131072
+      },
+      "grok-3": {
+        "label": "Grok 3",
+        "context_window": 131072
+      },
+      "grok-3-fast": {
+        "label": "Grok 3 Fast",
+        "context_window": 131072
+      },
+      "grok-3-mini": {
+        "label": "Grok 3 Mini",
+        "context_window": 131072
+      },
+      "grok-3-mini-fast": {
+        "label": "Grok 3 Mini Fast",
+        "context_window": 131072
+      }
+    }
+  },
+  "volcengine": {
+    "label": "火山引擎",
+    "website": "https://console.volcengine.com/ark/region",
+    "models": {
+      "deepseek-r1": {
+        "label": "DeepSeek R1",
+        "context_window": 65536
+      },
+      "deepseek-r1-distill-qwen-32b": {
+        "label": "R1 Distill Qwen 32B",
+        "context_window": 32768
+      },
+      "deepseek-r1-distill-qwen-7b": {
+        "label": "R1 Distill Qwen 7B",
+        "context_window": 32768
+      },
+      "deepseek-v3": {
+        "label": "DeepSeek V3",
+        "context_window": 65536
+      },
+      "doubao-seed-1.8": {
+        "label": "Doubao Seed 1.8",
+        "context_window": 131072
+      },
+      "doubao-seed-2.0-pro": {
+        "label": "Doubao Seed 2.0 Pro",
+        "context_window": 131072
+      },
+      "doubao-seed-2.0-lite": {
+        "label": "Doubao Seed 2.0 Lite",
+        "context_window": 32768
+      },
+      "doubao-seed-2.0-code-preview": {
+        "label": "Doubao Seed 2.0 Code",
+        "context_window": 131072
+      },
+      "doubao-seed-2.0-mini": {
+        "label": "Doubao Seed 2.0 Mini",
+        "context_window": 32768
+      },
+      "doubao-lite-4k": {
+        "label": "Doubao Lite 4K",
+        "context_window": 4096
+      },
+      "doubao-lite-32k": {
+        "label": "Doubao Lite 32K",
+        "context_window": 32768
+      },
+      "doubao-lite-128k": {
+        "label": "Doubao Lite 128K",
+        "context_window": 131072
+      },
+      "doubao-pro-32k": {
+        "label": "Doubao Pro 32K",
+        "context_window": 32768
+      },
+      "doubao-pro-256k": {
+        "label": "Doubao Pro 256K",
+        "context_window": 262144
+      }
+    }
+  },
+  "hunyuan": {
+    "label": "腾讯混元",
+    "website": "https://cloud.tencent.com/product/hunyuan",
+    "models": {
+      "hunyuan-pro": {
+        "label": "Hunyuan Pro",
+        "context_window": 32768
+      },
+      "hunyuan-standard": {
+        "label": "Hunyuan Standard",
+        "context_window": 32768
+      },
+      "hunyuan-lite": {
+        "label": "Hunyuan Lite",
+        "context_window": 4096
+      },
+      "hunyuan-standard-256k": {
+        "label": "Hunyuan Standard 256K",
+        "context_window": 262144
+      },
+      "hunyuan-vision": {
+        "label": "Hunyuan Vision",
+        "context_window": 32768
+      },
+      "hunyuan-code": {
+        "label": "Hunyuan Code",
+        "context_window": 32768
+      },
+      "hunyuan-turbo": {
+        "label": "Hunyuan Turbo",
+        "context_window": 32768
+      },
+      "hunyuan-turbos-latest": {
+        "label": "Hunyuan TurboS",
+        "context_window": 32768
+      }
+    }
+  },
+  "openrouter": {
+    "label": "OpenRouter",
+    "website": "https://openrouter.ai/",
+    "models": {}
+  },
+  "qwen": {
+    "label": "Qwen (通义千问)",
+    "website": "https://www.qianwen.com/",
+    "models": {
+      "Qwen3.7-PLUS": {
+        "label": "Qwen3.7-PLUS",
+        "context_window": 131072
+      },
+      "Qwen3.7-MAX": {
+        "label": "Qwen3.7-MAX",
+        "context_window": 131072
+      },
+      "HappyHorse-T2V": {
+        "label": "HappyHorse-T2V",
+        "context_window": 32768
+      },
+      "deepseek-V4-flash": {
+        "label": "DeepSeek V4 Flash",
+        "context_window": 65536
+      },
+      "GLM-5.2": {
+        "label": "GLM-5.2",
+        "context_window": 131072
+      }
+    }
+  },
+  "ollama": {
+    "label": "Ollama (本地)",
+    "website": "https://ollama.com/",
+    "models": {}
+  }
+}
