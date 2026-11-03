@@ -89,9 +89,12 @@ def test_bash_is_probed() -> None:
         return
     check("它是**绝对路径**（不是靠 PATH 找）", Path(got).is_absolute(), got)
     check("它真的存在", Path(got).is_file(), got)
-    check("候选表里第一条就是它（顺序即优先级）",
-          _BASH_CANDIDATES[0].replace("\\", "/").lower()
-          == got.replace("\\", "/").lower(), got)
+    #: 候选表里第一条**存在**的应该就是它 —— 第一项可能只装在这台机器上
+    #: （另一台机器上不存在时，探测走的是后面那条，产品行为是对的）。
+    want = next((c for c in _BASH_CANDIDATES if Path(c).is_file()), "")
+    check("候选表里第一条存在的就是它（顺序即优先级）",
+          bool(want) and want.replace("\\", "/").lower()
+          == got.replace("\\", "/").lower(), "%r vs %r" % (want, got))
     check("★ 探测结果是缓存的（两次调用同一个值）", bash_path() is got or bash_path() == got)
 
 

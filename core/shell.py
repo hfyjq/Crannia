@@ -191,12 +191,21 @@ def clean_env() -> dict:
         import sys as _sys
         _bindir = str(Path(_sys.executable).parent)
         _sep = ";" if os.name == "nt" else ":"
+
+        def _norm(p: str) -> str:
+            return os.path.normcase(p.rstrip("\\/"))
+
+        #: 必须是**第一段**，不是"在 PATH 里出现过就行"：它已经在 PATH 里但排在
+        #:   别处时，`python` 仍会解析到另一个项目那份（现场原样：`python -m pytest`
+        #:   报 No module named pytest，而它跑的是旧虚拟环境）。
         for _k in list(out):
-            if _k.lower() == "path" and _bindir not in out[_k].split(_sep):
-                out[_k] = _bindir + _sep + out[_k]
+            if _k.lower() == "path":
+                _parts = [p for p in out[_k].split(_sep)
+                          if p and _norm(p) != _norm(_bindir)]
+                out[_k] = _sep.join([_bindir] + _parts)
                 break
         else:
-            out.setdefault("PATH", _bindir)
+            out["PATH"] = _bindir
     except Exception:                                    # noqa: BLE001
         pass
     return out

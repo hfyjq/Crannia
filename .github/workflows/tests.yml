@@ -39,4 +39,5 @@ jobs:
         run: npm ci
 
       - name: Test suite
-        run: python scripts/run_tests.py --quiet
+        #: 失败时多打几行 —— 默认 12 行会把失败用例的名字截掉。
+        run: python scripts/run_tests.py --quiet --fail-lines 200

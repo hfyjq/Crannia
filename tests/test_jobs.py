@@ -342,9 +342,17 @@ def test_sink_decodes_non_utf8_and_keeps_split_chars():
     assert chr(0xFFFD) not in s.text(), "分块解码产生了替换字符"
     assert s.encoding == "utf-8", s.encoding
 
+    #: 这一档是"本地代码页"：钉住它，别钉机器。CI 的机器是 cp1252、本机是 cp936
+    #: —— 直接喂 GBK 字节，结果会随机器变，而产品行为是对的。
+    import locale as _locale
+    _old_preferred = _locale.getpreferredencoding
     g = jobs._Sink()
-    g.write("中文输出\n".encode("gbk"))
-    g.finish()
+    try:
+        _locale.getpreferredencoding = lambda do_setlocale=True: "gbk"
+        g.write("中文输出\n".encode("gbk"))
+        g.finish()
+    finally:
+        _locale.getpreferredencoding = _old_preferred
     assert "中文输出" in g.text(), repr(g.text())
     assert g.encoding and g.encoding != "utf-8", g.encoding
 

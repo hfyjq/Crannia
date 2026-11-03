@@ -816,11 +816,14 @@ def _shown_path(path: Path, root: Path) -> str:
     模型问的是 `core/x.py`，回的若是 `d:/OPD/.../core/x.py`，同一个文件就有了
     两种写法 —— `read_file` 那边是相对写法，两边对不上。
     """
+    #: `root` 可能是 8.3 短名（`C:\Users\RUNNER~1\…`），而文件路径是解析后的长名
+    #: —— 两个写法都试一遍，否则要么回绝对路径、要么回错。
     for base in (root, Path.cwd()):
-        try:
-            return path.relative_to(base).as_posix()
-        except ValueError:
-            continue
+        for candidate in (base, Path(base).resolve()):
+            try:
+                return path.relative_to(candidate).as_posix()
+            except ValueError:
+                continue
     return path.as_posix()
 
 
