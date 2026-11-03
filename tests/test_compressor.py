@@ -654,6 +654,23 @@ def test_summary_lists_read_files_as_pointers():
             forget_t(key)
 
 
+def test_path_key_expands_8_3_short_names():
+    """两本账本一个存短名、一个存长名 —— 比较口径必须归一到同一个键。
+
+    现场：CI 的临时目录是 `C:\\Users\\RUNNER~1\\…`，`touched_files` 存的是
+    `resolve()` 后的长名，`file_tools` 存的是短名 —— `abspath` 不展开短名，
+    于是同一个文件在「动过的」和「读过的」两节里各出现一次。
+    """
+    from core.memory.compressor import _path_key
+    long_dir = Path(r"C:\Program Files")
+    if os.name != "nt" or not long_dir.is_dir():
+        print("  [skip] 非 Windows 或没有这个短名")
+        return
+    assert _path_key(r"C:\PROGRA~1") == _path_key(str(long_dir)), (
+        _path_key(r"C:\PROGRA~1"), _path_key(str(long_dir)))
+    print("  [ok] 8.3 短名与长名归一到同一个键")
+
+
 def test_prompt_asks_for_three_sections_only():
     """提示词只要三节；另外两节由框架附上，模型不许复述。"""
     from core.memory.compressor import COMPRESSION_PROMPT as P
@@ -930,6 +947,8 @@ if __name__ == "__main__":
          test_w168_summary_pointer_does_not_accumulate),
         ("prompt marks history as untrusted data",
          test_prompt_marks_history_as_untrusted_data),
+        ("path key expands 8.3 short names",
+         test_path_key_expands_8_3_short_names),
     ]
 
     passed = 0

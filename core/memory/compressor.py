@@ -1154,9 +1154,14 @@ def _recent_user_utterances(messages: List[Dict],
 
 
 def _path_key(p) -> str:
-    """比较两份文件账本用的口径（大小写与相对/绝对都归一）。"""
+    """比较两份文件账本用的口径（大小写、相对/绝对、8.3 短名都归一）。
+
+    `abspath` 只做字符串归一，不展开 8.3 短名（`C:\\Users\\RUNNER~1\\…`）；
+    而 `touched_files` 记的是 `resolve()` 后的长名 —— 两本账对不上，
+    同一个文件就会在「动过的」和「读过的」两节里各出现一次。
+    """
     try:
-        return os.path.normcase(os.path.abspath(str(p)))
+        return os.path.normcase(str(Path(str(p)).resolve()))
     except Exception:                                          # noqa: BLE001
         return str(p)
 
