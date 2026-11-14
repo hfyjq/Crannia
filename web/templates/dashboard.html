@@ -1,0 +1,821 @@
+{% extends "base.html" %}
+{% block header_title %}端配置{% endblock %}
+{% block content %}
+
+<!-- ═══ Status Bar (小白日志) ═══ -->
+<div class="status-bar" id="status-bar">
+  <div class="status-left">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">加载中...</span>
+  </div>
+  <div class="status-right" id="status-metrics"></div>
+</div>
+
+<!-- ═══ Platform Section ═══ -->
+<div class="card">
+  <h2> 选择平台 <button class="btn btn-primary btn-sm btn-start-fw" id="btn-start-fw" onclick="startFrameworkHere()" style="margin-left:12px"> 启动框架</button></h2>
+  <div class="platform-row" id="platform-row">加载中...</div>
+  <div id="platform-config" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+    <h3 id="platform-config-title" style="font-size:14px;color:var(--text-bright);margin-bottom:12px"></h3>
+    <form id="platform-config-form"></form>
+  </div>
+</div>
+
+<!-- ═══ Model Section ═══ -->
+<div class="card">
+  <h2> 模型 API</h2>
+  <!-- 重启按钮就放在这儿：切换 provider / 模型必须重启才生效
+       （`/api/restart` 重建 provider 实例），放在模型卡片旁边省掉来回设置面板。
+       它重启的是 Agent 框架，不是 WebUI 进程 —— 改 `core/` 里的
+       import 期常量（prompt 拼装、`_CORE_TOOLS` 那类）必须重启整个进程，
+       这个按钮不管用。 -->
+  <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+    <p style="font-size:13px;color:var(--text-dim);margin:0;flex:1">填入 API Key 即可切换模型。当前激活的模型带有边框。</p>
+    <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;flex:none"
+            onclick="restartFramework()"
+            title="切换 provider / 模型后必须重启才生效（重启的是 Agent 框架，不是 WebUI 进程）">🔄 重启框架</button>
+  </div>
+  <div class="model-grid" id="model-grid">加载中...</div>
+</div>
+
+<script>
+// Platform field definitions
+const PLATFORM_FIELDS = {
+  feishu_channel: [
+    {key:'app_id', label:'App ID', hint:'飞书开放平台 → 凭证与基础信息'},
+    {key:'app_secret', label:'App Secret', hint:'飞书开放平台 → 凭证与基础信息'},
+  ],
+  dingtalk_channel: [
+    {key:'app_key', label:'App Key (ClientId)', hint:'钉钉开放平台 → 凭证与基础信息'},
+    {key:'app_secret', label:'App Secret', hint:'钉钉开放平台 → 凭证与基础信息'},
+  ],
+  telegram_channel: [
+    {key:'bot_token', label:'Bot Token', hint:'@BotFather 创建机器人获取'},
+  ],
+  wechat_channel: [
+    {key:'_note', label:'微信配置', hint:'微信 iLink 需要扫码登录，请通过 CLI 首次启动完成'},
+  ],
+  cli_channel: [
+    {key:'_note', label:'CLI 终端', hint:'CLI 通道始终可用，无需配置。在 CLI 聊天页直接对话。'},
+  ],
+};
+
+// Status bar
+async function refreshStatus() {
+  try {
+    const h = await api('/api/health');
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    const met = document.getElementById('status-metrics');
+
+    if (h.framework_running) {
+      dot.className = 'status-dot online';
+      if (h.busy && h.task) {
+        txt.innerHTML = '🔵 Agent 工作中 — <span class="status-task">' + esc(h.task) + '</span>';
+        txt.style.color = 'var(--accent)';
+      } else {
+        txt.textContent = '🟢 Agent 在线';
+        txt.style.color = 'var(--accent)';
+      }
+      let parts = [];
+      parts.push('内存: ' + (h.memory_mb > 0 ? h.memory_mb + 'MB' : '...'));
+      let tkStr = h.tokens_total > 1000 ? (h.tokens_total/1000).toFixed(1)+'K' : h.tokens_total;
+      parts.push('Token: ' + tkStr + ' (' + h.api_calls + '次)');
+      if (h.uptime_seconds > 0) {
+        let s = h.uptime_seconds;
+        let str = s < 3600 ? Math.floor(s/60)+'m '+(s%60)+'s' :
+          Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+        parts.push('运行: ' + str);
+      }
+      parts.push('工具: ' + h.tool_count + '个');
+      parts.push(h.provider || '');
+      met.textContent = parts.join(' | ');
+    } else {
+      dot.className = 'status-dot offline';
+      txt.textContent = '⚪ Agent 离线';
+      txt.style.color = 'var(--text-dim)';
+      met.textContent = '点击下方「启动框架」开始';
+    }
+  } catch(e) {
+    document.getElementById('status-text').textContent = '⚠️ 状态获取失败';
+  }
+}
+
+// Platform section
+async function loadPlatforms() {
+  try {
+    const cfg = await api('/api/config');
+    let chStatus = {};
+    try { const cs = await api('/api/channel/status'); chStatus = cs.running || {}; } catch(e) {}
+
+    const row = document.getElementById('platform-row');
+    row.innerHTML = cfg.channels.map(c => {
+      const running = chStatus[c.id];
+      let btnHtml = '';
+      if (c.id !== 'cli_channel' && c.configured) {
+        btnHtml = running
+          ? '<span style="font-size:11px;color:var(--green);margin-top:4px;display:block">🟢 运行中</span>'
+          : '<button class="btn btn-primary btn-sm" style="margin-top:6px;width:100%" onclick="event.stopPropagation();startChannel(\''+c.id+'\')">▶ 启动</button>';
+      }
+      const showEdit = c.id !== 'cli_channel';
+      const editBtn = showEdit
+        ? '<div class="platform-chip-edit" onclick="event.stopPropagation();editPlatform(\''+c.id+'\')" title="' + (c.configured ? '修改配置' : '点击配置') + '">' + (c.configured ? '✎' : '⚙') + '</div>'
+        : '';
+      return `
+      <div class="platform-chip ${c.active?'active':''}" onclick="selectPlatform('${c.id}')" data-pid="${c.id}">
+        ${editBtn}
+        <div class="platform-chip-icon">${c.icon}</div>
+        <div class="platform-chip-name">${c.name}</div>
+        <div class="platform-chip-status ${c.configured?'ready':'pending'}">${c.configured?'✅ 已配置': (c.always_available?'可用':'未配置')}</div>
+        ${btnHtml}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('platform-row').innerHTML = '<p style="color:var(--red)">⚠️ ' + e.message + '</p>';
+  }
+}
+
+let _selectedPlatform = '';
+function selectPlatform(pid) {
+  _selectedPlatform = pid;
+  document.querySelectorAll('.platform-chip').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector('[data-pid="'+pid+'"]');
+  if (el) el.classList.add('active');
+
+  // Persist default channel choice to config.yaml
+  api('/api/channel/set-default', {method:'POST', body:JSON.stringify({channel_id:pid})})
+    .catch(e => console.warn('set-default failed:', e));
+
+  // For unconfigured platforms, open config form directly
+  // (for configured ones, clicking the chip just selects it; use ✎ to edit)
+  if (pid !== 'cli_channel') {
+    // Check if this platform is not yet configured
+    const chipEl = document.querySelector('[data-pid="'+pid+'"] .platform-chip-status');
+    if (chipEl && chipEl.classList.contains('pending')) {
+      editPlatform(pid);
+      return;
+    }
+  }
+  document.getElementById('platform-config').style.display = 'none';
+}
+
+async function editPlatform(pid) {
+  const panel = document.getElementById('platform-config');
+  const title = document.getElementById('platform-config-title');
+  const form = document.getElementById('platform-config-form');
+  const names = {feishu_channel:'飞书', dingtalk_channel:'钉钉', telegram_channel:'Telegram', wechat_channel:'微信', cli_channel:'CLI 终端'};
+
+  // WeChat uses iLink QR login — guided flow
+  if (pid === 'wechat_channel') {
+    title.textContent = '微信 iLink 扫码登录';
+    panel.style.display = 'block';
+    panel.scrollIntoView({behavior:'smooth'});
+    _wechatShowConfirm();
+    return;
+  }
+
+  const fields = PLATFORM_FIELDS[pid] || [];
+  title.textContent = (names[pid]||pid) + ' 修改配置';
+  panel.style.display = 'block';
+  panel.scrollIntoView({behavior:'smooth'});
+
+  if (fields.length === 1 && fields[0].key === '_note') {
+    form.innerHTML = '<p style="color:var(--text-dim);font-size:13px">'+fields[0].hint+'</p>';
+    return;
+  }
+
+  form.innerHTML = fields.map(f => `
+    <div class="form-group">
+      <label>${f.label}</label>
+      <input type="${f.key.includes('secret')||f.key.includes('token')?'password':'text'}" id="field_${f.key}" placeholder="${f.hint||''}">
+    </div>
+  `).join('') + `
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button type="button" class="btn btn-primary" onclick="savePlatform('${pid}')">💾 保存配置</button>
+      ${pid !== 'cli_channel' ? '<button type="button" class="btn btn-secondary" onclick="startChannel(\''+pid+'\')">▶ 启动通道</button>' : ''}
+    </div>
+  `;
+}
+
+async function savePlatform(pid) {
+  const fields = PLATFORM_FIELDS[pid] || [];
+  const data = {};
+  fields.forEach(f => {
+    if (f.key !== '_note') {
+      const el = document.getElementById('field_'+f.key);
+      if (el) data[f.key] = el.value;
+    }
+  });
+  const r = await api('/api/config', {
+    method: 'POST',
+    body: JSON.stringify({section:'channel', channel_id:pid, fields:data}),
+  });
+  alert(r.ok ? '✅ 已保存！' : '❌ '+r.error);
+  if (r.ok) loadPlatforms();
+}
+
+async function startChannel(pid) {
+  try {
+    const r = await api('/api/channel/start', {method:'POST', body:JSON.stringify({channel_id:pid})});
+    if (r.ok) {
+      alert('✅ 通道已启动！');
+      loadPlatforms();
+    } else {
+      alert('❌ ' + (r.error || '启动失败'));
+    }
+  } catch(e) {
+    alert('❌ 请求失败: ' + e.message);
+  }
+}
+
+// ── WeChat QR code login (iLink) — guided flow ──
+
+let _wechatQRTimer = null;
+let _wechatPrevPlatform = '';
+
+function _wechatShowConfirm() {
+  // Remember previously selected platform so we can revert on cancel
+  _wechatPrevPlatform = _selectedPlatform !== 'wechat_channel' ? _selectedPlatform : 'cli_channel';
+  const form = document.getElementById('platform-config-form');
+  form.innerHTML = `
+    <div id="wechat-flow" style="text-align:center;padding:16px 0">
+      <div style="font-size:14px;color:var(--text);margin-bottom:16px">
+        还没有连接至微信，开始引导？
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button type="button" class="btn btn-primary" onclick="_wechatStartLogin()">✅ 开始引导</button>
+        <button type="button" class="btn btn-secondary" onclick="_wechatCancel()">取消</button>
+      </div>
+    </div>`;
+}
+
+function _wechatCancel() {
+  _wechatCleanup();
+  // Revert to previous platform selection
+  selectPlatform(_wechatPrevPlatform);
+  document.getElementById('platform-config').style.display = 'none';
+}
+
+function _wechatShowProgress(msg) {
+  const form = document.getElementById('platform-config-form');
+  form.innerHTML = `
+    <div id="wechat-flow" style="text-align:center;padding:16px 0">
+      <div style="font-size:14px;color:var(--text);margin-bottom:12px">${msg}</div>
+      <div style="color:var(--text-dim);font-size:13px">⏳ 请稍候…</div>
+    </div>`;
+}
+
+function _wechatShowQR(imgUrl, qrcodeKey, qrDataUri) {
+  const form = document.getElementById('platform-config-form');
+  const qrImg = qrDataUri
+    ? '<img id="wechat-qr-img" src="'+qrDataUri+'" style="width:200px;height:200px" alt="QR Code">'
+    : (imgUrl
+        ? '<img id="wechat-qr-img" src="'+imgUrl+'" style="width:200px;height:200px" alt="QR Code" onerror="this.style.display=\'none\';document.getElementById(\'wechat-qr-fallback\').style.display=\'flex\'">'
+          + '<div id="wechat-qr-fallback" style="width:200px;height:200px;display:none;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px">QR Key:<br>'+qrcodeKey+'</div>'
+        : '<div style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px">QR Key:<br>'+qrcodeKey+'</div>');
+  form.innerHTML = `
+    <div id="wechat-flow" style="text-align:center;padding:16px 0">
+      <div id="wechat-qr-status" style="font-size:13px;color:var(--text);margin-bottom:12px">请用微信扫描二维码</div>
+      <div style="display:inline-block;background:#fff;padding:12px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.1);margin-bottom:12px">
+        ${qrImg}
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.6">
+        1. 打开微信 → 扫一扫<br>
+        2. 扫描上方二维码<br>
+        3. 在手机上确认登录
+      </div>
+      <div id="wechat-qr-actions" style="display:flex;gap:8px;justify-content:center">
+        <button type="button" class="btn btn-secondary" onclick="_wechatRetry()">🔄 重试</button>
+        <button type="button" class="btn btn-primary" id="wechat-btn-confirm" disabled onclick="_wechatConfirm()">✅ 确认连接</button>
+      </div>
+      <div id="wechat-qr-hint" style="font-size:11px;color:var(--text-dim);margin-top:8px">确认连接后将重启框架以应用配置</div>
+    </div>`;
+  // Start polling for scan status — use the shared state endpoint
+  _wechatQRTimer = setInterval(_wechatPollState, 2000);
+}
+
+async function _wechatStartLogin() {
+  _wechatShowProgress('✅ 正在唤起微信通道，请在二维码展示后按流程扫描以建立连接');
+  try {
+    const r = await api('/api/wechat/start-login', {method:'POST'});
+    if (!r.ok) throw new Error(r.error || '启动失败');
+    if (r.phase === 'already_configured') {
+      // Already logged in — just update UI
+      _wechatCleanup();
+      document.getElementById('platform-config-form').innerHTML = `
+        <div style="text-align:center;padding:16px 0;color:var(--green)">✅ 微信已连接 (Bot: ${r.bot_id||'?'})</div>`;
+      setTimeout(() => loadPlatforms(), 1000);
+      return;
+    }
+    // Start polling the shared state for QR code
+    _wechatQRTimer = setInterval(_wechatPollForQR, 1500);
+  } catch(e) {
+    document.getElementById('platform-config-form').innerHTML = `
+      <div id="wechat-flow" style="text-align:center;padding:16px 0">
+        <div style="color:var(--red);margin-bottom:12px">❌ 启动失败: ${e.message}</div>
+        <button type="button" class="btn btn-secondary" onclick="_wechatStartLogin()">🔄 重试</button>
+      </div>`;
+  }
+}
+
+async function _wechatPollForQR() {
+  try {
+    const r = await api('/api/wechat/qrcode');
+    if (!r.ok) return;
+    if (r.phase === 'qr_ready' && (r.qr_data_uri || r.img_url)) {
+      // QR code is ready — stop polling for QR, switch to status polling
+      clearInterval(_wechatQRTimer);
+      _wechatShowQR(r.img_url, r.qrcode_key, r.qr_data_uri);
+    } else if (r.phase === 'confirmed') {
+      clearInterval(_wechatQRTimer);
+      _wechatShowConfirmed(r.bot_id || '');
+    } else if (r.phase === 'expired') {
+      clearInterval(_wechatQRTimer);
+      _wechatShowExpired();
+    } else if (r.phase === 'error') {
+      clearInterval(_wechatQRTimer);
+      _wechatShowError(r.error_msg || '登录流程出错');
+    }
+    // "starting" / "idle" → keep polling
+  } catch(e) { /* keep polling */ }
+}
+
+async function _wechatPollState() {
+  try {
+    const r = await api('/api/wechat/qrcode');
+    if (!r.ok) return;
+    const statusEl = document.getElementById('wechat-qr-status');
+    const confirmBtn = document.getElementById('wechat-btn-confirm');
+    const hintEl = document.getElementById('wechat-qr-hint');
+
+    if (r.phase === 'scanned') {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--primary);font-weight:bold">📱 已扫描，请在手机上确认登录...</span>';
+    } else if (r.phase === 'confirmed') {
+      clearInterval(_wechatQRTimer); _wechatQRTimer = null;
+      _wechatShowConfirmed(r.bot_id || '');
+    } else if (r.phase === 'expired') {
+      clearInterval(_wechatQRTimer); _wechatQRTimer = null;
+      _wechatShowExpired();
+    } else if (r.phase === 'error') {
+      clearInterval(_wechatQRTimer); _wechatQRTimer = null;
+      _wechatShowError(r.error_msg || '登录流程出错');
+    }
+  } catch(e) { /* keep polling */ }
+}
+
+function _wechatShowConfirmed(botId) {
+  const form = document.getElementById('platform-config-form');
+  form.innerHTML = `
+    <div id="wechat-flow" style="text-align:center;padding:16px 0">
+      <div style="font-size:14px;color:var(--green);font-weight:bold;margin-bottom:8px">✅ 登录成功！</div>
+      ${botId ? '<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Bot: '+botId+'</div>' : ''}
+      <div style="font-size:13px;color:var(--text);margin-bottom:16px">点击下方按钮重启框架以应用配置</div>
+      <button type="button" class="btn btn-primary" onclick="_wechatRestart()">🔄 确认连接并重启</button>
+    </div>`;
+}
+
+function _wechatShowExpired() {
+  const form = document.getElementById('platform-config-form');
+  form.innerHTML = `
+    <div id="wechat-flow" style="text-align:center;padding:16px 0">
+      <div style="color:var(--warn);font-weight:bold;margin-bottom:8px">⏰ 二维码已过期</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">请重新获取二维码</div>
+      <button type="button" class="btn btn-secondary" onclick="_wechatRetry()">🔄 重试</button>
+    </div>`;
+}
+
+function _wechatShowError(msg) {
+  const form = document.getElementById('platform-config-form');
+  form.innerHTML = `
+    <div id="wechat-flow" style="text-align:center;padding:16px 0">
+      <div style="color:var(--red);font-weight:bold;margin-bottom:8px">❌ 出错</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">${msg}</div>
+      <button type="button" class="btn btn-secondary" onclick="_wechatRetry()">🔄 重试</button>
+    </div>`;
+}
+
+async function _wechatRetry() {
+  _wechatCleanup();
+  _wechatShowProgress('✅ 正在重新唤起微信通道…');
+  // Give the old channel thread a moment, then restart flow
+  setTimeout(() => _wechatStartLogin(), 800);
+}
+
+async function _wechatConfirm() {
+  _wechatCleanup();
+  await _wechatRestart();
+}
+
+async function _wechatRestart() {
+  try {
+    const r = await api('/api/restart', {method:'POST'});
+    if (r.ok) {
+      document.getElementById('platform-config-form').innerHTML = `
+        <div style="text-align:center;padding:16px 0;color:var(--green)">✅ 框架正在重启…</div>`;
+      setTimeout(() => { location.reload(); }, 3000);
+    } else {
+      alert('重启失败: ' + (r.error || '请手动重启'));
+    }
+  } catch(e) {
+    alert('重启请求失败: ' + e.message);
+  }
+}
+
+function _wechatCleanup() {
+  if (_wechatQRTimer) { clearInterval(_wechatQRTimer); _wechatQRTimer = null; }
+}
+
+// Model section
+async function loadModels() {
+  try {
+    const cfg = await api('/api/config');
+    const grid = document.getElementById('model-grid');
+    grid.innerHTML = cfg.models.map(m => {
+      const modelOpts = (m.models||[]).map(md =>
+        `<option value="${md.id}" ${md.id===m.current_model?'selected':''}>${md.label}</option>`
+      ).join('');
+
+      const noAnim = localStorage.getItem('crannia-anim-disabled') === '1';
+      const cardIdx = cfg.models.indexOf(m);
+      const animStyle = noAnim ? '' : 'animation: cardFadeIn 0.4s ease forwards; animation-delay: ' + (cardIdx * 0.05) + 's; opacity: 0;';
+      return `
+      <div class="model-card ${m.active?'active-card':''}" style="${animStyle}">
+        <div class="model-name">
+          <span class="provider-icon">${providerIcon(m.key)}</span> ${m.label || m.key}
+          ${m.website ? '<a href=\"'+m.website+'\" target=\"_blank\" class=\"website-link\" title=\"官网\">↗</a>' : ''}
+          ${m.is_local ? '<span class=\"skill-badge configured\" style=\"font-size:10px\">本地</span>' : ''}
+          ${m.is_gateway ? '<span class=\"skill-badge needs-config\" style=\"font-size:10px\">网关</span>' : ''}
+          ${m.active ? '<span class=\"status-badge-accent\"> ● 当前</span>' : ''}
+        </div>
+        ${modelOpts && !m.is_gateway ? '<select class="model-select" id="model_'+m.key+'" onchange="switchModel(\''+m.key+'\')">'+modelOpts+'</select>' : ''}
+        ${m.is_gateway ? '<input placeholder="模型 ID (如 deepseek/deepseek-chat)" value="'+esc(m.current_model||'')+'" id="model_'+m.key+'" style="font-size:12px;margin:6px 0;opacity:0.7">' : ''}
+        ${m.is_local
+          ? '<input type="text" disabled style="opacity:0.4" placeholder="本地模型 — 无需 Key" id="key_'+m.key+'">'
+          : '<input type="text" readonly placeholder="'+(m.configured?'✅ 已配置 - 点击修改':'点击填入 Key...')+'" id="key_'+m.key+'" onclick="openKeyFloater(\''+m.key+'\',\''+escAttr(m.label||m.key)+'\')"'+(m.configured?' style=\"cursor:pointer;background:rgba(191,126,67,0.15);border-color:var(--accent);color:var(--accent);font-weight:600\"':' style=\"cursor:pointer\"')+'>'
+        }
+        <div class="model-actions">
+          ${m.is_local || m.configured
+            ? `<button class="btn btn-sm" style="font-size:11px" onclick="switchProvider('${m.key}')">设为当前</button>`
+            : '<button class="btn btn-sm" style="font-size:11px;opacity:0.3;cursor:not-allowed" disabled>先配置 Key</button>'
+          }
+          ${m.is_local ? '' : `<button class="btn btn-primary btn-sm" onclick="openKeyFloater('${m.key}','${escAttr(m.label||m.key)}')">保存 Key</button>`}
+          ${m.is_local ? '' : `<button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="openKeyManager('${m.key}')">查看配置</button>`}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('model-grid').innerHTML = '<p style="color:var(--red)">' + e.message + '</p>';
+  }
+}
+
+async function switchProvider(key) {
+  const el = document.getElementById('model_'+key);
+  const mid = el ? el.value || el.placeholder.split(' ')[0] : '';
+  const r = await api('/api/config', {
+    method:'POST',
+    body: JSON.stringify({section:'provider', provider:key, model_name:mid}),
+  });
+  alert(r.ok ? '已切换! 重启框架生效.' : '错误: '+r.error);
+  if (r.ok) loadModels();
+}
+
+async function switchModel(key) {
+  const sel = document.getElementById('model_'+key);
+  if (!sel) return;
+  const r = await api('/api/config', {
+    method:'POST',
+    body: JSON.stringify({section:'model_select', provider:key, model_name:sel.value}),
+  });
+}
+
+async function saveKey(key, labelOverride) {
+  const nameInp = document.getElementById('keyfloater-name');
+  const keyInp = document.getElementById('keyfloater-key');
+  const apiKey = keyInp ? keyInp.value.trim() : '';
+  const displayLabel = nameInp ? nameInp.value.trim() : (labelOverride || key);
+  if (!apiKey) { alert('请先填入 API Key'); return; }
+  const r = await api('/api/config', {
+    method:'POST',
+    body: JSON.stringify({section:'model', key, api_key: apiKey, label: displayLabel}),
+  });
+  alert(r.ok ? '✅ 已保存' : '❌ 错误: '+r.error);
+  if (r.ok) { closeKeyFloater(); loadModels(); }
+}
+
+// Key Floater (API name + key small popup)
+function openKeyFloater(providerKey, label) {
+  closeKeyFloater();
+  const overlay = document.createElement('div');
+  overlay.id = 'keyfloater-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = closeKeyFloater;
+
+  const box = document.createElement('div');
+  box.id = 'keyfloater-box';
+  box.className = 'modal-content keyfloater-box';
+  box.onclick = e => e.stopPropagation();
+  box.innerHTML = `
+    <div class="modal-header">
+      <span>🔑 配置 API Key</span>
+      <button class="modal-close" onclick="closeKeyFloater()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>提供商</label>
+        <input type="text" value="${escAttr(label)}" disabled style="opacity:0.6">
+      </div>
+      <div class="form-group">
+        <label>API 名称 <span style="font-size:10px;color:var(--text-dim)">(用于区分不同Key)</span></label>
+        <input type="text" id="keyfloater-name" placeholder="如：个人DeepSeek、公司OpenAI...">
+      </div>
+      <div class="form-group">
+        <label>API Key <span style="color:var(--red)">*</span></label>
+        <input type="password" id="keyfloater-key" placeholder="粘贴 API Key..." autofocus>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeKeyFloater()">取消</button>
+      <button class="btn btn-primary" onclick="saveKey('${providerKey}','${escAttr(label)}')">💾 保存</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  // Trigger CSS transitions
+  requestAnimationFrame(() => {
+    overlay.classList.add('show');
+    const kf = document.getElementById('keyfloater-key');
+    if (kf) kf.focus();
+  });
+}
+
+function closeKeyFloater() {
+  const overlay = document.getElementById('keyfloater-overlay');
+  if (overlay) { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 200); }
+}
+
+// Key Manager (查看配置 — scoped per provider)
+let _keyManagerDeleteCooldown = {};
+let _keyManagerProvider = '';
+
+async function openKeyManager(providerKey) {
+  closeKeyManager();
+  _keyManagerProvider = providerKey || '';
+  const overlay = document.createElement('div');
+  overlay.id = 'keymgr-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.onclick = closeKeyManager;
+
+  const box = document.createElement('div');
+  box.id = 'keymgr-box';
+  box.className = 'modal-content keymgr-box';
+  box.onclick = e => e.stopPropagation();
+  const title = providerKey ? esc(providerKey) + ' 的 API 配置' : '已保存的 API 配置';
+  box.innerHTML = `
+    <div class="modal-header">
+      <span>🔑 ${title}</span>
+      <button class="modal-close" onclick="closeKeyManager()">✕</button>
+    </div>
+    <div class="modal-body" id="keymgr-body">
+      <p style="color:var(--text-dim);text-align:center">加载中...</p>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-start">
+      <button class="btn btn-primary btn-sm" onclick="closeKeyManager();openKeyFloater('${escAttr(providerKey||'')}','${escAttr(providerKey||'')}')">＋ 添加新 Key</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => {
+    overlay.classList.add('show');
+    loadKeyManagerList();
+  });
+}
+
+function closeKeyManager() {
+  const overlay = document.getElementById('keymgr-overlay');
+  if (overlay) { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 200); }
+}
+
+async function loadKeyManagerList() {
+  const body = document.getElementById('keymgr-body');
+  if (!body) return;
+  try {
+    const provider = _keyManagerProvider;
+    const url = '/api/env-keys' + (provider ? '?provider=' + encodeURIComponent(provider) : '');
+    const r = await api(url);
+    const keys = r.keys || [];
+    if (!keys.length) {
+      body.innerHTML = `<p style="color:var(--text-dim);text-align:center;padding:24px">
+        暂无${provider ? '「'+esc(provider)+'」的' : ''}已保存 API Key。<br>
+        点击下方"添加新 Key"按钮或返回端配置页添加。
+      </p>`;
+      return;
+    }
+    body.innerHTML = keys.map(k => {
+      const cdKey = k.provider + '/' + k.id;
+      const cdRemain = _keyManagerDeleteCooldown[cdKey] || 0;
+      const delDisabled = cdRemain > 0;
+      return `
+      <div class="keymgr-row${k.active?' keymgr-row-active':''}">
+        <div class="keymgr-info">
+          <div class="keymgr-label">${esc(k.label)}
+            ${k.active ? '<span class="status-badge-accent" style="font-size:10px"> ● 使用中</span>' : ''}
+          </div>
+          <div class="keymgr-masked">${esc(k.masked)}</div>
+          ${k.created ? '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">创建于 ' + k.created.slice(0,10) + '</div>' : ''}
+        </div>
+        <div class="keymgr-actions">
+          ${k.active
+            ? '<button class="btn btn-sm" style="font-size:11px;opacity:0.5;cursor:default" disabled>当前使用</button>'
+            : `<button class="btn btn-sm" style="font-size:11px;color:var(--green);border-color:var(--green)" onclick="activateKey('${escAttr(k.provider)}','${escAttr(k.id)}')">▶ 使用此Key</button>`
+          }
+          <button class="btn btn-sm" style="font-size:11px" onclick="renameKey('${escAttr(k.provider)}','${escAttr(k.id)}','${escAttr(k.label)}')">✎ 改名</button>
+          <button class="btn btn-sm btn-delete-key" id="del-btn-${escAttr(cdKey.replace(/[^a-zA-Z0-9_]/g,''))}" onclick="deleteKey('${escAttr(k.provider)}','${escAttr(k.id)}')" ${delDisabled?'disabled':''}>${delDisabled?'🗑 冷却 '+cdRemain+'s':'🗑 删除'}</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<p style="color:var(--red);text-align:center">⚠️ 加载失败: ' + e.message + '</p>';
+  }
+}
+
+async function activateKey(provider, kid) {
+  try {
+    const r = await api('/api/env-keys/activate', {
+      method:'POST',
+      body: JSON.stringify({provider, id: kid})
+    });
+    if (r.ok) {
+      loadKeyManagerList();
+      loadModels();
+    } else {
+      alert('❌ 切换失败: ' + (r.error || '未知错误'));
+    }
+  } catch(e) {
+    alert('❌ 请求失败: ' + e.message);
+  }
+}
+
+async function deleteKey(provider, kid) {
+  const cdKey = provider + '/' + kid;
+  if (!_keyManagerDeleteCooldown[cdKey]) {
+    // First click: show warning
+    const safeId = cdKey.replace(/[^a-zA-Z0-9_]/g,'');
+    const btn = document.getElementById('del-btn-'+safeId);
+    const row = btn ? btn.closest('.keymgr-row') : null;
+    if (row) {
+      row.style.background = 'rgba(220,53,69,0.1)';
+      row.style.borderLeft = '3px solid var(--red)';
+    }
+    if (btn) {
+      btn.style.color = 'var(--red)';
+      btn.style.fontWeight = '600';
+      btn.textContent = '⚠️ 此操作无法复原，请注意 — 再次点击确认';
+    }
+    _keyManagerDeleteCooldown[cdKey] = 3;
+    const timer = setInterval(() => {
+      _keyManagerDeleteCooldown[cdKey]--;
+      if (_keyManagerDeleteCooldown[cdKey] <= 0) {
+        clearInterval(timer);
+        delete _keyManagerDeleteCooldown[cdKey];
+        if (btn && document.body.contains(btn)) {
+          btn.textContent = '🗑 删除';
+          btn.style.color = 'var(--red)';
+          btn.style.fontWeight = 'normal';
+          btn.disabled = false;
+        }
+      } else {
+        if (btn && document.body.contains(btn)) {
+          btn.textContent = '⚠️ 再次点击确认 (' + _keyManagerDeleteCooldown[cdKey] + 's)';
+        }
+      }
+    }, 1000);
+    return;
+  }
+
+  // Second click: actually delete
+  try {
+    const r = await api('/api/env-keys/delete', {
+      method:'POST',
+      body: JSON.stringify({provider, id: kid})
+    });
+    if (r.ok) {
+      loadModels();
+      loadKeyManagerList();
+    } else {
+      alert('❌ 删除失败: ' + (r.error || '未知错误'));
+    }
+  } catch(e) {
+    alert('❌ 请求失败: ' + e.message);
+  }
+}
+
+async function renameKey(provider, kid, currentLabel) {
+  const newLabel = prompt('请输入新的 API 名称:', currentLabel);
+  if (!newLabel || newLabel === currentLabel) return;
+  try {
+    const r = await api('/api/env-keys/rename', {
+      method:'POST',
+      body: JSON.stringify({provider, id: kid, label: newLabel})
+    });
+    if (r.ok) {
+      loadKeyManagerList();
+    } else {
+      alert('❌ 改名失败: ' + (r.error || '未知错误'));
+    }
+  } catch(e) {
+    alert('❌ 请求失败: ' + e.message);
+  }
+}
+
+// Init
+async function startFrameworkHere() {
+  const btn = document.getElementById('btn-start-fw');
+  // Check API key configured
+  try {
+    const hk = await api('/api/has-api-key');
+    if (!hk.has_key) {
+      alert('请先前往端配置页配置您的 API Key，否则 Agent 无法工作。');
+      return;
+    }
+  } catch(e) {}
+  btn.disabled = true;
+  btn.textContent = '⏳ 启动中...';
+  try {
+    const r = await api('/api/start', {method:'POST'});
+    if (r.ok) {
+      btn.textContent = '✅ 已启动';
+      btn.classList.remove('btn-start-fw');
+      btn.style.boxShadow = 'none';
+      btn.style.animation = 'none';
+      if (localStorage.getItem('crannia-glow-once') === '1') {
+        localStorage.setItem('crannia-glow-done', '1');
+      }
+      refreshStatus();
+      loadPlatforms();
+      window.dispatchEvent(new CustomEvent('crannia:framework-started'));
+    } else {
+      btn.textContent = '🚀 重试';
+      btn.disabled = false;
+      alert('❌ ' + (r.error || '启动失败'));
+    }
+  } catch(e) {
+    btn.textContent = '🚀 重试';
+    btn.disabled = false;
+  }
+}
+
+(async function initStartBtn() {
+  const btn = document.getElementById('btn-start-fw');
+  if (localStorage.getItem('crannia-glow-done') === '1') {
+    btn.classList.remove('btn-start-fw');
+    btn.style.boxShadow = 'none';
+    btn.style.animation = 'none';
+  }
+  try {
+    const s = await api('/api/status');
+    if (s.framework_running) {
+      btn.textContent = '✅ 已启动';
+      btn.disabled = true;
+      btn.classList.remove('btn-start-fw');
+      btn.style.boxShadow = 'none';
+      btn.style.animation = 'none';
+    }
+  } catch(e) {}
+})();
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function providerIcon(name) {
+  const icons = {
+    deepseek: 'provider-deepseek.svg', openai: 'provider-openai.svg', anthropic: 'provider-anthropic.svg',
+    zhipu: 'provider-zhipu.svg', qwen: 'provider-qwen.svg',
+    moonshot: 'provider-moonshot.svg', minimax: 'provider-minimax.svg',
+    ollama: 'provider-ollama.svg', lmstudio: 'provider-lmstudio.svg',
+    openrouter: 'provider-openrouter.svg', siliconflow: 'provider-siliconflow.svg',
+    azure: 'provider-azure.svg', gemini: 'provider-gemini.svg',
+    grok: 'provider-grok.svg', volcengine: 'provider-volcengine.svg',
+    hunyuan: 'provider-hunyuan.svg',
+  };
+  const fn = icons[name];
+  if (fn) return `<img src="/static/img/${fn}" alt="${name}" class="provider-icon-svg">`;
+  return '<span class="provider-icon-emoji">⏺</span>';
+}
+
+// Listen for auto-start events from base.html
+window.addEventListener('crannia:framework-started', () => {
+  loadPlatforms();
+  refreshStatus();
+});
+
+refreshStatus();
+setInterval(refreshStatus, 5000);
+loadPlatforms();
+loadModels();
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+[project]
+name = "crannia"
+# NOTE: Keep in sync with core/version.py __version__
+version = "1.0.1"
+description = "Modular AI Agent Framework"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Crannia" }]
+requires-python = ">=3.12"
+dependencies = [
+    # LLM / AI
+    "openai>=2.44",
+    "anthropic>=0.116",
+    "tiktoken>=0.13",
+    # Document parsing
+    "pypdf>=6.21",
+    "pypdfium2>=5.0",
+    "pdfplumber>=0.11",
+    "docvortex>=0.5.16",
+    "python-docx>=1.2",
+    "python-pptx>=1.0",
+    "openpyxl>=3.1",
+    "xlrd>=1.2,<2.0",
+    # Images / SVG / PDF generation
+    "Pillow>=12.3",
+    "opencv-python-headless>=5.0",
+    "resvg-py>=0.5",
+    "reportlab>=5.0",
+    # 这三条代码里真 import（plot_excel_data 出图 / web_search 传输层 /
+    # Windows 上的 ZoneInfo），漏了就会在运行时缺，而按元数据装的人尤其容易漏。
+    # requirements.txt 里是同一份清单的另一处写法，改一处要改两处。
+    "matplotlib>=3.9",
+    "curl-cffi>=0.13",
+    "tzdata>=2024.1",
+    # Search / NLP / Vector
+    "jieba>=0.42",
+    "rank_bm25>=0.2",
+    "numpy>=2.4",
+    "ddgs>=9.14",
+    # Network / Web server
+    "Flask>=3.1",
+    "waitress>=3.0",
+    "requests>=2.32",
+    "httpx>=0.28",
+    # SOCKS 代理支持，缺了会让 provider 构造直接抛。
+    "socksio>=1.0",
+    "PySocks>=1.7.1",
+    "aiohttp>=3.14",
+    # Channel adapters
+    "lark-oapi>=1.7",
+    "dingtalk-stream>=0.24",
+    "python-telegram-bot>=22.8",
+    # Infrastructure
+    "PyYAML>=6.0",
+    "python-dotenv>=1.2",
+    "cryptography>=49.0",
+    "psutil>=7.2",
+    "pystray>=0.19",
+    "qrcode>=8.2",
+    # Archive extraction
+    "py7zr>=1.1",
+    "rarfile>=4.3",
+    # MCP protocol
+    "mcp>=1.28",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "bus", "skills", "providers", "channels", "web", "mcpx"]

@@ -1,0 +1,14 @@
+kind: provider
+name: lmstudio
+version: 0.2.0
+description: LM Studio — 图形化本地模型管理
+api_mode: openai_compat
+config:
+  base_url: http://localhost:1234/v1
+  default_model: local-model
+  context_window: 8192
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+env_keys:
+- LMSTUDIO_API_KEY

@@ -1,0 +1,16 @@
+{
+  "_comment": "白名单示例（真文件是 data/allowlist.json，不进仓）。四个键都写全；空数组即不额外放行。`*` 表示全部放行（设置页那两个开关写的就是它）。",
+  "egress": [
+    "docs.python.org",
+    "*.example.com"
+  ],
+  "command": [
+    "git status --short"
+  ],
+  "email_to": [
+    "someone@example.com"
+  ],
+  "computer_app": [
+    "notepad.exe"
+  ]
+}

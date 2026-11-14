@@ -1,0 +1,4 @@
+kind: channel
+name: telegram_channel
+description: Telegram Bot adapter — multi-user messaging via Telegram Bot API
+version: 0.1.0

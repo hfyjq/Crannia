@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4" width="256" height="256" shape-rendering="crispEdges">
+<title>Crannia pixel C</title>
+<g fill="#6bbf40">
+<rect x="1.5" y="0" width="1" height="1"/>
+<rect x="2.5" y="0" width="1" height="1"/>
+<rect x="0.5" y="1" width="1" height="1"/>
+<rect x="0.5" y="2" width="1" height="1"/>
+<rect x="1.5" y="3" width="1" height="1"/>
+<rect x="2.5" y="3" width="1" height="1"/>
+</g>
+</svg>

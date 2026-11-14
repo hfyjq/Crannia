@@ -1,0 +1,21 @@
+Update notes - regular release (2026/11/14) v1.0.1
+
+Fixes:
+1. Fixed an issue that made the compatibility notice render incorrectly
+2. Fixed settings import: options that were previously skipped now apply
+3. Channels now say clearly when they fail because of a proxy
+4. Fixed an interface language display issue
+5. Fixed long pasted text being lost
+6. Fixed requests occasionally being rejected when thinking mode is on
+7. Fixed a background task reporting its result twice
+8. Fixed a problem that made mail configuration fail
+9. Fixed an experience defect in the automatic security review
+10. Fixed PDF watermark failing on some systems
+
+UI:
+1. Adjusted some wording and translations
+2. Pasted attachments now leave a short marker in the message
+
+Performance and features:
+1. Fixed a misunderstanding in workspace file statistics: when extra working directories are configured, the result now says which directories it covers
+2. QQ is supported now; configure it on the endpoint settings page

@@ -1,0 +1,26 @@
+kind: skill
+name: entertainment
+version: "0.1.0"
+load_strategy: on_demand
+description: "娱乐指令 — 音乐点歌"
+
+tools:
+  - name: search_song
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      根据歌名或歌手搜索网易云音乐歌曲。返回歌曲 id、名称、歌手、专辑信息。
+      用户说"点歌"/"放歌"/"来首歌"时调用。不下载文件，仅返回歌曲信息。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        keyword:
+          type: string
+          description: "搜索关键词，如歌名、歌手名"
+        limit:
+          type: integer
+          default: 5
+          description: "返回结果数，默认 5"
+      required: [keyword]

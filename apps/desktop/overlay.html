@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!--
+  接管期间的顶层横幅 —— 横幅文案是「操作接管-esc退出」。
+
+  这个窗口的三条约束在 `main.cjs` 的 `setTakeoverOverlay` 里：
+     `focusable:false`（不抢焦点）· `setContentProtection(true)`（不被截图拍到）·
+     `alwaysOnTop("screen-saver")`（盖住普通置顶窗）。
+
+  Esc 不在这里处理 —— 这里收不到键盘（窗口不可聚焦，而且物理/注入的
+     区分只有 Python 那边的 `WH_KEYBOARD_LL` 做得到）。这个页面只负责"看得见"
+     和"点得动那个退出按钮"。
+-->
+<style>
+  html, body { height: 100%; margin: 0; background: transparent;
+    font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    -webkit-user-select: none; user-select: none; }
+  body { display: grid; place-items: center; }
+  .bar { width: calc(100% - 10px); height: 38px; display: flex; align-items: center;
+    gap: 10px; padding: 0 10px 0 14px; border-radius: 19px;
+    background: #1f2a24; color: #f4f7f4; border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 6px 22px rgba(0,0,0,.35); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #e0b15a;
+    box-shadow: 0 0 0 4px rgba(224,177,90,.18); }
+  .txt { flex: 1; font-size: 12px; letter-spacing: .04em; }
+  button { height: 26px; border: 0; border-radius: 13px; padding: 0 12px;
+    background: #e0b15a; color: #1f2a24; font-size: 11px; font-weight: 700;
+    cursor: pointer; }
+  button:hover { background: #ecc47a; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <i class="dot"></i>
+    <span class="txt">操作接管-esc退出</span>
+    <button id="stop">退出</button>
+  </div>
+  <script>
+    document.getElementById("stop").addEventListener("click", () => {
+      // 只暴露这一个具名动作（见 `overlay-preload.cjs`）。
+      if (window.cranniaOverlay) window.cranniaOverlay.stop();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+kind: provider
+name: moonshot
+version: 0.2.0
+description: 月之暗面 Kimi — K2.5 / K2.6 / K2.7 Code
+api_mode: openai_compat
+config:
+  base_url: https://api.moonshot.cn/v1
+  default_model: kimi-k2.5
+  context_window: 131072
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: moonshot
+  website: https://www.moonshot.cn/
+env_keys:
+- MOONSHOT_API_KEY

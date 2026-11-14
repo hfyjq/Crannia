@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Crannia</title>
+<!-- 深色在首屏之前定下来（同 `index.html` 那条）：
+     这个窗口是 `transparent:true`，底色是 `.win` 自己画的 —— 晚一步就会先闪一帧白。
+     这里跟的是系统（`prefers-color-scheme`）：启动窗与主窗不同 origin，
+     读不到主窗的 `lv.theme` 覆盖。 -->
+<script>
+  (function () {
+    try {
+      if (window.matchMedia
+          && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        document.documentElement.dataset.theme = "dark";
+      }
+    } catch (e) { /* 读不到就按浅色 */ }
+  })();
+</script>
+<!--
+  启动小窗 —— 浏览器直接打开就能看。
+
+  浏览器预览模式下它只是个壳：不连后端、不读真状态，两个开关都是假的
+  （`?demo=ready` / `?demo=fail`）。启动窗的观感只能靠目视验收。
+
+  素材：`splash-data.js`（由 `scripts/extract_beads.py` 从七张拼豆图抠出来的
+  像素数据）。用经典脚本 + 全局变量，不是 ESM —— 判据是这个页面要在
+  `file://` 下打开，而 `file://` 上的 `<script type="module">` 读同级 .js
+  会被浏览器当跨源挡掉。
+-->
+<style>
+  * { box-sizing: border-box; }
+  /* 尺寸只有这一处。写死在 `.win` 上的话，改一次要同时动 HTML、预览脚本、
+     以及 Electron 那个 `BrowserWindow` 的宽高 —— 三处，必然漂。
+     改这三个数之后预览图要重渲 —— 命令是
+     用开发树里的预览脚本重渲（截图工具不随发布；Pillow 复刻的预览算不对折行）。 */
+  :root {
+    --win-w: 688px;    /* 窗宽 */
+    --win-h: 386px;    /* 窗高 */
+    --art-w: 364px;    /* 左半边（画）的宽度，剩下给右边那栏文字 */
+    --pad: 26px;       /* 右栏左右内边距 */
+    --quote-pad: 103px;/* 右栏那段字离顶多远（`alignStatus` 会按句长收窄它 —— 那是"上移"） */
+  }
+  /* 背景默认透明 —— Electron 那个窗口是 `transparent: true` +
+     `frame: false`，圆角与阴影是靠 CSS 画出来的，底子必须透。
+     而在浏览器里预览时要有个灰底（不然白窗贴在白页面上看不出边），
+     所以那个灰底挂在 `.preview` 上，由 `?shell` 没带时加上。 */
+  html, body {
+    margin: 0; height: 100%; background: transparent;
+    display: grid; place-items: center;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  body.preview { background: #e9ebe6; }
+  /* ── 那张"居中的白色长方形小窗" ───────────────────────────────── */
+  .win {
+    width: var(--win-w); height: var(--win-h); background: #fff; border-radius: 14px;
+    box-shadow: 0 18px 60px rgba(24, 40, 20, .22), 0 2px 6px rgba(0, 0, 0, .06);
+    display: grid; grid-template-columns: var(--art-w) 1fr;
+    overflow: hidden; position: relative;
+    /* 拖动整窗：Electron 里用 `-webkit-app-region: drag`。
+       浏览器里没这个属性（点着没反应是正常的）。 */
+    -webkit-app-region: drag;
+  }
+  .art { position: relative; }
+  .art canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* ── 右半边 ─────────────────────────────────────────────────── */
+  .side {
+    padding: 0 var(--pad); position: relative;
+    -webkit-app-region: no-drag;
+    /* 失败屏要在右半边里居中：`flex:1` 那一条只有父级是 flex 容器才成立。
+       （用户：启动失败的提示"没右侧居中" —— 修前它贴在左上角。） */
+    display: flex; flex-direction: column;
+  }
+  /* 引言块用显式上边距，不靠 `justify-content: center`
+     （后者会让"往下移"变成"改一处、动全身"）。 */
+  .quote { padding-top: var(--quote-pad); overflow: hidden; }
+  /* ↑ 上边距是变量（`--quote-pad`）：`alignStatus` 会按句长临时收窄它 ——
+     那正是"文字整体上移"。`overflow:hidden` 是最后一道兜底：
+     收窄到头也放不下时截断，而不是让字越过状态行。
+     它只在用户自己往 `quotes.txt` 里塞了超长句时才会生效 ——
+     最长的那条俄文（Циолковский，7+4 行）收窄到 41px 就够放，不截。 */
+  /* 英文那段必须用比例字体、不能等宽：等宽 12px 下那一行是 ~310px，
+     而右栏只有 ~272px，会被折行。
+     这一条是渲染出来才看得见的：Pillow 预览里会被截成
+     `...to co` —— 而浏览器不会截、它会折，两者长得不一样。
+     不许写 `white-space: pre-line` —— 那会保住源文件里的
+     手动折行，于是折两次（源文件折一次、浏览器按栏宽再折一次），
+     折出 `…the Analytical / Engine / weaves…` 那种碎句。
+     源文件应当"写成一行"（`quotes.txt` 头上写着），这里就正常折。 */
+  .quote .orig {
+    /* 字体栈里必须有中日文那一档：Georgia 没有中日文字形 ——
+       渲染预览时那一条整行会变成豆腐块。
+       浏览器会自动回退，所以真实窗口里未必难看；但回退到哪一支是不确定的，
+       而"不确定的字体"就是"换台机器换一副面孔"。写死一支。
+       （西里尔字母 Georgia 自己就有，俄文那条不用管。） */
+    font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+    font-size: 13px; line-height: 1.7; color: #3d4a38; font-style: italic;
+    margin: 0 0 12px;
+  }
+  /* 原文本身就是中日文时不用斜体：斜体是给拉丁字母看的 ——
+     西文斜体是另一套字形，而中日文的"斜体"是浏览器硬斜出来的，
+     看着像排版事故（`《周易》`那条就是）。判据在 `showQuote` 里那一行。 */
+  .quote .orig.cjk {
+    font-style: normal;
+    font-family: "Microsoft YaHei", "Yu Gothic", "Hiragino Sans", serif;
+    letter-spacing: .01em;
+  }
+  .quote .zh {
+    font-size: 13px; line-height: 1.8; color: #52604c; margin: 0;
+  }
+  .quote .by { font-size: 11.5px; color: #98a492; margin-top: 10px; letter-spacing: .02em; }
+  /* 非中文界面只留原文（`SHOW_ZH === false`，由壳用 `?lang=` 带进来）。
+     译文整行不占位之后，"原文 → 出处"之间会剩下两段边距
+     （`.orig` 的下边距 12px 是给译文留的，再加 `.by` 的 10px），收紧成一段。
+     这不是"好看一点"：22px 的空隙在没有译文时会看着像漏了一行。 */
+  .quote.single .orig { margin-bottom: 0; }
+
+  /* 「正在初始化…」与棕色地平线齐平。
+     不写死 y —— 那个 y 由左边那棵树的几何算出来（见 `alignStatus()`）：
+     写死的话，"改窗子高度 / 改一格多少像素"这两个动作里任意一个都会让它错位，
+     而错位之后它只是看着有点歪，不会报错。 */
+  .status { position: absolute; left: 30px; right: 30px; display: flex; align-items: center; gap: 10px; }
+  /* 三颗珠子在弹 —— 用拼豆的颜色（`#A5D279` 绿 · `#D29D79` 浅棕），
+     这样它和左边那棵树的材质是同一套，不是两个世界的东西。 */
+  .dots { display: inline-flex; gap: 5px; }
+  .dots i {
+    width: 7px; height: 7px; border-radius: 2px; background: #A5D279;
+    animation: hop 1.05s ease-in-out infinite;
+  }
+  .dots i:nth-child(2) { background: #D29D79; animation-delay: .13s; }
+  .dots i:nth-child(3) { background: #6BBF40; animation-delay: .26s; }
+  @keyframes hop {
+    0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+    30%           { transform: translateY(-4px); opacity: 1; }
+  }
+  .status b { font-size: 13px; font-weight: 500; color: #4a5645; letter-spacing: .03em; }
+
+  /* ── 失败态 ────────────────────────────────────────────────────
+     判据：加载失败要有兜底，并给出报错提醒。
+     没有这一屏时，这种情形是没有窗口、没有托盘、进程静默消失（30 秒后 reject 无人接）
+     —— 用户看到的是"点了没反应"。这一屏就是把它换成人话。 */
+  /* 两轴都居中 —— 竖向靠 `flex:1` + `justify-content`，横向靠 `align-items`。
+     `text-align:center` 是给多行文字用的（`<p>` 会各自左对齐）。 */
+  .fail { display: none; flex: 1; flex-direction: column; justify-content: center;
+          align-items: center; text-align: center; }
+  .fail h3 { margin: 0 0 8px; font-size: 14px; color: #a8543f; font-weight: 600; }
+  .fail p  { margin: 0 0 6px; font-size: 12.5px; line-height: 1.7; color: #6a7265; }
+  /* 原因那一行是这一屏唯一有用的信息 —— 加粗、加深、允许换行。
+     小字浅灰在深色底上读不清楚。 */
+  .fail .why {
+    font-size: 13px; font-weight: 650; color: #3d4a3a;
+    white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto;
+  }
+  .fail .row { margin-top: 14px; display: flex; gap: 8px; }
+  .fail button {
+    font: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 7px;
+    border: 1px solid #cdd8c6; background: #f4f8f1; color: #46523f; cursor: pointer;
+  }
+  .fail button.primary { background: #7fb356; border-color: #7fb356; color: #fff; }
+  body.is-fail .quote, body.is-fail .status { display: none; }
+  body.is-fail .fail { display: flex; }
+
+  /* ── 调试条（只在 `?demo=` 时出现；出货版没有它）──────────────── */
+  .dbg {
+    position: fixed; left: 12px; bottom: 12px; display: none; gap: 6px;
+    font-size: 11.5px; z-index: 9;
+  }
+  .dbg button {
+    font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc;
+    background: #fff; cursor: pointer;
+  }
+  body.dbg-on .dbg { display: flex; }
+
+  /* ── 深色 ────────────────────────────────────────────────────────
+     只换底色与文字：左边那幅拼豆画（画布上的珠子）一个颜色都不动 ——
+     它是素材，不是界面。判据同 `styles.css` 那条：令牌给界面，素材归素材。 */
+  :root[data-theme="dark"] body.preview { background: #22271f; }
+  :root[data-theme="dark"] .win {
+    background: #171b18;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .35);
+  }
+  :root[data-theme="dark"] .quote .orig { color: #d7e1d9; }
+  :root[data-theme="dark"] .quote .zh { color: #bfcbc1; }
+  :root[data-theme="dark"] .quote .by { color: #8b978d; }
+  :root[data-theme="dark"] .status b { color: #cfd9d1; }
+  :root[data-theme="dark"] .fail h3 { color: #e59a80; }
+  :root[data-theme="dark"] .fail p { color: #b7c2b9; }
+  :root[data-theme="dark"] .fail .why { color: #e8f0e9; }
+  :root[data-theme="dark"] .fail button {
+    border-color: #33403a; background: #1f2622; color: #dbe4dc;
+  }
+  :root[data-theme="dark"] .fail button.primary {
+    background: #5f9a4c; border-color: #5f9a4c; color: #fff;
+  }
+  :root[data-theme="dark"] .dbg button {
+    border-color: #33403a; background: #1f2622; color: #dbe4dc;
+  }
+</style>
+</head>
+<body>
+  <div class="win">
+    <div class="art"><canvas id="c"></canvas></div>
+    <div class="side">
+      <div class="quote">
+        <p class="orig" id="q-orig"></p>
+        <p class="zh" id="q-zh"></p>
+        <div class="by" id="q-by"></div>
+      </div>
+      <div class="status">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <b id="st">正在初始化…</b>
+      </div>
+
+      <div class="fail">
+        <h3 data-i18n>启动失败</h3>
+        <!-- 只显示真实原因。写死一句"30 秒内没有就绪"会在秒级失败
+             （后端进程一退就退）里把原因说反 —— 那时等的时间是 1 秒不是 30 秒。 -->
+        <p id="f-why" class="why"></p>
+        <div class="row">
+          <button class="primary" data-i18n onclick="retryApp()">重试</button>
+          <button data-i18n onclick="quitApp()">退出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dbg">
+    <button onclick="demo('ok')">就绪：2.6 秒后</button>
+    <button onclick="demo('slow')">就绪：9 秒后（看它停住等）</button>
+    <button onclick="demo('fail')">失败</button>
+  </div>
+
+<script src="splash-data.js"></script>
+<script>
+"use strict";
+/** 启动轨迹：每走到一步报一声，主进程打到终端（`[splash] boot: <步>`）。
+ *  `window.shell` 可能还没挂上（preload 没生效）—— 那就退化成不打，别抛。 */
+function boot(tag) {
+  try { if (window.shell && window.shell.boot) window.shell.boot(tag); } catch (e) { /* 只是日志 */ }
+}
+boot("script-start");
+
+// ── 界面语言（`?lang=zh|en|…`，由 `main.cjs::openSplash()` 带进来）──────────
+// 两件事都由它定：
+//   ① 引文要不要带中文译文（非中文只留原文 —— 用户）；
+//   ② 小窗自己那几句话（「正在初始化…」/ 失败屏）用哪种语言。
+// 没带参数（浏览器里直接打开预览），按中文（源码语言）。
+const PAGE_LANG = (new URLSearchParams(location.search).get("lang") || "zh").toLowerCase();
+const SHOW_ZH = PAGE_LANG.startsWith("zh");
+//: 英文文案表 —— 键是中文原文（与全仓 i18n 同一条约定：键就是源码里那句话）。
+//: 这个页面不接 `locales/en.json`：它在后端起来之前就要画，
+//:   读不到 `/api/i18n`。所以这几句住在这里，只有这一份。
+const T_EN = {
+  "正在初始化…": "Initializing…",
+  "正在更新，请稍后。完成后我们将为您重新启动。":
+    "Updating, please wait. We'll restart the app for you when it's done.",
+  "准备就绪": "Ready",
+  "启动失败": "Startup failed",
+  "重试": "Retry",
+  "退出": "Quit",
+  "启动素材没读到（splash-data.js）—— 见终端 [splash] 那几行":
+    "Startup artwork failed to load (splash-data.js) — see the [splash] lines in the terminal",
+};
+function L(text) { return SHOW_ZH ? text : (T_EN[text] || text); }
+/** 把带 `data-i18n` 的静态节点换成当前语言（启动时跑一次）。 */
+function applyLang() {
+  if (SHOW_ZH) return;
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = (el.textContent || "").trim();
+    if (T_EN[key]) el.textContent = T_EN[key];
+  });
+}
+//: 定义完立刻用一次 —— 脚本在 body 末尾，静态节点已经在了。
+//:   不能放在 `boot("script-start")` 那一行下面：那时 `SHOW_ZH` 还在 TDZ 里，
+//:   抛出来会被 catch 吞掉，文案静默不换（"没换"长得像"不需要换"）。
+try { applyLang(); } catch (e) { /* 换文案失败不该拦着启动 */ }
+// 素材读不到时，必须当场出声。
+//    症状长这样：画布全空（没有地面、没有动画）、状态永远停在「正在初始化…」、
+//    而终端里一个字都没有 —— 因为脚本死在 `D.palette` 那一行，
+//    后面「收主进程消息」和「开动画」两件事都没注册。
+//    这一段只能用静态 DOM（不能碰下面那些 `let`，它们还在 TDZ 里）。
+const D = window.CRANNIA_BEADS;
+if (!D || !D.frames || !D.palette) {
+  document.body.classList.add("is-fail");
+  const why = document.getElementById("f-why");
+  if (why) why.textContent = L("启动素材没读到（splash-data.js）—— 见终端 [splash] 那几行");
+  throw new Error("[splash] splash-data.js 没加载上：window.CRANNIA_BEADS = " + String(D));
+}
+const PAL = D.palette;
+boot("data-ok");
+
+// ── 随机句 ───────────────────────────────────────────────────────
+//
+// 句子不在代码里硬编码：主进程去读 `apps/desktop/` 那个
+//    `quotes.txt`，页面通过 `window.shell.quotes()` 拉回来。
+//    改 txt、重启，就生效，不碰代码、不重新构建。
+//    文件格式与"怎么写"写在那个 txt 自己头上（那才是用户看的地方），
+//    机械读者是 `tests/test_splash_quotes.py`。
+//
+
+//: 📌 内置兜底：只在读不到那个 txt 时用（文件被删 / 权限 / 打包路径变了）。
+//: 判据：宁可显示一句我们自己的话，也不要让右栏空着 —— 空着看起来像坏了。
+const FALLBACK_QUOTES = [
+  { orig: "This is only a foretaste of what is to come and only the shadow of what is going to be.",
+    zh: "“这只是未来的一点预尝，也只是将要到来之物投下的影子。”",
+    by: "Alan Turing, The Times, 1949" },
+  { orig: "We may say most aptly, that the Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.",
+    zh: "“我们可以说，解析机编织代数图案，就像雅卡尔提花机编织花与叶。”",
+    by: "Ada Lovelace, 1843" },
+];
+
+/** 挑一句显示。
+ *
+ *  每句单独成段，把内容交给浏览器去折行。
+ *  若 `.quote .orig` 挂着 `white-space: pre-line`，而源文件里那几句是
+ *  手动折过行的，折两次：源文件折一次、浏览器按栏宽再折一次，
+ *  折出 `…the Analytical / Engine / weaves…` 那种碎句。
+ *，源文件应当写成一行（txt 头上写着），这里也不保留换行。
+ *
+ *  `zh` 可以没有（原文本身就是中文的那几条），那一格整个隐掉，
+ *  不是留一行空的（空行看着像"这句没译完"）。
+ */
+function showQuote(q) {
+  const el = document.getElementById("q-orig");
+  el.textContent = q.orig;
+  //: 原文里一个拉丁字母都没有，它是中日文，去掉斜体（见上面 `.cjk` 那段）。
+  //:   用"有没有 Latin 字母"当判据，不是"有没有 CJK 字" ——
+  //:   俄文那条一个 CJK 都没有，但它该保留斜体（西文斜体是真字形）。
+  el.classList.toggle("cjk", !/[A-Za-z]/.test(q.orig));
+  const zh = document.getElementById("q-zh");
+  //: 非中文界面不显示译文（`SHOW_ZH` 见上面那个常量的说明）。
+  //:   原文本身是中文的那几条（没有 `zh`）照旧只有一段 —— 那是"原文"，不是译文。
+  const showZh = SHOW_ZH && !!q.zh;
+  zh.textContent = showZh ? q.zh : "";
+  zh.style.display = showZh ? "" : "none";
+  //: 只留原文，收紧"原文 → 出处"的间距（见 CSS `.quote.single`）。
+  document.querySelector(".quote").classList.toggle("single", !showZh);
+  //: 出处前面那个破折号也跟着语言走：中文用「—— 」，西文用一个长破折号。
+  document.getElementById("q-by").textContent = (SHOW_ZH ? "—— " : "— ") + q.by;
+  // 换了句子，右栏的高度变了，状态行要重新摆（见 `realignStatus` 的 docstring）
+  realignStatus();
+}
+
+// ── 素材 → 画布坐标 ──────────────────────────────────────────────
+// (1)-(6) 是逐帧的长树（32x32 格，图纸格距 30px）；
+// (7) 是常驻背景（27x18 格，格距 27px）—— 两者不在同一张画布上，
+// 所以这里由我们自己定"一格画多少像素"，对齐是由构造保证的。
+const BG_PX = 13;      // 背景一格
+const TREE_PX = 9;     // 生长树一格
+//: 整幅画往上挪几像素 —— 窗子收小的同时，上头的留白再收一点
+//:   （不然收完显得头重）。
+//: 只有这一个数，背景与树共用它。
+const TOP_SHIFT = 22;
+
+/** 「最后一帧里最下面那一行珠子」= 那条棕色地面。 */
+function groundRowOf(fr) {
+  let g = 0;
+  for (let i = 0; i < fr.cells.length; i++) if (fr.cells[i]) g = Math.max(g, i / fr.w | 0);
+  return g;
+}
+
+function drawBead(ctx, x, y, s, fill) {
+  const pad = Math.max(0.6, s * 0.09);
+  const r = Math.max(1, s * 0.22);
+  ctx.beginPath();
+  const X = x + pad, Y = y + pad, Wd = s - pad * 2, Ht = s - pad * 2;
+  ctx.moveTo(X + r, Y);
+  ctx.arcTo(X + Wd, Y, X + Wd, Y + Ht, r);
+  ctx.arcTo(X + Wd, Y + Ht, X, Y + Ht, r);
+  ctx.arcTo(X, Y + Ht, X, Y, r);
+  ctx.arcTo(X, Y, X + Wd, Y, r);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+/** 背景（常驻，一次画好）。 */
+function drawBg(ctx, cw, ch) {
+  const bg = D.background, w = bg.w;
+  const total = w * BG_PX, totalH = bg.h * BG_PX;
+  // 背景居中放：不撑满，留白 —— 留白是这个画面的一部分。
+  // 那个 `- TOP_SHIFT` 与树那边共用同一个数（见 `treeGeom`）：
+  //    两处各写一个"往上挪几像素"，迟早会不同步，而症状只是"看着有点歪"。
+  const ox = (cw - total) / 2, oy = (ch - totalH) / 2 - TOP_SHIFT;
+  for (let i = 0; i < bg.cells.length; i++) {
+    const v = bg.cells[i];
+    if (!v) continue;
+    drawBead(ctx, ox + (i % w) * BG_PX, oy + ((i / w) | 0) * BG_PX, BG_PX, PAL[v - 1]);
+  }
+}
+
+// ── 动画 ────────────────────────────────────────────────────────
+const cvs = document.getElementById("c");
+// `getContext("2d")` 可能返回 null（画布上下文拿不到，GPU/合成那一层的事）
+//    —— 那时下面每一句 `ctx.xxx` 都会抛，而抛在起手、看起来就像"页面没反应"。
+//    所以拿不到就带着原因进失败屏（判据：`__ready` 里那次 `redraw()` 必须有画布）。
+const ctx = cvs && cvs.getContext("2d");
+//: 一帧 1 秒。
+//: 6 帧，走完是 6 秒。就绪早于 6 秒时直接跳到最后一帧、不等动画放完
+//: —— 用户已经在等了，不该为了看动画再让他等（这个取舍写死在 `play()` 里）。
+const FRAME_MS = 1000;
+let frame = 0;                 // 正在画第几帧（0 起）
+let ready = false;             // 后端就绪
+let failed = false;
+
+function resize() {
+  const box = cvs.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cvs.width = box.width * dpr; cvs.height = box.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  redraw();
+}
+
+function redraw() {
+  const g = treeGeom();
+  ctx.clearRect(0, 0, g.cw, g.ch);
+  drawBg(ctx, g.cw, g.ch);
+  // 生长树：居中（"在 7 的两棵树中间"）。
+  // 直接画第 `frame` 帧 —— 颜色与形状就是图上那一张。
+  //    而那条棕色地面在每一帧里都有（连第 1 帧都有），所以它
+  //    "一开始就在"，不需要额外画一遍、也不该由动画把它长出来。
+  const F = D.frames[frame];
+  for (let i = 0; i < F.cells.length; i++) {
+    const v = F.cells[i];
+    if (!v) continue;
+    drawBead(ctx, g.ox + (i % F.w) * g.px, g.oy + ((i / F.w) | 0) * g.px,
+             g.px, PAL[v - 1]);
+  }
+  alignStatus(g);
+}
+
+/** 左边那棵树的几何 —— 一处算，画与"对齐状态行"共用它。
+ *
+ *  若拆成两处算（`redraw()` 里一份、对齐时又一份），以后改格距或窗高，
+ *     只会动到一处，而症状是状态行跟地平线差了几像素 —— 不报错、只觉得有点歪。
+ */
+function treeGeom() {
+  const cw = cvs.width / (window.devicePixelRatio || 1);
+  const ch = cvs.height / (window.devicePixelRatio || 1);
+  const px = TREE_PX, size = 32 * px;
+  const ox = (cw - size) / 2, oy = (ch - size) / 2 - TOP_SHIFT;
+  const groundY = oy + groundRowOf(D.frames[D.frames.length - 1]) * px + px / 2;
+  return { cw, ch, ox, oy, px, groundY };
+}
+
+/** 把「正在初始化…」放好 —— 它钉在地平线上不动，让文字整体上移。
+ *
+ *  判据是「与棕色地平线齐平」，前提是右栏是短句。
+ *  而 `quotes.txt` 是用户自己加句子的地方，长度不可控 ——
+ *  俄文 Циолковский 那条原文 7 行 + 译文 4 行，会直接压在状态行上。
+ *
+ *  取舍："把这段文字整体上移"（另一种做法是让状态行往下让路）。
+ *  判据是视觉上的归属 —— 状态行与三颗珠子跟左边那棵树是同一套材质
+ *  （用拼豆的颜色、贴地平线），它是左半边的；右栏那段字才是会变的那一半。
+ *，谁可变，谁让位：字数变了就动文字，不让左半边跟着跳。
+ *  若让"状态行逐句改位置"，换一句随机句它就挪一下地方 —— 看起来像没摆正。
+ *
+ *  三档，按序：
+ *    ① 状态行永远落在地平线上；
+ *    ② 文字整体上移（`padding-top` 收窄）给它腾地方 —— 足够短时原样不动；
+ *    ③ 实在腾不出（用户塞了超长句），截断，别让它越过状态行。
+ *
+ *  一个函数里算完（一个口径一个地方）—— 状态行的位置、
+ *  文字的 `padding-top`、截断线互相依赖，分开写迟早给出三个打架的答案。
+ */
+//: 那个基数从 CSS 变量读（一个口径一个地方）——
+//:   别在这里再写一个 103，那迟早会和 `:root` 分叉，而症状只是"看着有点偏"。
+//:   `|| 103` 只是取不到时的兜底（变量被删 / 拼错），不是第二个真相源。
+const QUOTE_PAD_BASE = parseInt(getComputedStyle(document.documentElement)
+  .getPropertyValue("--quote-pad"), 10) || 103;
+const QUOTE_PAD_MIN = 22;     // 再挤也不许贴到顶边（"整体上移"有个头）
+
+function alignStatus(g) {
+  const el = document.querySelector(".status");
+  const quote = document.querySelector(".quote");
+  const h = el.offsetHeight || 16;
+  const GAP = 10;
+
+  // ① 状态行：就钉在地平线上（这个位置不随文字变化）
+  const statusTop = g.groundY - h / 2;
+  el.style.top = Math.round(statusTop) + "px";
+  const limit = statusTop - GAP;        // 文字的底边不许越过这里
+
+  // ② 量一遍"光文字有多高"：先摊平（去掉截断与内边距），量完再摆回去。
+  //    这三步必须成对 —— 只写不还原的话，下一轮量到的就是上一次截断后的高度，
+  //    于是内边距会一轮比一轮小（悄悄把字挤到顶上）。
+  quote.style.maxHeight = "";
+  quote.style.paddingTop = QUOTE_PAD_BASE + "px";
+  const contentH = Math.max(0, quote.scrollHeight - QUOTE_PAD_BASE);
+  const pad = Math.round(Math.max(QUOTE_PAD_MIN,
+                                  Math.min(QUOTE_PAD_BASE, limit - contentH)));
+  quote.style.paddingTop = pad + "px";
+
+  // ③ 兜底：真的放不下就截断（`overflow:hidden` 在 CSS 里），别越过状态行。
+  //    这里是 `limit`，不是 `limit - pad` —— `max-height` 量的是
+  //    盒子的总高（`* { box-sizing: border-box }` 那个 `*` 在文件顶上，
+  //    内边距算在里面）。写成 `limit - pad` 会把内边距扣第二次
+  //    长句当场被截掉一行半（渲染出来才看得见）。
+  const cap = Math.max(48, Math.round(limit)) + "px";
+  if (quote.style.maxHeight !== cap) quote.style.maxHeight = cap;
+}
+
+/** 文字换过之后要重新摆一次状态行（判据见 `alignStatus`）。
+ *
+ *  必须单独有这个口：`showQuote` 是异步的（真句子从主进程拉回来，
+ *  见文件末尾那段），而摆位挂在 `redraw()` 上 —— 换句那一刻不会触发重画。
+ *  少这一口，长句换上来时状态行还停在上一句的位置，于是又叠一次。
+ *  起手时画布还没量过（`cvs.width === 0`），直接跳过，等 `resize()`。 */
+function realignStatus() {
+  if (!ctx || !cvs.width) return;
+  try { alignStatus(treeGeom()); } catch (e) { /* 只是摆位，别让它挡住换句 */ }
+}
+
+/** 一帧一帧地把树长出来（1 秒一帧）。
+ *
+ *  用 `setInterval`，不用 `requestAnimationFrame`。
+ *  判据：`rAF` 在被遮挡/非前台的窗口里根本不触发（Chromium 的
+ *  遮挡节流），而小窗刚建出来时常常正是那个状态，动画、「正在初始化…」的推进、
+ *  「准备就绪」的落地三件事一起停，看起来像三个 bug。
+ *  主进程那边同时给了 `backgroundThrottling: false` —— 两条都要：
+ *  只关节流的话，"窗口还没被系统算作可见"那一小段仍然可能吞掉 rAF；
+ *  只换定时器的话，被节流时它一样会被拉长到秒级。
+ */
+let timer = null;
+function play() {
+  const t0 = Date.now();
+  boot("playing");
+  if (timer) clearInterval(timer);
+  timer = setInterval(() => {
+    const last = D.frames.length - 1;
+    const k = Math.min(last, Math.floor((Date.now() - t0) / FRAME_MS));
+    if (k !== frame) { frame = k; redraw(); }
+    if (ready) { clearInterval(timer); timer = null; }
+  }, 100);
+}
+
+function done() {
+  // 「准备就绪」保留。它显示多久由主进程管
+  //   —— 那边等 `MIN_HOLD_MS = 500` 之后才关小窗、显示主窗。
+  //   时长写在主进程而不是这里：这里再写一个 `setTimeout` 就是两处真相，
+  //      而"到底等了多久"这件事要能在一个地方读出来。
+  document.getElementById("st").textContent = L("准备就绪");
+  document.body.classList.add("done");
+}
+
+function fail(why) {
+  failed = true;
+  boot("fail: " + (why || "").slice(0, 80));
+  document.body.classList.add("is-fail");
+  document.getElementById("f-why").textContent = why || "";
+}
+
+// ── 给主进程的两个"喊话口" ──────────────────────────────────
+//
+// 主进程用 `webContents.executeJavaScript("window.__ready()")` 调它们。
+// 没有走 IPC / preload —— 这个窗口不需要任何特权，只要能被单向指挥。
+//    走 IPC 就得再写一个 preload 文件、再配一次 `contextBridge`，
+//    而那半面（渲染进程 → 主进程）这里一个字都用不上。
+// 主进程永远只在前两个之一恰好一次地调：就绪 or 失败。
+//
+// 它们直接把结果画出来，不等任何循环。
+//   只把 `ready` 置真、指望 `play()` 那一圈来收尾是不够的 —— 那一圈可能是 rAF、
+//   可能被节流吞掉，「准备就绪」永远不出现，而数据早就到了。
+//   判据：收到消息就该看得见结果，中间不许再依赖"下一个 tick"。
+window.__ready = function () {
+  ready = true;
+  if (timer) { clearInterval(timer); timer = null; }
+  frame = D.frames.length - 1;
+  redraw();                       // 直接画最后一帧
+  done();                         // 直接落到「准备就绪」
+  boot("ready");
+};
+window.__fail = function (why) {
+  ready = true;                   // 让动画循环退出（否则它一直转）
+  if (timer) { clearInterval(timer); timer = null; }
+  fail(why || "");
+};
+
+/** 「正在更新」—— 壳在开小窗之后、起后端之前发现了待安装的更新包。
+ *
+ *  它与 `__ready` / `__fail` 是同一族：直接把结果画出来，不等任何循环
+ *  （动画可能被节流吞掉，而这一句是用户唯一能看到的东西）。
+ *  动画继续跑：它还要看 1 到 2 秒，停住反而像卡死。
+ */
+window.__updating = function () {
+  document.getElementById("st").textContent =
+    L("正在更新，请稍后。完成后我们将为您重新启动。");
+  boot("updating");
+};
+
+/** 失败屏上那两个按钮。壳里走 `window.shell`（IPC），浏览器里退化成网页动作
+ *  —— 这样同一个文件在两种环境下都点得动，不必有两份。 */
+function retryApp() { window.shell ? window.shell.retry() : location.reload(); }
+function quitApp()  { window.shell ? window.shell.quit()  : window.close(); }
+
+function demo(mode) {
+  ready = false; failed = false;
+  document.body.classList.remove("is-fail");
+  document.getElementById("st").textContent = L("正在初始化…");
+  frame = 0; redraw();
+  if (mode === "fail") { setTimeout(() => fail("backend did not become ready (demo)"), 1800); return; }
+  play();
+  // `ok` 那条要晚于 1 帧（1 秒），否则一点就跳完，看不出它是逐帧的。
+  setTimeout(() => { ready = true; }, mode === "slow" ? 9000 : 2600);
+}
+
+// ── 起手 ────────────────────────────────────────────────────────
+// 先摆兜底那句（右栏一刻都不空着），再去主进程把真句子拉回来替换掉。
+//   顺序是有意的：反过来的话，"读 txt" 那一步（磁盘/权限/打包路径都可能出岔）
+//   会让右栏空着几百毫秒，而空着看起来像坏了。
+showQuote(FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)]);
+(async () => {
+  try {
+    const qs = (window.shell && window.shell.quotes) ? await window.shell.quotes() : [];
+    if (qs && qs.length) {
+      showQuote(qs[Math.floor(Math.random() * qs.length)]);
+      boot("quotes:" + qs.length);
+    } else {
+      boot("quotes:fallback");     // 读不到，用兜底那句，并在终端里留个记号
+    }
+  } catch (e) {
+    console.warn("[splash] 取随机句失败，继续用兜底那句:", e);
+    boot("quotes:error");
+  }
+})();
+
+const PARAMS = new URLSearchParams(location.search);
+//: 主进程建这个窗口时会带 `?shell=1`（见 `main.cjs` 的 `openSplash()`）。
+//: 它同时管两件事：① 页面底色透明（壳里那个窗口是 transparent + 无边框）；
+//: ② 不挂那个调试条、不自动跑假的 demo —— 只等主进程喊话。
+const IN_SHELL = PARAMS.has("shell");
+if (!IN_SHELL) document.body.classList.add("preview");
+
+try {
+  // `resize()` 必须在 try 里面：它一进来就 `ctx.setTransform(...)`，
+  //    而上下文可能是 null，抛在 try 外面就没人接，整个脚本静默死掉
+  //    （症状与"素材没读到"逐字相同：画布空、字样不变、收不到主进程消息）。
+  if (!ctx) throw new Error("拿不到 2d 画布上下文（getContext 返回 null）");
+  boot("ctx-ok");
+  window.addEventListener("resize", resize);
+  resize();
+  boot("first-paint");     // ← 到这里画布上就该有东西了（第一帧 = 地面 + 小芽）
+
+  // 右栏一换大小就重摆状态行（`alignStatus` 那三档）。
+  //    为什么要有这一道，而不是只在 `showQuote` 里喊一声："记得调用"不是机制。
+  //       随机句有两条来路（起手那句兜底 + 主进程拉回来的真句子），
+  //       以后难保不加第三条；`ResizeObserver` 盯的是结果（文字真的变高了），
+  //       所以谁换的、什么时候换的都不用管。
+  //    不会自激：`alignStatus` 里那个 `max-height` 只依赖 `offsetTop` 与状态行高度
+  //       （都不随高度变），第二次算出来是同一个值，写回不动，不再触发。
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(realignStatus).observe(document.querySelector(".quote"));
+  }
+  if (IN_SHELL) {
+    // 主进程喊话的唯一入口（见 `splash-preload.cjs`）。
+    //   判据是 `window.shell` 在不在，不是 `IN_SHELL` —— 万一 preload 没挂上
+    //   （打包路径写错之类），这里会安静地不动，而动画会一直转下去；
+    //   接不上时至少要能在控制台看见（`main.cjs` 把渲染进程的 console 也转出来）。
+    if (!window.shell) console.error("[splash] preload 没挂上：收不到主进程的消息");
+    else window.shell.onState((s) => {
+      if (s && s.updating) window.__updating();
+      else if (s && s.ok) window.__ready();
+      else window.__fail(s && s.reason);
+    });
+    boot(window.shell ? "listening" : "NO-preload");
+    play();
+  } else {
+    // 浏览器里预览：调试条常驻（只在带 `?demo=` 时加 `dbg-on` 的话，
+    // 双击打开没有参数，就看不见按钮）。
+    document.body.classList.add("dbg-on");
+    demo(PARAMS.get("demo") || "ok");
+  }
+} catch (e) {
+  // 起手任何一步炸了，进失败屏，别留一个"看着像还在加载"的空壳。
+  console.error("[splash] 初始化失败:", e);
+  fail((e && e.message) || String(e));
+}
+</script>
+</body>
+</html>

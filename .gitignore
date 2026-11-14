@@ -1,0 +1,147 @@
+# ==================== Python ====================
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Package managers
+pip-log.txt
+pip-delete-this-directory.txt
+.pdm-python
+
+# ==================== IDE ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==================== Claude Code ====================
+# 项目级本地配置（含个人偏好/密钥），不进 git
+.claude/settings.local.json
+.claude/agents/
+
+# 全局/个人级配置（在你的 ~/.claude/ 下，不进任何项目）
+# 这个不用在项目里写，因为它在你的用户目录下
+
+# ==================== 本项目运行时数据 ====================
+# ── 运行数据（模块自带：校准 / 缓存 / chroma / skill 数据）──
+# 运行时数据一律进 data/runtime/，不许落在 core/ 或 skills/ 下。
+# 判据：任何模块自带的库与缓存都从 data/runtime/ 出（skill 的在 data/runtime/skills/ 下）
+data/runtime/
+
+# ── 用户工作区（运行时生成，不进 git）──
+workspace/*
+!workspace/.gitkeep
+!workspace/LEAF.md
+
+# ── 框架内部数据（运行时生成，不进 git）──
+data/workdata/*
+!data/workdata/.gitkeep
+
+# 记忆数据（运行时生成，不进 git）
+data/memory/*.db
+data/memory/*.db-shm
+data/memory/*.db-wal
+data/memory/sessions/*
+data/memory/LEAF_memory.md
+# 长期记忆的事实文件 + tombstone 账本
+data/memory/facts/
+data/memory/.tombstones.json
+# 备份目录也不进版本 —— 它装的就是上面那批被有意排除的内容
+#   （记忆条目 / 会话笔记）。放它进来等于在 `facts/` 之外造第二份真相源，
+#   而两份一旦漂移，看着都对。
+#   这条规则不会让已经跟踪的文件退出跟踪（gitignore 只管"未跟踪的要不要加"）。
+data/_memory_backup_*/
+# 按日期轮转的日报
+data/memory/logs/
+# 记忆巩固的互斥与状态 —— lock/ 目录（持有者 <pid> <since>）+ state.json。
+#   都是运行态，不进 git；不忽略会在 git status 里冒出来。
+data/memory/.consolidation/
+!data/memory/.gitkeep
+
+# 测试数据（运行时生成）
+tests/data/memory/
+
+# 进度事件落盘（运行时生成，按天轮转）
+data/events/
+
+# 事故账本（运行时生成：时间 / 错误码 / 组件 / 详情，属本机运行日志）
+data/incidents/
+
+# WeChat iLink credentials + downloaded files
+data/wechat_credentials.json
+
+# 日志（含审计日志，不进 git）
+logs/
+*.log
+
+# 环境变量
+.env
+.env.local
+
+# 运行时数据（每次启动可能变化）
+data/.onboarding-done
+data/api_keys.json
+
+# 调试日志
+记录*.txt
+api*.txt
+ppt记录*.txt
+
+# 邮件附件测试产物
+ATT*.bin
+tcmime*.bin
+
+# PyInstaller 构建产物
+build/
+dist/
+*.spec.bak
+
+# 测试缓存
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+# 含明文凭据（邮箱密码 / web_token）—— 2026-09-25 从跟踪里拿掉，并已从历史清除
+data/settings.json
+data/allowlist.json
+
+# GUI（Electron + Vite）：依赖与构建产物不入库
+node_modules/
+apps/desktop/dist/
+
+# 自带 Python 运行时的产物与下载缓存 ——
+# 都是几十 MB 的二进制，用 `scripts/prepare_runtime.py` 在本地重建。
+# 锁（`apps/desktop/primary-runtime-lock.json`）要入库 —— 它是"发的是哪一个"
+#   的唯一真相源（打包配置里的 `extraResources` 指的就是上面那个 runtime 目录）。
+apps/desktop/runtime/
+apps/desktop/.runtime-cache/
+
+# electron-builder 的产物（安装器 / 未打包目录）—— 不入库。
+apps/desktop/release/
+
+# locales/worksheet/ 里的本地资料（不是工作表）—— 不进仓
+# （`i18n_scan` 也不会读写它们）。
+# `_apply_report.txt` 是 `i18n_apply` 的产物（每次重跑都会变），也不入库。
+locales/worksheet/.workbuddy/
+locales/worksheet/.文案待改清单.ref/
+locales/worksheet/文案待改清单.xlsx
+locales/_apply_report.txt
+# 生图/生视频 skill 的凭据 —— 与 data/wechat_credentials.json 同族。
+# 这条必须在第一次写入之前就存在 —— data/ 只忽略了几条子路径，
+#    不是整个目录，漏一条就是把密钥提交进仓库。
+data/media_gen_key.txt
+data/media_gen_credentials.json
+# 用户附件（运行时写入）。data/ 只忽略了几条子路径，
+# 这条漏掉的话，第一次跑对话就会把用户的图片 / 文档提交进仓库。
+data/attachments/
+
+# 本地工作记忆（agent 笔记），不进版本
+.workbuddy/

@@ -1,0 +1,205 @@
+kind: skill
+name: github
+version: "0.1.0"
+draft: false
+load_strategy: on_demand
+description: "GitHub 原生集成 —— 身份、仓库文件、代码搜索、issue、PR、提交（走 REST API）"
+# 技能页卡片上那句短简介。
+# 与 `description` 分开：那一句还喂给技能索引，短简介不许把它吃掉。
+summary: "github连接器"
+
+# 凭据只有一个读取口：`core/github_config.py::token()`。
+#   优先级：设置页填的那一格 > 环境变量 `CRANNIA_GITHUB_TOKEN` >
+#   `GITHUB_PERSONAL_ACCESS_TOKEN`。都不在工具参数里 —— 模型永远看不到令牌。
+#   没配的话工具照常注册，调用时回一句"没配令牌，去设置页填"，不是崩。
+
+tools:
+  - name: github_whoami
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      看当前令牌对应的是哪个 GitHub 账号（登录名、名字、公开仓库数、限流余量）。
+      用来确认令牌能用、以及还剩多少次调用。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties: {}
+      required: []
+
+  - name: github_get_file
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      读一个仓库里文件的内容或目录列表。目录会返回条目清单（名字 + 类型 + 大小）。
+      大文件会在返回里标出 truncated。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string, description: "仓库所有者（用户或组织）"}
+        repo: {type: string, description: "仓库名"}
+        path: {type: string, description: "仓库内路径；空串 = 仓库根目录"}
+        ref: {type: string, description: "分支 / 标签 / commit；空串 = 默认分支"}
+      required: [owner, repo]
+
+  - name: github_search_code
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      用 GitHub 的代码搜索找文件。query 支持 GitHub 那套语法
+      （如 `repo:owner/name path:src extension:py foo`）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        query: {type: string, description: "搜索语句（GitHub 代码搜索语法）"}
+        limit: {type: integer, default: 10, description: "最多返回几条（1-50）"}
+      required: [query]
+
+  - name: github_list_issues
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: 列一个仓库的 issue（可按状态过滤）。返回编号、标题、状态、作者、标签。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        state: {type: string, enum: [open, closed, all], default: open}
+        limit: {type: integer, default: 20}
+      required: [owner, repo]
+
+  - name: github_get_issue
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: 看一个 issue 的正文与前若干条评论。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        number: {type: integer, description: "issue 编号"}
+        comments: {type: integer, default: 10, description: "最多带回几条评论"}
+      required: [owner, repo, number]
+
+  - name: github_create_issue
+    permission: write
+    destructive: false
+    output_kind: structured
+    review_input: "要在哪个仓库（owner/repo）建 issue、标题、正文、标签"
+    description: 在一个仓库里建 issue。返回编号与链接。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        title: {type: string}
+        body: {type: string, default: ""}
+        labels: {type: array, items: {type: string}, description: "标签名列表"}
+      required: [owner, repo, title]
+
+  - name: github_list_pulls
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: 列一个仓库的 pull request。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        state: {type: string, enum: [open, closed, all], default: open}
+        limit: {type: integer, default: 20}
+      required: [owner, repo]
+
+  - name: github_get_pull
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: 看一个 PR 的详情（含改动文件清单、增删行数、可合并状态）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        number: {type: integer}
+        files: {type: boolean, default: true, description: "要不要带改动文件清单"}
+      required: [owner, repo, number]
+
+  - name: github_create_pull
+    permission: write
+    destructive: false
+    output_kind: structured
+    review_input: "要在哪个仓库（owner/repo）建 PR、标题、源分支、目标分支、正文"
+    description: 建一个 pull request。返回编号与链接。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        title: {type: string}
+        head: {type: string, description: "源分支（`user:branch` 可跨 fork）"}
+        base: {type: string, description: "目标分支，如 main"}
+        body: {type: string, default: ""}
+      required: [owner, repo, title, head, base]
+
+  - name: github_list_commits
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: 列一个仓库的提交（最近若干条）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        owner: {type: string}
+        repo: {type: string}
+        branch: {type: string, description: "分支名；空串 = 默认分支"}
+        limit: {type: integer, default: 20}
+      required: [owner, repo]
+
+config:
+  # 条目要有名字（一个用户可能同时有工作号 / 个人号两个令牌）。
+  #   同名的不静默覆盖：要么点「修改」，要么保存时被拦下问一句。
+  named: true
+  fields:
+    - key: token
+      label: "GitHub 令牌"
+      type: password
+      placeholder: "github_pat_… 或 ghp_…"
+      required: true
+      help: "怎么拿令牌？"
+  setup_guide:
+    zh: |
+      ### 怎么拿
+
+      1. 登录 GitHub → 右上角头像 → 「Settings」
+      2. 左侧最下 「Developer settings」 → 「Personal access tokens」 → 「Fine-grained tokens」
+      3. 「Generate new token」
+      4. 「Repository access」：只读公开仓库选 `Public repositories`；要读私有仓库选 `Only select repositories`
+      5. 「Permissions」：`Contents` = 「Read-only」（要建 issue / PR 再开 `Issues` / `Pull requests`）
+      6. 生成后复制（只显示一次），填到上面的输入框
+
+      > 令牌等同密码。它存在本机 `settings.json` 里，不进仓库、不进对话。
+    en: |
+      ### How to get a token
+
+      1. Sign in to GitHub -> avatar (top right) -> **Settings**
+      2. Bottom of the left column -> **Developer settings** -> **Personal access tokens** -> **Fine-grained tokens**
+      3. **Generate new token**
+      4. **Repository access**: `Public repositories` for public read-only; `Only select repositories` for private ones
+      5. **Permissions**: `Contents` = **Read-only** (also enable `Issues` / `Pull requests` if you want to create them)
+      6. Copy the token (shown only once) into the field above
+
+      > A token is a password. It is stored locally in `settings.json` - never in the repo, never in the chat.
