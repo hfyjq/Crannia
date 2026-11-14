@@ -2,15 +2,16 @@
   "latest": {
     "version": "1.0.0",
     "channel": "stable",
-    "published_at": "2026-11-14T00:10:00+08:00",
+    "published_at": "2026-11-14T11:58:19Z",
     "release_notes_url": "https://github.com/hfyjq/Crannia/releases/tag/v1.0.0",
     "minimum_client_version": null,
     "mandatory": false,
+    "changelog": {},
     "artifacts": {
       "windows-exe": {
         "url": "https://github.com/hfyjq/Crannia/releases/download/v1.0.0/crannia-1.0.0-win-x64.exe",
-        "sha256": "2cf3bfb3b35a72765b0573a08586300fc90160339a185892074d840b41fda3c0",
-        "size_bytes": 275719946
+        "sha256": "bf4000f3febecc67184aa84c13bd4da6a0cc7f043c213cb86c66fd847551a278",
+        "size_bytes": 275722418
       }
     }
   }
