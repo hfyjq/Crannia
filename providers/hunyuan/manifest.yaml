@@ -1,0 +1,16 @@
+kind: provider
+name: hunyuan
+version: 0.2.0
+description: 腾讯混元 — Pro/Standard/Lite/Vision/Code
+api_mode: openai_compat
+config:
+  base_url: https://api.hunyuan.cloud.tencent.com/v1
+  default_model: hunyuan-pro
+  context_window: 32768
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: hunyuan
+  website: https://cloud.tencent.com/product/hunyuan
+env_keys:
+- HUNYUAN_API_KEY

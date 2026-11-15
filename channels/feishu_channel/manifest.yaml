@@ -1,0 +1,12 @@
+kind: channel
+name: feishu_channel
+version: "0.1.0"
+description: "Feishu (Lark) IM channel via lark-oapi WebSocket long connection. No public IP required."
+
+config:
+  platform_type: feishu
+  support_multimodal: true
+  support_streaming: true
+
+required_packages:
+  - lark-oapi

@@ -1,0 +1,5 @@
+kind: channel
+name: cli_channel
+version: "0.1.0"
+description: "Command-line interface for interactive document analysis"
+protocol: stdio

@@ -1,0 +1,16 @@
+kind: provider
+name: deepseek
+version: 0.2.0
+description: DeepSeek — V4 Flash / V4 Pro
+api_mode: openai_compat
+config:
+  base_url: https://api.deepseek.com/v1
+  default_model: deepseek-v4-flash
+  context_window: 65536
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: deepseek
+  website: https://deepseek.com/
+env_keys:
+- DEEPSEEK_API_KEY

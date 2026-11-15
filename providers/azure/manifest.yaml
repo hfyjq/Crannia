@@ -1,0 +1,16 @@
+kind: provider
+name: azure
+version: 0.2.0
+description: Azure AI Foundry — 企业级 OpenAI 服务
+api_mode: openai_compat
+config:
+  base_url: https://YOUR_RESOURCE.openai.azure.com/openai/v1
+  default_model: gpt-4o
+  context_window: 128000
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: azure
+  website: https://azure.microsoft.com/en-us/products/ai-foundry/models/openai/
+env_keys:
+- AZURE_OPENAI_API_KEY

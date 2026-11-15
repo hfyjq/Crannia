@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  #: 这个 job 名就是分支保护里 required status checks 的 context，
+  #: 改名要同步改仓库设置。
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Python dependencies
+        run: pip install -r requirements.txt
+
+      #: 有一个测试用 vite 编译 JSX（tests/test_desktop_settings.py）；
+      #: 启动小窗那条测试在没有 Electron 时会明确跳过，装了才会真跑。
+      - name: Node dependencies
+        run: npm ci
+
+      - name: Test suite
+        #: 失败时多打几行 —— 默认 12 行会把失败用例的名字截掉。
+        run: python scripts/run_tests.py --quiet --fail-lines 200

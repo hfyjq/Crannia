@@ -1,0 +1,56 @@
+# Crannia 启动时显示的句子。
+#
+# 加一条：一段三行，段与段之间空一行。
+#
+#     orig: 原文。写在一行里，显示时会自动折行。
+#     zh:   中文译文。
+#     by:   出处，作者与年份。
+#
+# 原文本身是中文的，可以不写 zh。
+# 缺少 orig 或 by 的段落会被跳过。
+# 以 # 开头的行是注释。改完重启应用即可。
+#
+# 这些是短引文，逐条署名，版权归原作者。
+
+orig: This is only a foretaste of what is to come, and only the shadow of what is going to be.
+zh: “这只是未来的一点预尝，也只是将要到来之物投下的影子。”
+by: Alan Turing, The Times, 1949
+
+orig: We may say most aptly, that the Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
+zh: “我们可以说，解析机编织代数图案，就像雅卡尔提花机编织花与叶。”
+by: Ada Lovelace, 1843
+
+orig: Человечество не останется вечно на Земле, но, в погоне за светом и пространством, сначала робко проникнет за пределы атмосферы, а затем завоюет себе все околосолнечное пространство.
+zh: “人类不会永远留在地球上。为了追逐光与空间，它会先怯生生地穿过大气层，然后征服整个环日空间。”
+by: Константин Циолковский, 1911
+
+orig: The resulting partnership will think as no human brain has ever thought…
+zh: “这种伙伴关系，将以任何人脑都未曾有过的方式进行思考……”
+by: J. C. R. Licklider, 1960
+
+orig: …we ended with patterns so complex that they seemed to defy any simple description at all.
+zh: “……最终得到的图样如此复杂，仿佛无法用任何简单的描述加以说明。”
+by: Stephen Wolfram, 2002
+
+orig: Machines take me by surprise with great frequency.
+zh: “机器常常让我感到惊讶。”
+by: Alan Turing, 1950
+
+orig: 科学は、自然に対する驚異の念と愛情の感じとから出発する。
+zh: “科学，始于对自然的惊异之念与热爱之情。”
+by: 中谷宇吉郎「簪を挿した蛇」
+
+orig: 仰以观于天文，俯以察于地理，是故知幽明之故。
+by: 《周易·系辞上》
+
+orig: L'homme n'est qu'un roseau, le plus faible de la nature ; mais c'est un roseau pensant.
+zh: “人只不过是一根苇草，是自然界最脆弱的东西；但他是一根能思想的苇草。”
+by: Blaise Pascal, Pensées, 1670
+
+orig: Sapere aude! Habe Mut, dich deines eigenen Verstandes zu bedienen!
+zh: “要敢于求知！要有勇气运用你自己的理智！”
+by: Immanuel Kant, 1784
+
+orig: Nam et ipsa scientia potestas est.
+zh: “因为知识本身就是力量。”
+by: Francis Bacon, 1597

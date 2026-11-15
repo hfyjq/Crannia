@@ -1,0 +1,12 @@
+kind: channel
+name: dingtalk_channel
+version: "0.1.0"
+description: "DingTalk IM channel via dingtalk-stream SDK WebSocket. sessionWebhook fast path with OpenAPI fallback."
+
+config:
+  platform_type: dingtalk
+  support_multimodal: true
+  support_streaming: false
+
+required_packages:
+  - dingtalk-stream

@@ -1,0 +1,8909 @@
+{
+ "fetched": "2026-10-06",
+ "note": "models.dev 的 limit（context + output）与 reasoning_options 摘录，只含我们支持的 provider。重跑 scripts/refetch_window_table.py 更新。★ schema 2（2026-10-06）：一条从**裸整数**（= context）改成**嵌套字典**—— 裸整数那条读法仍然认（`core/window_estimate.py::_row_field`），所以旧表不会读崩。",
+ "providers": {
+  "anthropic": {
+   "claude-fable-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-fable-5-1": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-haiku-4-5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-haiku-4-5-20251001": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-opus-4-5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-5-20251101": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-6": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-7": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-8": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-5-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-sonnet-4-5": {
+    "context": 1000000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-sonnet-4-5-20250929": {
+    "context": 1000000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-sonnet-4-6": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-sonnet-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "claude-sonnet-5-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   }
+  },
+  "azure": {
+   "claude-fable-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-fable-5-1": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-haiku-4-5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-mythos-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-1": {
+    "context": 200000,
+    "output": 32000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-opus-4-5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-6": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-7": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-4-8": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-opus-5-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "claude-sonnet-4-5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "claude-sonnet-4-6": {
+    "context": 1000000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort"
+     ]
+    }
+   },
+   "claude-sonnet-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "claude-sonnet-5-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "codestral-2501": {
+    "context": 256000,
+    "output": 256000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "codex-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "cohere-command-a": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "cohere-embed-v-4-0": {
+    "context": 128000,
+    "output": 1536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere-embed-v3-english": {
+    "context": 512,
+    "output": 1024,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere-embed-v3-multilingual": {
+    "context": 512,
+    "output": 1024,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "deepseek-r1": {
+    "context": 163840,
+    "output": 163840,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deepseek-v3.2": {
+    "context": 128000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deepseek-v3.2-speciale": {
+    "context": 128000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deepseek-v4-flash": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deepseek-v4-pro": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gpt-3.5-turbo-0125": {
+    "context": 16384,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-3.5-turbo-1106": {
+    "context": 16384,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-3.5-turbo-instruct": {
+    "context": 4096,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4-turbo": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4-turbo-vision": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4.1": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4.1-mini": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4.1-nano": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o-mini": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-5": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-nano": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-pro": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.1": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.1-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.1-codex-max": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.1-codex-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.2": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.2-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.3-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4-nano": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.5": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6-luna": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6-terra": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6-astra": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6-luna": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6.1-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-chat-latest": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "grok-4-1-fast-non-reasoning": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-4-1-fast-reasoning": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "grok-4-20-non-reasoning": {
+    "context": 262000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-4-20-reasoning": {
+    "context": 262000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "grok-4.6": {
+    "context": 200000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "kimi-k2.5": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "kimi-k2.6": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "kimi-k2.7-code": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "llama-3.3-70b-instruct": {
+    "context": 128000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "llama-4-maverick-17b-128e-instruct-fp8": {
+    "context": 1000000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "llama-4-scout-17b-16e-instruct": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "ministral-3b": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistral-medium-2505": {
+    "context": 128000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistral-small-2503": {
+    "context": 128000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "model-router": {
+    "context": 200000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "o1": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o3": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o3-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o4-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "phi-4": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "phi-4-mini": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "phi-4-mini-reasoning": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "phi-4-multimodal": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "phi-4-reasoning": {
+    "context": 32000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "phi-4-reasoning-plus": {
+    "context": 32000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "text-embedding-3-large": {
+    "context": 8192,
+    "output": 3072,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "text-embedding-3-small": {
+    "context": 8192,
+    "output": 1536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "text-embedding-ada-002": {
+    "context": 8192,
+    "output": 1536,
+    "reasoning": {
+     "reasons": false
+    }
+   }
+  },
+  "deepseek": {
+   "deepseek-flash": {
+    "context": 1000000,
+    "output": 393216,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-flash": {
+    "context": 1000000,
+    "output": 393216,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-flash-vision-exp": {
+    "context": 1000000,
+    "output": 393216,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-pro": {
+    "context": 1000000,
+    "output": 393216,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   }
+  },
+  "gemini": {
+   "deep-research-max-preview-04-2026": {
+    "context": 131072,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deep-research-preview-04-2026": {
+    "context": 131072,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gemini-2.5-computer-use-preview-10-2025": {
+    "context": 128000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gemini-2.5-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "gemini-2.5-flash-image": {
+    "context": 32768,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gemini-2.5-flash-lite": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "gemini-2.5-flash-preview-tts": {
+    "context": 8192,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gemini-2.5-pro": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "gemini-2.5-pro-preview-tts": {
+    "context": 8192,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gemini-3-flash-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3-pro-image": {
+    "context": 65536,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3-pro-image-preview": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gemini-3.1-flash-image": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-flash-image-preview": {
+    "context": 65536,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-flash-lite": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-flash-lite-image": {
+    "context": 65536,
+    "output": 4096,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-flash-lite-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-flash-live-preview": {
+    "context": 131072,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-flash-tts-preview": {
+    "context": 8192,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gemini-3.1-pro-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.1-pro-preview-customtools": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.5-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.5-flash-lite": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.5-live-translate-preview": {
+    "context": 16384,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gemini-3.6-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.7-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-3.8-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-embedding-001": {
+    "context": 2048,
+    "output": 1,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gemini-embedding-2": {
+    "context": 8192,
+    "output": 1,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gemini-flash-latest": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-flash-lite-latest": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gemini-omni-flash-preview": {
+    "context": 131072,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "gemma-4-26b-a4b-it": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "gemma-4-31b-it": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "lyria-3-clip-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "lyria-3-pro-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "veo-3.1-fast-generate-preview": {
+    "context": 480,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "veo-3.1-generate-preview": {
+    "context": 480,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "veo-3.1-lite-generate-preview": {
+    "context": 480,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   }
+  },
+  "grok": {
+   "grok-4.20-0309-non-reasoning": {
+    "context": 1000000,
+    "output": 30000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-4.20-0309-reasoning": {
+    "context": 1000000,
+    "output": 30000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "grok-4.20-multi-agent-0309": {
+    "context": 1000000,
+    "output": 30000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "grok-4.3": {
+    "context": 1000000,
+    "output": 30000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "grok-4.5": {
+    "context": 500000,
+    "output": 500000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "grok-4.6": {
+    "context": 500000,
+    "output": 500000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "grok-4.7": {
+    "context": 500000,
+    "output": 500000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "grok-build-0.1": {
+    "context": 256000,
+    "output": 256000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "grok-imagine-image": {
+    "context": 16000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-imagine-image-quality": {
+    "context": 16000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-imagine-video": {
+    "context": 1024,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-imagine-video-1.5": {
+    "context": 1024,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "grok-imagine-video-1.5-lite": {
+    "context": 1024,
+    "reasoning": {
+     "reasons": false
+    }
+   }
+  },
+  "hunyuan": {
+   "hy3": {
+    "context": 256000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "hy3-preview": {
+    "context": 256000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "hy4-preview": {
+    "context": 1024000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   }
+  },
+  "lmstudio": {
+   "openai/gpt-oss-20b": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "qwen/qwen3-30b-a3b-2507": {
+    "context": 262144,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-coder-30b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   }
+  },
+  "minimax": {
+   "MiniMax-M2": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "MiniMax-M2.1": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "MiniMax-M2.5": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "MiniMax-M2.5-highspeed": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "MiniMax-M2.7": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "MiniMax-M2.7-highspeed": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "MiniMax-M3": {
+    "context": 1000000,
+    "output": 512000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   }
+  },
+  "moonshot": {
+   "kimi-k2.6": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "kimi-k2.7-code": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "kimi-k2.7-code-highspeed": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "kimi-k3": {
+    "context": 1048576,
+    "output": 1048576,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   }
+  },
+  "ollama": {
+   "deepseek-v4-flash": {
+    "context": 1048576,
+    "output": 1048576,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-flash:0731": {
+    "context": 1048576,
+    "output": 1048576,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-pro": {
+    "context": 1048576,
+    "output": 1048576,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-pro:0813": {
+    "context": 1048576,
+    "output": 1048576,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4.1-flash": {
+    "context": 1048576,
+    "output": 384000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "gemma4:31b": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-5.1": {
+    "context": 202752,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-5.2": {
+    "context": 976000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5.3": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5.3-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-oss:120b": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-oss:20b": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "kimi-k2.5": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "kimi-k2.6": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "kimi-k2.7-code": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "kimi-k3": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "minimax-m2.5": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "minimax-m2.7": {
+    "context": 196608,
+    "output": 196608,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "minimax-m3": {
+    "context": 512000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "mistral-large-3:675b": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "nemotron-3-nano:30b": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nemotron-3-super": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nemotron-3-ultra": {
+    "context": 262144,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5:397b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   }
+  },
+  "openai": {
+   "gpt-3.5-turbo": {
+    "context": 16385,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4": {
+    "context": 8192,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4-turbo": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4.1": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4.1-mini": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4.1-nano": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o-2024-05-13": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o-2024-08-06": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o-2024-11-20": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-4o-mini": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-5": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-nano": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5-pro": {
+    "context": 400000,
+    "output": 272000,
+    "reasoning": {
+     "effort_values": [
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.1": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.2": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.2-chat-latest": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "effort_values": [
+      "medium"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.2-pro": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.3-chat-latest": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gpt-5.3-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.3-codex-spark": {
+    "context": 128000,
+    "output": 32000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4-nano": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.4-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.5": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.5-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6-luna": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-5.6-terra": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6-astra": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6-luna": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-6.1-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-daybreak-blue-latest": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-daybreak-red-latest": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "gpt-realtime-2.1": {
+    "context": 128000,
+    "output": 32000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o1": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o1-pro": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o3": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o3-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o3-pro": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "o4-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "text-embedding-3-large": {
+    "context": 8191,
+    "output": 3072,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "text-embedding-3-small": {
+    "context": 8191,
+    "output": 1536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "text-embedding-ada-002": {
+    "context": 8192,
+    "output": 1536,
+    "reasoning": {
+     "reasons": false
+    }
+   }
+  },
+  "openrouter": {
+   "aion-labs/aion-2.0": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "aion-labs/aion-3.0": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "aion-labs/aion-3.0-mini": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "aion-labs/aion-3.5": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "aion-labs/aion-3.5-mini": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "aion-labs/aion-rp-llama-3.1-8b": {
+    "context": 32768,
+    "output": 29491,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "amazon/nova-2-lite-v1": {
+    "context": 1000000,
+    "output": 65535,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "amazon/nova-lite-v1": {
+    "context": 300000,
+    "output": 5120,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "amazon/nova-micro-v1": {
+    "context": 128000,
+    "output": 5120,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "amazon/nova-premier-v1": {
+    "context": 1000000,
+    "output": 32000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "amazon/nova-pro-v1": {
+    "context": 300000,
+    "output": 5120,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "anthracite-org/magnum-v4-72b": {
+    "context": 32768,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "anthropic/claude-fable-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "anthropic/claude-fable-5.1": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "anthropic/claude-haiku-4.5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-4.1": {
+    "context": 200000,
+    "output": 32000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-4.5": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-4.6": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-4.7": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-4.8": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-opus-5.5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "anthropic/claude-sonnet-4": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-sonnet-4.5": {
+    "context": 1000000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-sonnet-4.6": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-sonnet-5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "anthropic/claude-sonnet-5.5": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "apodex/apodex-1.1-mini:free": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "arcee-ai/trinity-large-thinking": {
+    "context": 262144,
+    "output": 80000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "baidu/ernie-4.5-vl-424b-a47b": {
+    "context": 123000,
+    "output": 16000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "bytedance-seed/seed-1.6": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "bytedance-seed/seed-1.6-flash": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "bytedance-seed/seed-2-1-turbo": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "bytedance-seed/seed-2.0-code": {
+    "context": 262144,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "bytedance-seed/seed-2.0-lite": {
+    "context": 262144,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "bytedance-seed/seed-2.0-mini": {
+    "context": 262144,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "bytedance/ui-tars-1.5-7b": {
+    "context": 128000,
+    "output": 2048,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cognitivecomputations/dolphin-mistral-24b-venice-edition": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere/command-a": {
+    "context": 256000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere/command-a-plus": {
+    "context": 192000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "cohere/command-r-08-2024": {
+    "context": 128000,
+    "output": 4000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere/command-r-plus-08-2024": {
+    "context": 128000,
+    "output": 4000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere/command-r7b-12-2024": {
+    "context": 128000,
+    "output": 4000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "cohere/north-mini-code:free": {
+    "context": 256000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-chat": {
+    "context": 163840,
+    "output": 16000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "deepseek/deepseek-chat-v3-0324": {
+    "context": 163840,
+    "output": 115200,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "deepseek/deepseek-chat-v3.1": {
+    "context": 163840,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-r1": {
+    "context": 64000,
+    "output": 16000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deepseek/deepseek-r1-0528": {
+    "context": 163840,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "deepseek/deepseek-v3.1-terminus": {
+    "context": 163840,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v3.2": {
+    "context": 163840,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v3.2-exp": {
+    "context": 163840,
+    "output": 147456,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v4-flash": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v4-flash-0731": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v4-flash-vision-exp": {
+    "context": 1048576,
+    "output": 262144,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v4-pro": {
+    "context": 1048576,
+    "output": 384000,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v4-pro-0813": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek/deepseek-v4.1-flash": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "dots-studio/dots-3-note-preview:free": {
+    "context": 512000,
+    "output": 460800,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "fireworks/ember-1": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-2.5-flash": {
+    "context": 1048576,
+    "output": 65535,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-2.5-flash-image": {
+    "context": 32768,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemini-2.5-flash-lite": {
+    "context": 1048576,
+    "output": 65535,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-2.5-pro": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "google/gemini-2.5-pro-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "google/gemini-3-flash-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-3-pro-image": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "google/gemini-3-pro-image-preview": {
+    "context": 65536,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "google/gemini-3.1-flash-image": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-3.1-flash-image-preview": {
+    "context": 65536,
+    "output": 58982,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-3.1-flash-lite": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-3.1-flash-lite-image": {
+    "context": 65536,
+    "output": 58982,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-3.1-flash-lite-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "google/gemini-3.1-pro-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemini-3.1-pro-preview-customtools": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemini-3.5-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemini-3.5-flash-lite": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemini-3.6-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemini-3.7-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemini-3.8-flash": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "google/gemma-2-27b-it": {
+    "context": 8192,
+    "output": 2048,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemma-3-12b-it": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemma-3-27b-it": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemma-3-4b-it": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemma-4-26b-a4b-it": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "google/gemma-4-26b-a4b-it:free": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "google/gemma-4-31b-it": {
+    "context": 262144,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "google/gemma-4-31b-it:free": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "google/lyria-3-clip-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/lyria-3-pro-preview": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "gryphe/mythomax-l2-13b": {
+    "context": 8192,
+    "output": 3686,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "ibm-granite/granite-4.0-h-micro": {
+    "context": 131000,
+    "output": 117900,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "ibm-granite/granite-4.2-8b": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "inception/mercury-2": {
+    "context": 128000,
+    "output": 50000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "inception/mercury-2.5": {
+    "context": 260000,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "inclusionai/ling-3.0-flash": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "inclusionai/ling-3.0-flash-fin": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "inclusionai/ling-3.0-flash-sante:free": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "inclusionai/ling-3.0-flash-vl": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "inclusionai/ling-3.1-flash": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "inference-net/schematron-v2-small": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "inference-net/schematron-v2-turbo": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "kwaipilot/kat-coder-pro-v2.5": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "liquid/lfm-2.5-2.6b:free": {
+    "context": 65536,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "mancer/weaver": {
+    "context": 8000,
+    "output": 6000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meituan/longcat-2.0": {
+    "context": 1048756,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "meta-llama/llama-3.1-70b-instruct": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-3.1-8b-instruct": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-3.2-1b-instruct": {
+    "context": 60000,
+    "output": 54000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-3.2-3b-instruct": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-3.3-70b-instruct": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-4-maverick": {
+    "context": 1048576,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-4-scout": {
+    "context": 1310720,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta-llama/llama-guard-4-12b": {
+    "context": 163840,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meta/muse-glimmer-30b": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "meta/muse-spark-1.1": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "meta/muse-spark-1.2": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "meta/muse-spark-1.2-contributor": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "meta/muse-spark-1.3": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "meta/muse-spark-1.3-contributor": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "microsoft/phi-4": {
+    "context": 16384,
+    "output": 14745,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "microsoft/wizardlm-2-8x22b": {
+    "context": 65535,
+    "output": 8000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "minimax/minimax-01": {
+    "context": 1000192,
+    "output": 40000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "minimax/minimax-m1": {
+    "context": 1000000,
+    "output": 40000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "minimax/minimax-m2": {
+    "context": 204800,
+    "output": 176947,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "minimax/minimax-m2-her": {
+    "context": 65536,
+    "output": 2048,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "minimax/minimax-m2.1": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "minimax/minimax-m2.5": {
+    "context": 204800,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "minimax/minimax-m2.7": {
+    "context": 204800,
+    "output": 176947,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "minimax/minimax-m3": {
+    "context": 1048576,
+    "output": 512000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "mistralai/codestral-2508": {
+    "context": 256000,
+    "output": 204800,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/devstral-2512": {
+    "context": 262144,
+    "output": 209715,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/ministral-14b-2512": {
+    "context": 262144,
+    "output": 209715,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/ministral-3b-2512": {
+    "context": 131072,
+    "output": 104857,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/ministral-8b-2512": {
+    "context": 262144,
+    "output": 209715,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-large": {
+    "context": 128000,
+    "output": 102400,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-large-2407": {
+    "context": 131072,
+    "output": 104857,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-large-2512": {
+    "context": 262144,
+    "output": 209715,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-medium-3": {
+    "context": 131072,
+    "output": 104857,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-medium-3-5": {
+    "context": 262144,
+    "output": 209715,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "mistralai/mistral-medium-3.1": {
+    "context": 131072,
+    "output": 104857,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-nemo": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-saba": {
+    "context": 32768,
+    "output": 26214,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-small-24b-instruct-2501": {
+    "context": 32768,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-small-2603": {
+    "context": 262144,
+    "output": 209715,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "mistralai/mistral-small-3.1-24b-instruct": {
+    "context": 128000,
+    "output": 102400,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mistral-small-3.2-24b-instruct": {
+    "context": 256000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/mixtral-8x22b-instruct": {
+    "context": 65536,
+    "output": 52428,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "mistralai/voxtral-small-24b-2507": {
+    "context": 32768,
+    "output": 26214,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "moonshotai/kimi-k2": {
+    "context": 131072,
+    "output": 98304,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "moonshotai/kimi-k2-0905": {
+    "context": 262144,
+    "output": 98304,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "moonshotai/kimi-k2-thinking": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "moonshotai/kimi-k2.5": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "moonshotai/kimi-k2.6": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "moonshotai/kimi-k2.7-code": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "moonshotai/kimi-k3": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "morph/morph-v3-fast": {
+    "context": 81920,
+    "output": 38000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "morph/morph-v3-large": {
+    "context": 262144,
+    "output": 131072,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "nex-agi/nex-n2.5-mini": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "nex-agi/nex-n2.5-pro": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "nousresearch/hermes-3-llama-3.1-405b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "nousresearch/hermes-3-llama-3.1-70b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "nousresearch/hermes-4-405b": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3-nano-30b-a3b": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
+    "context": 256000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3-super-120b-a12b": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3-super-120b-a12b:free": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3-ultra-550b-a55b": {
+    "context": 262144,
+    "output": 16384,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3-ultra-550b-a55b:free": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3.5-content-safety": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3.5-content-safety:free": {
+    "context": 128000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3.5-lightning": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "nvidia/nemotron-3.5-lightning:free": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/gpt-3.5-turbo": {
+    "context": 16385,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-3.5-turbo-0613": {
+    "context": 4095,
+    "output": 3685,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-3.5-turbo-16k": {
+    "context": 16385,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-3.5-turbo-instruct": {
+    "context": 4095,
+    "output": 3685,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4": {
+    "context": 8191,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4-turbo": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4.1": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4.1-mini": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4.1-nano": {
+    "context": 1047576,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4o": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4o-2024-05-13": {
+    "context": 128000,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4o-2024-08-06": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4o-2024-11-20": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4o-mini": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-4o-mini-2024-07-18": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-5": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5-image": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "openai/gpt-5-image-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "openai/gpt-5-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5-nano": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5-pro": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.1": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.1-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.1-codex-max": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.1-codex-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "openai/gpt-5.2": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.2-chat": {
+    "context": 128000,
+    "output": 32000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-5.2-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.2-pro": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.3-codex": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.4": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.4-image-2": {
+    "context": 272000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.4-mini": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.4-nano": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.4-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.5": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.5-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.6-luna": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.6-luna-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.6-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.6-sol-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.6-terra": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-5.6-terra-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6-astra": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6-astra-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6-luna": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6-luna-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6-sol-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6.1-sol": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-6.1-sol-pro": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-audio": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-audio-mini": {
+    "context": 128000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-chat-latest": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openai/gpt-oss-120b": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-oss-20b": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/gpt-oss-safeguard-20b": {
+    "context": 131072,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/o1": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/o1-pro": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/o3": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/o3-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/o3-mini-high": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openai/o3-pro": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/o4-mini": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "openai/o4-mini-high": {
+    "context": 200000,
+    "output": 100000,
+    "reasoning": {
+     "effort_values": [
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "openrouter/auto": {
+    "context": 2000000,
+    "output": 2000000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "openrouter/bodybuilder": {
+    "context": 128000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openrouter/free": {
+    "context": 200000,
+    "output": 8000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "openrouter/fusion": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "openrouter/pareto-code": {
+    "context": 2000000,
+    "output": 200000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "perceptron/perceptron-mk1": {
+    "context": 32768,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "perceptron/perceptron-mk1.5": {
+    "context": 36864,
+    "output": 8192,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "perplexity/sonar": {
+    "context": 127072,
+    "output": 114364,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "perplexity/sonar-deep-research": {
+    "context": 128000,
+    "output": 115200,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "perplexity/sonar-pro": {
+    "context": 200000,
+    "output": 8000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "perplexity/sonar-pro-search": {
+    "context": 200000,
+    "output": 8000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "perplexity/sonar-reasoning-pro": {
+    "context": 128000,
+    "output": 115200,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "poolside/laguna-s-2.1": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "poolside/laguna-s-2.1:free": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "poolside/laguna-xs-2.1": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "poolside/laguna-xs-2.1:free": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "prism-ml/ternary-bonsai-2-27b": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "effort_values": [
+      "medium",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen-2.5-72b-instruct": {
+    "context": 32768,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen-2.5-7b-instruct": {
+    "context": 32768,
+    "output": 29491,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen-2.5-coder-32b-instruct": {
+    "context": 32768,
+    "output": 29491,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen-plus": {
+    "context": 1000000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen-plus-2025-07-28": {
+    "context": 1000000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen2.5-vl-72b-instruct": {
+    "context": 128000,
+    "output": 115200,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-14b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3-235b-a22b": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3-235b-a22b-2507": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-235b-a22b-thinking-2507": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen/qwen3-30b-a3b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3-30b-a3b-instruct-2507": {
+    "context": 262144,
+    "output": 32000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-30b-a3b-thinking-2507": {
+    "context": 81920,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen/qwen3-32b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3-8b": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3-coder": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-coder-30b-a3b-instruct": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-coder-flash": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-coder-next": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-coder-plus": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-max": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-max-thinking": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3-next-80b-a3b-instruct": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-next-80b-a3b-thinking": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen/qwen3-vl-235b-a22b-instruct": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-vl-235b-a22b-thinking": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen/qwen3-vl-30b-a3b-instruct": {
+    "context": 262144,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-vl-30b-a3b-thinking": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen/qwen3-vl-32b-instruct": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-vl-8b-instruct": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen/qwen3-vl-8b-thinking": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen/qwen3.5-122b-a10b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-27b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-35b-a3b": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-397b-a17b": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-9b": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-flash-02-23": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-plus-02-15": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.5-plus-20260420": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.6-27b": {
+    "context": 262144,
+    "output": 262140,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.6-35b-a3b": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.6-flash": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.6-max-preview": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.6-plus": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.7-flash": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.7-max": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.7-plus": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.8-2.4t-a95b": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "qwen/qwen3.8-27b": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.8-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen/qwen3.8-max-0902": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "qwen/qwen3.8-max-prime": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "qwen/qwen3.8-omni-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "rekaai/reka-edge": {
+    "context": 16384,
+    "output": 14745,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "rekaai/reka-flash-3": {
+    "context": 65536,
+    "output": 58982,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "relace/relace-apply-3": {
+    "context": 256000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "relace/relace-search": {
+    "context": 256000,
+    "output": 128000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "sakana/fugu-max": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "sakana/fugu-ultra": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "sakana/fugu-ultra-v2": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "sakana/sakana-namazu": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "sao10k/l3-lunaris-8b": {
+    "context": 8192,
+    "output": 7372,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "sao10k/l3.1-euryale-70b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "sao10k/l3.3-euryale-70b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "stepfun/step-3.5-flash": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "stepfun/step-3.7-flash": {
+    "context": 262144,
+    "output": 230400,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "tencent/hunyuan-a13b-instruct": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "tencent/hy-mt2-1.8b": {
+    "context": 8192,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "tencent/hy-mt2-30b-a3b": {
+    "context": 8192,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "tencent/hy-mt2-7b": {
+    "context": 8192,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "tencent/hy3": {
+    "context": 262144,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "tencent/hy3-preview": {
+    "context": 262144,
+    "output": 235929,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "tencent/hy4-preview": {
+    "context": 1048576,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "thedrummer/cydonia-24b-v4.1": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "thedrummer/skyfall-36b-v2": {
+    "context": 32768,
+    "output": 29491,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "thedrummer/unslopnemo-12b": {
+    "context": 1024000,
+    "output": 819200,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "thinkingmachines/inkling": {
+    "context": 524288,
+    "output": 262144,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "thinkingmachines/inkling-small": {
+    "context": 524288,
+    "output": 262144,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "thinkingmachines/inkling-small:free": {
+    "context": 1048576,
+    "output": 262144,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "thinkingmachines/inkling:free": {
+    "context": 1048576,
+    "output": 262144,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "unbiased/pareto": {
+    "context": 262144,
+    "output": 131072,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "unbiased/pareto-26.10-preview": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "undi95/remm-slerp-l2-13b": {
+    "context": 6144,
+    "output": 5529,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "upstage/solar-mini4": {
+    "context": 524288,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "upstage/solar-pro-3": {
+    "context": 131072,
+    "output": 117964,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "upstage/solar-pro4": {
+    "context": 524288,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "writer/palmyra-x5": {
+    "context": 1040000,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "x-ai/grok-4.20": {
+    "context": 2000000,
+    "output": 1800000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "x-ai/grok-4.20-multi-agent": {
+    "context": 2000000,
+    "output": 1800000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "x-ai/grok-4.3": {
+    "context": 1000000,
+    "output": 900000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "x-ai/grok-4.5": {
+    "context": 500000,
+    "output": 450000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "x-ai/grok-4.6": {
+    "context": 500000,
+    "output": 450000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "x-ai/grok-4.7": {
+    "context": 500000,
+    "output": 450000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "x-ai/grok-build-0.1": {
+    "context": 256000,
+    "output": 230400,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "xiaomi/mimo-v2.5": {
+    "context": 1050000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "xiaomi/mimo-v2.5-pro": {
+    "context": 1050000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "xiaomi/mimo-v2.6-flash": {
+    "context": 1050000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "xiaomi/mimo-v2.6-pro": {
+    "context": 1050000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "xiaomi/mimo-v2.6-pro-ultraspeed": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.5": {
+    "context": 131072,
+    "output": 98304,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.5-air": {
+    "context": 131072,
+    "output": 98304,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.5v": {
+    "context": 65536,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.6": {
+    "context": 204800,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.6v": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.7": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-4.7-flash": {
+    "context": 200000,
+    "output": 117964,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-5": {
+    "context": 204800,
+    "output": 128000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-5-turbo": {
+    "context": 202752,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-5.1": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-5.2": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "z-ai/glm-5.3": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "z-ai/glm-5.3-flash": {
+    "context": 1048576,
+    "output": 943717,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "z-ai/glm-5.3-flashx": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "z-ai/glm-5.3-prime": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "z-ai/glm-5v-turbo": {
+    "context": 202752,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "~anthropic/claude-fable-latest": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~anthropic/claude-haiku-latest": {
+    "context": 200000,
+    "output": 64000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "~anthropic/claude-opus-latest": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~anthropic/claude-sonnet-latest": {
+    "context": 1000000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~deepseek/deepseek-flash-latest": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "~deepseek/deepseek-pro-latest": {
+    "context": 1048576,
+    "output": 393216,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "~deepseek/deepseek-v4-flash-latest": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "~google/gemini-flash-latest": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~google/gemini-pro-latest": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~moonshotai/kimi-latest": {
+    "context": 1048576,
+    "output": 943718,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "~openai/gpt-astra-latest": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~openai/gpt-luna-latest": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~openai/gpt-mini-latest": {
+    "context": 400000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~openai/gpt-sol-latest": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~openai/gpt-terra-latest": {
+    "context": 1050000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~x-ai/grok-latest": {
+    "context": 500000,
+    "output": 450000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~z-ai/glm-flash-latest": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "~z-ai/glm-latest": {
+    "context": 1048576,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   }
+  },
+  "qwen": {
+   "deepseek-v4-flash-0731": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "glm-5.2": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "kimi-k3": {
+    "context": 1048576,
+    "output": 1048576,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "qvq-max": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "qwen-flash": {
+    "context": 1000000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen-max": {
+    "context": 32768,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-mt-plus": {
+    "context": 16384,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-mt-turbo": {
+    "context": 16384,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-omni-turbo": {
+    "context": 32768,
+    "output": 2048,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-omni-turbo-realtime": {
+    "context": 32768,
+    "output": 2048,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-plus": {
+    "context": 1000000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen-plus-character-ja": {
+    "context": 8192,
+    "output": 512,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-turbo": {
+    "context": 1000000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen-vl-max": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-vl-ocr": {
+    "context": 34096,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen-vl-plus": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-14b-instruct": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-32b-instruct": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-72b-instruct": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-7b-instruct": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-omni-7b": {
+    "context": 32768,
+    "output": 2048,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-vl-72b-instruct": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen2-5-vl-7b-instruct": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-14b": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3-235b-a22b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3-32b": {
+    "context": 131072,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3-8b": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3-asr-flash": {
+    "context": 53248,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-coder-30b-a3b-instruct": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-coder-480b-a35b-instruct": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-coder-flash": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-coder-plus": {
+    "context": 1048576,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-livetranslate-flash-realtime": {
+    "context": 53248,
+    "output": 4096,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-max": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-next-80b-a3b-instruct": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-next-80b-a3b-thinking": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "qwen3-omni-flash": {
+    "context": 65536,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "qwen3-omni-flash-realtime": {
+    "context": 65536,
+    "output": 16384,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "qwen3-vl-235b-a22b": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "qwen3-vl-30b-a3b": {
+    "context": 131072,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "qwen3-vl-plus": {
+    "context": 262144,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5-122b-a10b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5-27b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5-35b-a3b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5-397b-a17b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5-flash": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.5-plus": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.6-27b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.6-35b-a3b": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.6-flash": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.6-max-preview": {
+    "context": 262144,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.6-plus": {
+    "context": 1000000,
+    "output": 65536,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.7-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.7-max": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.7-plus": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.8-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.8-max": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "qwen3.8-omni-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "qwq-plus": {
+    "context": 131072,
+    "output": 8192,
+    "reasoning": {
+     "reasons": true
+    }
+   }
+  },
+  "siliconflow": {
+   "ByteDance-Seed/Seed-OSS-36B-Instruct": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "MiniMaxAI/MiniMax-M2.5": {
+    "context": 197000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "MiniMaxAI/MiniMax-M3": {
+    "context": 1048576,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "Qwen/Qwen2.5-72B-Instruct": {
+    "context": 33000,
+    "output": 4000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen2.5-7B-Instruct": {
+    "context": 33000,
+    "output": 4000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3-14B": {
+    "context": 131000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "Qwen/Qwen3-30B-A3B-Instruct-2507": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3-32B": {
+    "context": 131000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "Qwen/Qwen3-8B": {
+    "context": 131000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3-Coder-480B-A35B-Instruct": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3-VL-30B-A3B-Thinking": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "Qwen/Qwen3-VL-32B-Instruct": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3-VL-32B-Thinking": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "Qwen/Qwen3-VL-8B-Instruct": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.5-122B-A10B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.5-27B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.5-35B-A3B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.5-397B-A17B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.5-9B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.6-27B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.6-35B-A3B": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "Qwen/Qwen3.8-2.4T-A95B": {
+    "context": 1049000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-R1": {
+    "context": 164000,
+    "output": 164000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V3": {
+    "context": 164000,
+    "output": 164000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "deepseek-ai/DeepSeek-V3.1": {
+    "context": 164000,
+    "output": 164000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V3.1-Terminus": {
+    "context": 164000,
+    "output": 164000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V3.2": {
+    "context": 164000,
+    "output": 164000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V3.2-Exp": {
+    "context": 164000,
+    "output": 164000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V4-Flash": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V4-Flash-0731": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V4-Pro": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "deepseek-ai/DeepSeek-V4-Pro-0813": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "google/gemma-4-12B-it": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemma-4-26B-A4B-it": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "google/gemma-4-31B-it": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "inclusionAI/Ling-flash-2.0": {
+    "context": 131000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "meituan-longcat/LongCat-2.0": {
+    "context": 1049000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "moonshotai/Kimi-K2.5": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "moonshotai/Kimi-K2.6": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "moonshotai/Kimi-K2.7-Code": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "moonshotai/Kimi-K3": {
+    "context": 1048576,
+    "output": 262000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "nex-agi/Nex-N2-Pro": {
+    "context": 262144,
+    "output": 256000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "openai/gpt-oss-120b": {
+    "context": 131000,
+    "output": 8000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "openai/gpt-oss-20b": {
+    "context": 131000,
+    "output": 8000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "stepfun-ai/Step-3.5-Flash": {
+    "context": 262000,
+    "output": 262000,
+    "reasoning": {
+     "reasons": true
+    }
+   },
+   "tencent/Hunyuan-A13B-Instruct": {
+    "context": 131000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   },
+   "tencent/Hy3": {
+    "context": 262144,
+    "output": 262144,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "zai-org/GLM-4.5-Air": {
+    "context": 131000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": false
+    }
+   },
+   "zai-org/GLM-5": {
+    "context": 205000,
+    "output": 205000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "zai-org/GLM-5.1": {
+    "context": 205000,
+    "output": 131000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens"
+     ]
+    }
+   },
+   "zai-org/GLM-5.2": {
+    "context": 1049000,
+    "output": 262000,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "zai-org/GLM-5.3": {
+    "context": 1049000,
+    "output": 262000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "zai-org/GLM-5.3-Flash": {
+    "context": 1049000,
+    "output": 262000,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "zai-org/GLM-5V-Turbo": {
+    "context": 200000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "budget_tokens",
+      "toggle"
+     ]
+    }
+   }
+  },
+  "volcengine": {
+   "deepseek-v4-flash-ga-260731": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "deepseek-v4-pro-ga-260813": {
+    "context": 1000000,
+    "output": 384000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "doubao-seed-1-6-251015": {
+    "context": 256000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "doubao-seed-1-6-flash-250828": {
+    "context": 256000,
+    "output": 32000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "doubao-seed-1-6-vision-250815": {
+    "context": 256000,
+    "output": 32000,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "doubao-seed-1-8-251228": {
+    "context": 256000,
+    "output": 64000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-2-0-code-preview-260215": {
+    "context": 262144,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-2-0-lite-260428": {
+    "context": 256000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-2-0-mini-260428": {
+    "context": 256000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-2-0-pro-260215": {
+    "context": 256000,
+    "output": 128000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-2-1-pro-260628": {
+    "context": 256000,
+    "output": 256000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-2-1-turbo-260628": {
+    "context": 256000,
+    "output": 256000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "doubao-seed-character-260628": {
+    "context": 256000,
+    "output": 256000,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "doubao-seed-evolving": {
+    "context": 256000,
+    "output": 256000,
+    "reasoning": {
+     "effort_values": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5-2-260617": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "reasons": true,
+     "types": [
+      "effort",
+      "toggle"
+     ]
+    }
+   },
+   "glm-5-3-flash-260828": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   }
+  },
+  "zhipu": {
+   "glm-4.5": {
+    "context": 131072,
+    "output": 98304,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.5-air": {
+    "context": 131072,
+    "output": 98304,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.5-flash": {
+    "context": 131072,
+    "output": 98304,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.5v": {
+    "context": 64000,
+    "output": 16384,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.6": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.6v": {
+    "context": 128000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.6v-flash": {
+    "context": 128000,
+    "output": 32768,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.7": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.7-flash": {
+    "context": 200000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-4.7-flashx": {
+    "context": 200000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-5": {
+    "context": 204800,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-5-turbo": {
+    "context": 200000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-5.1": {
+    "context": 200000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   },
+   "glm-5.2": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5.3": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5.3-flash": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5.3-flashx": {
+    "context": 1000000,
+    "output": 131072,
+    "reasoning": {
+     "effort_values": [
+      "low",
+      "high",
+      "max"
+     ],
+     "reasons": true,
+     "types": [
+      "effort"
+     ]
+    }
+   },
+   "glm-5v-turbo": {
+    "context": 200000,
+    "output": 131072,
+    "reasoning": {
+     "reasons": true,
+     "types": [
+      "toggle"
+     ]
+    }
+   }
+  }
+ },
+ "schema": 2,
+ "source": "https://models.dev/api.json"
+}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Crannia</title>
+    <!-- 主题在首屏之前就定下来（否则深色用户会先看到一帧白底）。
+         逻辑与 `theme.js::resolveMode` 同形：`lv.theme` 缺省 = 跟随系统。 -->
+    <script>
+      (function () {
+        try {
+          var p = localStorage.getItem("lv.theme") || "system";
+          var dark = p === "dark" || (p !== "light"
+            && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var e = document.documentElement;
+          e.dataset.theme = dark ? "dark" : "light";
+          e.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) { /* 读不到就按浅色跑 */ }
+      })();
+    </script>
+  </head>
+  <body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
+</html>

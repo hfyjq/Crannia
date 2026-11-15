@@ -1,0 +1,6665 @@
+{
+ "fetched": "2026-10-17",
+ "note": "models.dev 的 modalities（input / output）摘录，只含我们支持的 provider。★ `input` 里有 text/image/audio/video/pdf；缺这条的模型**不收进表**（读不到 != 只能收文本）。重跑 scripts/refetch_window_table.py 更新。注意：端配置页换模型时，能力从这张表按 (provider, model) 查 —— `config.yaml` 的显式声明仍然**赢过**它。",
+ "providers": {
+  "anthropic": {
+   "claude-fable-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-haiku-4-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-haiku-4-5-20251001": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-1-20250805": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-5-20251101": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-7": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-8": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-4-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-4-5-20250929": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-4-6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "azure": {
+   "claude-fable-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-haiku-4-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-opus-4-8": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-4-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-4-6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "claude-sonnet-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "codestral-2501": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "codex-mini": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere-command-a": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere-command-r-08-2024": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere-command-r-plus-08-2024": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere-embed-v-4-0": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere-embed-v3-english": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere-embed-v3-multilingual": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-r1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-r1-0528": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v3-0324": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v3.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v3.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v3.2-speciale": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v4-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v4-pro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-3.5-turbo-0125": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-3.5-turbo-0301": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-3.5-turbo-0613": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-3.5-turbo-1106": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-3.5-turbo-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4-32k": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4-turbo": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4-turbo-vision": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4.1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4.1-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4.1-nano": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-chat": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-nano": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1": {
+    "input": [
+     "text",
+     "image",
+     "audio"
+    ],
+    "output": [
+     "text",
+     "image",
+     "audio"
+    ]
+   },
+   "gpt-5.1-chat": {
+    "input": [
+     "text",
+     "image",
+     "audio"
+    ],
+    "output": [
+     "text",
+     "image",
+     "audio"
+    ]
+   },
+   "gpt-5.1-codex": {
+    "input": [
+     "text",
+     "image",
+     "audio"
+    ],
+    "output": [
+     "text",
+     "image",
+     "audio"
+    ]
+   },
+   "gpt-5.1-codex-max": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1-codex-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2-chat": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.3-chat": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.3-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4-mini": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4-nano": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-image-1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "gpt-image-1.5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gpt-image-2": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "grok-4-1-fast-non-reasoning": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4-1-fast-reasoning": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4-20-non-reasoning": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4-20-reasoning": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4-fast-reasoning": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.6": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "llama-3.2-11b-vision-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "llama-3.2-90b-vision-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "llama-3.3-70b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "llama-4-maverick-17b-128e-instruct-fp8": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "llama-4-scout-17b-16e-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama-3-70b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama-3-8b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama-3.1-405b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama-3.1-70b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama-3.1-8b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "ministral-3b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistral-large-2411": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistral-medium-2505": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistral-nemo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistral-small-2503": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "model-router": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o1-mini": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o3": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o3-mini": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o4-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3-medium-128k-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3-medium-4k-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3-mini-128k-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3-mini-4k-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3-small-128k-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3-small-8k-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3.5-mini-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-3.5-moe-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-4": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-4-mini": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-4-mini-reasoning": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-4-multimodal": {
+    "input": [
+     "text",
+     "image",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-4-reasoning": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "phi-4-reasoning-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "text-embedding-3-large": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "text-embedding-3-small": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "text-embedding-ada-002": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "deepseek": {
+   "deepseek-chat": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-reasoner": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v4-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v4-pro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "gemini": {
+   "gemini-2.0-flash": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-2.0-flash-lite": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-2.5-flash": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-2.5-flash-image": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gemini-2.5-flash-lite": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-2.5-flash-preview-tts": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "audio"
+    ]
+   },
+   "gemini-2.5-pro": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-2.5-pro-preview-tts": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "audio"
+    ]
+   },
+   "gemini-3-flash-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3-pro-image-preview": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gemini-3-pro-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3.1-flash-image-preview": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gemini-3.1-flash-lite": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3.1-flash-lite-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3.1-pro-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3.1-pro-preview-customtools": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3.5-flash": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-embedding-001": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-flash-latest": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-flash-lite-latest": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-omni-flash-preview": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "video"
+    ]
+   },
+   "gemma-4-26b-a4b-it": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemma-4-31b-it": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "grok": {
+   "grok-4.20-0309-non-reasoning": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4.20-0309-reasoning": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4.20-multi-agent-0309": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4.3": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-4.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-build-0.1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "grok-imagine-image": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "image",
+     "pdf"
+    ]
+   },
+   "grok-imagine-image-quality": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "image",
+     "pdf"
+    ]
+   },
+   "grok-imagine-video": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "video"
+    ]
+   }
+  },
+  "hunyuan": {
+   "hy3": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "hy3-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "lmstudio": {
+   "openai/gpt-oss-20b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-30b-a3b-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder-30b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "minimax": {
+   "MiniMax-M2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMax-M2.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMax-M2.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMax-M2.5-highspeed": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMax-M2.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMax-M2.7-highspeed": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMax-M3": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "moonshot": {
+   "kimi-k2-0711-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2-0905-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2-thinking-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2-turbo-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.5": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.6": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.7-code": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.7-code-highspeed": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "ollama": {
+   "cogito-2.1:671b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v3.1:671b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v3.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v4-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-v4-pro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "devstral-2:123b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "devstral-small-2:24b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemini-3-flash-preview": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemma3:12b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemma3:27b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemma3:4b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gemma4:31b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.6": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-oss:120b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-oss:20b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.6": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2.7-code": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kimi-k2:1t": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax-m2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax-m2.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax-m2.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax-m2.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax-m3": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "ministral-3:14b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "ministral-3:3b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "ministral-3:8b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistral-large-3:675b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nemotron-3-nano:30b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nemotron-3-super": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nemotron-3-ultra": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-coder-next": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-coder:480b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-next:80b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-vl:235b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-vl:235b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.5:397b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "rnj-1:8b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "openai": {
+   "chatgpt-image-latest": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gpt-3.5-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4-turbo": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4.1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4.1-mini": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4.1-nano": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o-2024-05-13": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o-2024-08-06": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o-2024-11-20": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-4o-mini": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-chat-latest": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-nano": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1-chat-latest": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1-codex-max": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.1-codex-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2-chat-latest": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2-codex": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.2-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.3-chat-latest": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.3-codex": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.3-codex-spark": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4-nano": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.4-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.5-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.6-luna": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.6-sol": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-5.6-terra": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "gpt-image-1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "gpt-image-1-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gpt-image-1.5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "gpt-image-2": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "image"
+    ]
+   },
+   "gpt-realtime-2.1": {
+    "input": [
+     "text",
+     "audio",
+     "image"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "o1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o1-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o3": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o3-deep-research": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o3-mini": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o3-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o4-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "o4-mini-deep-research": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "text-embedding-3-large": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "text-embedding-3-small": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "text-embedding-ada-002": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "openrouter": {
+   "ai21/jamba-large-1.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "aion-labs/aion-2.0": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "aion-labs/aion-3.0": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "aion-labs/aion-3.0-mini": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "aion-labs/aion-rp-llama-3.1-8b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "allenai/olmo-3-32b-think": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "amazon/nova-2-lite-v1": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "amazon/nova-lite-v1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "amazon/nova-micro-v1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "amazon/nova-premier-v1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "amazon/nova-pro-v1": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthracite-org/magnum-v4-72b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-3-haiku": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-fable-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-haiku-4.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.7": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.7-fast": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.8": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-opus-4.8-fast": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-sonnet-4": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-sonnet-4.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-sonnet-4.6": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "anthropic/claude-sonnet-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "arcee-ai/coder-large": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "arcee-ai/trinity-large-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "arcee-ai/virtuoso-large": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "baidu/ernie-4.5-vl-424b-a47b": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "bytedance-seed/seed-1.6": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "bytedance-seed/seed-1.6-flash": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "bytedance-seed/seed-2.0-lite": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "bytedance-seed/seed-2.0-mini": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "bytedance/ui-tars-1.5-7b": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cognitivecomputations/dolphin-mistral-24b-venice-edition": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cognitivecomputations/dolphin-mistral-24b-venice-edition:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere/command-a": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere/command-r-08-2024": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere/command-r-plus-08-2024": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere/command-r7b-12-2024": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "cohere/north-mini-code:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepcogito/cogito-v2.1-671b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-chat": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-chat-v3-0324": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-chat-v3.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-r1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-r1-0528": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-r1-distill-llama-70b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-v3.1-terminus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-v3.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-v3.2-exp": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-v4-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek/deepseek-v4-pro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-2.5-flash": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-2.5-flash-image": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "google/gemini-2.5-flash-lite": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-2.5-pro": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-2.5-pro-preview": {
+    "input": [
+     "pdf",
+     "image",
+     "text",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-2.5-pro-preview-05-06": {
+    "input": [
+     "text",
+     "image",
+     "pdf",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-3-flash-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-3-pro-image": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "google/gemini-3-pro-image-preview": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "google/gemini-3.1-flash-image": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "google/gemini-3.1-flash-image-preview": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "google/gemini-3.1-flash-lite": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-3.1-flash-lite-image": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "image",
+     "text"
+    ]
+   },
+   "google/gemini-3.1-flash-lite-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-3.1-pro-preview": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-3.1-pro-preview-customtools": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemini-3.5-flash": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-2-27b-it": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-3-12b-it": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-3-27b-it": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-3-4b-it": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-3n-e4b-it": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-4-26b-a4b-it": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-4-26b-a4b-it:free": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-4-31b-it": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-4-31b-it:free": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/lyria-3-clip-preview": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "google/lyria-3-pro-preview": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "gryphe/mythomax-l2-13b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "ibm-granite/granite-4.0-h-micro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "ibm-granite/granite-4.1-8b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inception/mercury-2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inclusionai/ling-2.6-1t": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inclusionai/ling-2.6-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inclusionai/ring-2.6-1t": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inflection/inflection-3-pi": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inflection/inflection-3-productivity": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "kwaipilot/kat-coder-pro-v2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "liquid/lfm-2.5-1.2b-instruct:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "liquid/lfm-2.5-1.2b-thinking:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mancer/weaver": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.1-70b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.1-8b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.2-11b-vision-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.2-1b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.2-3b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.2-3b-instruct:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.3-70b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-3.3-70b-instruct:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-4-maverick": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-4-scout": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "meta-llama/llama-guard-4-12b": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "microsoft/phi-4": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "microsoft/wizardlm-2-8x22b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-01": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m2-her": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m2.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m2.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m2.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "minimax/minimax-m3": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/codestral-2508": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/devstral-2512": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/ministral-14b-2512": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/ministral-3b-2512": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/ministral-8b-2512": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-large": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-large-2407": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-large-2512": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-medium-3": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-medium-3-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-medium-3.1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-nemo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-saba": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-small-24b-instruct-2501": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-small-2603": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-small-3.1-24b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mistral-small-3.2-24b-instruct": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/mixtral-8x22b-instruct": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "mistralai/voxtral-small-24b-2507": {
+    "input": [
+     "text",
+     "audio",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/kimi-k2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/kimi-k2-0905": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/kimi-k2-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/kimi-k2.5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/kimi-k2.6": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/kimi-k2.7-code": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "morph/morph-v3-fast": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "morph/morph-v3-large": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nex-agi/nex-n2-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nex-agi/nex-n2-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nousresearch/hermes-3-llama-3.1-405b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nousresearch/hermes-3-llama-3.1-405b:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nousresearch/hermes-3-llama-3.1-70b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nousresearch/hermes-4-405b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nousresearch/hermes-4-70b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-nano-30b-a3b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-nano-30b-a3b:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-super-120b-a12b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-super-120b-a12b:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-ultra-550b-a55b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3-ultra-550b-a55b:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-3.5-content-safety:free": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-nano-12b-v2-vl:free": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "nvidia/nemotron-nano-9b-v2:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-3.5-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-3.5-turbo-0613": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-3.5-turbo-16k": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-3.5-turbo-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4-turbo": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4-turbo-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4.1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4.1-mini": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4.1-nano": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-2024-05-13": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-2024-08-06": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-2024-11-20": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-mini": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-mini-2024-07-18": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-mini-search-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-4o-search-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5-chat": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5-image": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "image",
+     "text"
+    ]
+   },
+   "openai/gpt-5-image-mini": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "image",
+     "text"
+    ]
+   },
+   "openai/gpt-5-mini": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5-nano": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5-pro": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.1": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.1-chat": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.1-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.1-codex-max": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.1-codex-mini": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.2": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.2-chat": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.2-codex": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.2-pro": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.3-chat": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.3-codex": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.4": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.4-image-2": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "image",
+     "text"
+    ]
+   },
+   "openai/gpt-5.4-mini": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.4-nano": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.4-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.5-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.6-luna": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.6-luna-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.6-sol": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.6-sol-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.6-terra": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-5.6-terra-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-audio": {
+    "input": [
+     "text",
+     "audio"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "openai/gpt-audio-mini": {
+    "input": [
+     "text",
+     "audio"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "openai/gpt-chat-latest": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-120b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-120b:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-20b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-20b:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-safeguard-20b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o1-pro": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o3": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o3-deep-research": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o3-mini": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o3-mini-high": {
+    "input": [
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o3-pro": {
+    "input": [
+     "text",
+     "pdf",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o4-mini": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o4-mini-deep-research": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/o4-mini-high": {
+    "input": [
+     "image",
+     "text",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openrouter/auto": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "pdf",
+     "video"
+    ],
+    "output": [
+     "text",
+     "image"
+    ]
+   },
+   "openrouter/bodybuilder": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openrouter/free": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openrouter/fusion": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openrouter/pareto-code": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "perceptron/perceptron-mk1": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "perplexity/sonar": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "perplexity/sonar-deep-research": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "perplexity/sonar-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "perplexity/sonar-pro-search": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "perplexity/sonar-reasoning-pro": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "poolside/laguna-m.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "poolside/laguna-m.1:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "poolside/laguna-xs-2.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "poolside/laguna-xs-2.1:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen-2.5-72b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen-2.5-7b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen-2.5-coder-32b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen-plus-2025-07-28": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen-plus-2025-07-28:thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen2.5-vl-72b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-14b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-235b-a22b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-235b-a22b-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-235b-a22b-thinking-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-30b-a3b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-30b-a3b-instruct-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-30b-a3b-thinking-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-32b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-8b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder-30b-a3b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder-next": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-coder:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-max": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-max-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-next-80b-a3b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-next-80b-a3b-instruct:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-next-80b-a3b-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-235b-a22b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-235b-a22b-thinking": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-30b-a3b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-30b-a3b-thinking": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-32b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-8b-instruct": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3-vl-8b-thinking": {
+    "input": [
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-122b-a10b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-27b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-35b-a3b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-397b-a17b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-9b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-flash-02-23": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-plus-02-15": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.5-plus-20260420": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.6-27b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.6-35b-a3b": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.6-flash": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.6-max-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.6-plus": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.7-max": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen/qwen3.7-plus": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "rekaai/reka-edge": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "rekaai/reka-flash-3": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "relace/relace-apply-3": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "relace/relace-search": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "sakana/fugu-ultra": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "sao10k/l3-lunaris-8b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "sao10k/l3.1-70b-hanami-x1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "sao10k/l3.1-euryale-70b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "sao10k/l3.3-euryale-70b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "stepfun/step-3.5-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "stepfun/step-3.7-flash": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "tencent/hunyuan-a13b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "tencent/hy3": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "tencent/hy3-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "tencent/hy3:free": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "thedrummer/cydonia-24b-v4.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "thedrummer/rocinante-12b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "thedrummer/skyfall-36b-v2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "thedrummer/unslopnemo-12b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "undi95/remm-slerp-l2-13b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "upstage/solar-pro-3": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "writer/palmyra-x5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "x-ai/grok-4.20": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "x-ai/grok-4.20-multi-agent": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "x-ai/grok-4.3": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "x-ai/grok-4.5": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "x-ai/grok-build-0.1": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "xiaomi/mimo-v2.5": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "xiaomi/mimo-v2.5-pro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.5-air": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.5v": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.6": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.6v": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-4.7-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-5-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-5.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-5.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "z-ai/glm-5v-turbo": {
+    "input": [
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~anthropic/claude-fable-latest": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~anthropic/claude-haiku-latest": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~anthropic/claude-opus-latest": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~anthropic/claude-sonnet-latest": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~google/gemini-flash-latest": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "pdf",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~google/gemini-pro-latest": {
+    "input": [
+     "audio",
+     "pdf",
+     "image",
+     "text",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~moonshotai/kimi-latest": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~openai/gpt-latest": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~openai/gpt-mini-latest": {
+    "input": [
+     "pdf",
+     "image",
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "~x-ai/grok-latest": {
+    "input": [
+     "text",
+     "image",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "qwen": {
+   "qvq-max": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-max": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-mt-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-mt-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-omni-turbo": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "qwen-omni-turbo-realtime": {
+    "input": [
+     "text",
+     "image",
+     "audio"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "qwen-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-plus-character-ja": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-vl-max": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-vl-ocr": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen-vl-plus": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen2-5-14b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen2-5-32b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen2-5-72b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen2-5-7b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen2-5-omni-7b": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "qwen2-5-vl-72b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen2-5-vl-7b-instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-14b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-235b-a22b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-32b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-8b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-asr-flash": {
+    "input": [
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-coder-30b-a3b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-coder-480b-a35b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-coder-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-coder-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-livetranslate-flash-realtime": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "qwen3-max": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-next-80b-a3b-instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-next-80b-a3b-thinking": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-omni-flash": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "qwen3-omni-flash-realtime": {
+    "input": [
+     "text",
+     "image",
+     "audio",
+     "video"
+    ],
+    "output": [
+     "text",
+     "audio"
+    ]
+   },
+   "qwen3-vl-235b-a22b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-vl-30b-a3b": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3-vl-plus": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.5-122b-a10b": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.5-27b": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.5-35b-a3b": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.5-397b-a17b": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.5-plus": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.6-27b": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.6-35b-a3b": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "audio"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.6-flash": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.6-max-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.6-plus": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.7-max": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwen3.7-plus": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "qwq-plus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "siliconflow": {
+   "ByteDance-Seed/Seed-OSS-36B-Instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "MiniMaxAI/MiniMax-M2.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen2.5-72B-Instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen2.5-7B-Instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-14B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-235B-A22B-Thinking-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-30B-A3B-Instruct-2507": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-32B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-8B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-Coder-480B-A35B-Instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-235B-A22B-Thinking": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-30B-A3B-Thinking": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-32B-Instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-32B-Thinking": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3-VL-8B-Instruct": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.5-122B-A10B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.5-27B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.5-35B-A3B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.5-397B-A17B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.5-9B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.6-27B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "Qwen/Qwen3.6-35B-A3B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "baidu/ERNIE-4.5-300B-A47B": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-R1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V3": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V3.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V3.1-Terminus": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V3.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V3.2-Exp": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V4-Flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "deepseek-ai/DeepSeek-V4-Pro": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-4-26B-A4B-it": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "google/gemma-4-31B-it": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "inclusionAI/Ling-flash-2.0": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/Kimi-K2.5": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "moonshotai/Kimi-K2.6": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-120b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "openai/gpt-oss-20b": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "stepfun-ai/Step-3.5-Flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "tencent/Hunyuan-A13B-Instruct": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "tencent/Hy3-preview": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "zai-org/GLM-4.5-Air": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "zai-org/GLM-5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "zai-org/GLM-5.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "zai-org/GLM-5.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "zai-org/GLM-5V-Turbo": {
+    "input": [
+     "text",
+     "image"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  },
+  "zhipu": {
+   "glm-4.5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.5-air": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.5-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.5v": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.6": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.6v": {
+    "input": [
+     "text",
+     "image",
+     "video"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.7": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.7-flash": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-4.7-flashx": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5-turbo": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5.1": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5.2": {
+    "input": [
+     "text"
+    ],
+    "output": [
+     "text"
+    ]
+   },
+   "glm-5v-turbo": {
+    "input": [
+     "text",
+     "image",
+     "video",
+     "pdf"
+    ],
+    "output": [
+     "text"
+    ]
+   }
+  }
+ },
+ "schema": 1,
+ "snapshot": "models-api.json",
+ "source": "local snapshot: models-api.json"
+}

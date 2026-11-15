@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block header_title %}运行日志 — 实时终端{% endblock %}
+{% block content %}
+
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <button class="btn btn-secondary btn-sm" onclick="refresh()">🔄 刷新</button>
+  <button class="btn btn-secondary btn-sm" onclick="toggleAuto()" id="btn-auto">⏯ 自动刷新: 开</button>
+  <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🗑 清屏</button>
+  <span style="font-size:12px;color:var(--text-dim);margin-left:auto" id="line-count"></span>
+</div>
+
+<pre id="log-viewer" style="
+  background:var(--bg);border:1px solid #000000;border-radius:var(--radius);
+  padding:12px;height:calc(100vh - 180px);overflow-y:auto;
+  font-family:var(--mono);font-size:12px;line-height:1.7;color:#555555;
+  white-space:pre-wrap;word-break:break-all;
+">加载中...</pre>
+
+<script>
+let autoRefresh = true;
+let timer = null;
+
+async function refresh() {
+  try {
+    const r = await api('/api/logs?lines=200');
+    const el = document.getElementById('log-viewer');
+    el.textContent = r.logs.join('\n');
+    document.getElementById('line-count').textContent = r.logs.length + ' 行';
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    document.getElementById('log-viewer').textContent = '加载失败: ' + e.message;
+  }
+}
+
+function toggleAuto() {
+  autoRefresh = !autoRefresh;
+  document.getElementById('btn-auto').textContent = '⏯ 自动刷新: ' + (autoRefresh ? '开' : '关');
+  if (autoRefresh) { timer = setInterval(refresh, 2000); }
+  else { clearInterval(timer); }
+}
+
+function clearLogs() {
+  document.getElementById('log-viewer').textContent = '';
+}
+
+refresh();
+timer = setInterval(refresh, 2000);
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+kind: provider
+name: volcengine
+version: 0.2.0
+description: 火山引擎 — DeepSeek/Doubao 全系列
+api_mode: openai_compat
+config:
+  base_url: https://ark.cn-beijing.volces.com/api/v3
+  default_model: deepseek-v3
+  context_window: 65536
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: volcengine
+  website: https://console.volcengine.com/ark/region
+env_keys:
+- VOLCENGINE_API_KEY
