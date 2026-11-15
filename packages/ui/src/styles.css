@@ -1,0 +1,3093 @@
+:root{font-family:"DM Sans","Microsoft YaHei UI","Microsoft YaHei","Noto Sans CJK SC",sans-serif;color:var(--c-app-fg-02);background:var(--c-app-bg-48);font-synthesis:none;-webkit-font-smoothing:antialiased;--ink:var(--th-box-fg);--muted:#829086;--line:#e0e9e1;--side:var(--th-side-bg);--mint:#dcefe1;--green:#4d9a5d;--green-dark:#2e7442;--clay:#a76d42;--c-warn-bg:#fff8e1;--c-warn-line:#e8c96a;--c-warn-fg:#6b5200;
+  /* ══ 六个主题轴（GUI 的 `theme.js` 只改这六行）══
+     它们被下面那六个令牌引用（`--c-*: var(--th-*)`），所以改这里
+       那六个落点跟着变；默认值与原有观感逐字相等，不动就一个像素都不变。
+     只驱动那六个令牌 —— 整张表的 342 个令牌不跟着推导（见 `theme.js` 抬头）。 */
+  --th-side-bg: #e7eee8;    /* 左边栏底色 */
+  --th-side-fg: #394b40;    /* 左边栏文字 */
+  --th-app-bg: #f7f9f6;     /* 大背景 */
+  --th-box-bg: #ffffff;     /* 框底色 */
+  --th-box-fg: #293a30;     /* 框内文字 */
+  --th-select: #c8dfcb;     /* 选择高亮 */
+  /*:连接重试那条红横幅的四个令牌。
+      它们不随主题轴走 —— 报警色不参与"换配色"，换掉就不再是报警。 */
+  --c-danger-solid: #b3261e;
+  --c-on-danger: #ffffff;
+  --c-on-danger-line: rgba(255,255,255,.55);
+  --c-on-danger-veil: rgba(255,255,255,.14);
+
+  /* ── 颜色令牌（步骤①；值 = 原有设计逐字相等）── */
+  /* 框内文字 */
+  --c-app-fg-01: #3b2f2f;
+  --c-app-fg-02: var(--th-box-fg);     /* 主题轴：框内文字 */
+  --c-app-fg-03: #26402f;
+  --c-app-fg-04: #2e4435;
+  --c-app-fg-05: #4a3f3d;
+  --c-app-fg-06: #2f4838;
+  --c-app-fg-07: #2f4a38;
+  --c-app-fg-08: #3a4a40;
+  --c-app-fg-09: #3c4f43;
+  --c-app-fg-10: #3f5145;
+  --c-app-fg-11: #5a4a4a;
+  --c-app-fg-12: #41564a;
+  --c-app-fg-13: #41584a;
+  --c-app-fg-14: #6d4a4a;
+  --c-app-fg-15: #3c5c46;
+  --c-app-fg-16: #4a5d50;
+  --c-app-fg-17: #3c6146;
+  --c-app-fg-18: #7b897e;
+  --c-app-fg-19: #7d8a80;
+  --c-app-fg-20: #7f8d81;
+  --c-app-fg-21: #829084;
+  --c-app-fg-22: #829086;
+  --c-app-fg-23: #849187;
+  --c-app-fg-24: #879489;
+  --c-app-fg-25: #87958a;
+  --c-app-fg-26: #88968b;
+  --c-app-fg-27: #98a59b;
+  --c-app-fg-28: #9aa79d;
+  --c-app-fg-29: #9aa79e;
+  --c-app-fg-30: #9ca79e;
+  --c-app-fg-31: #9aa89d;
+  --c-app-fg-32: #9aa89e;
+  --c-app-fg-33: #a0aaa1;
+  --c-app-fg-34: #a3aea6;
+  --c-app-fg-35: #a3b0a6;
+  --c-app-fg-36: #a9b3aa;
+  --c-app-fg-37: #a9b6ab;
+  --c-app-fg-38: #b3bdb5;
+  --c-app-fg-39: #b5c0b7;
+  --c-app-fg-40: #c3ccc4;
+  --c-app-fg-41: #ffffff;
+  /* 大背景 / 框底色 */
+  --c-app-bg-01: rgba(24,34,27,.45);
+  --c-app-bg-02: #12301c;
+  --c-app-bg-03: rgba(34,48,39,.19);
+  --c-app-bg-04: #a9b3aa;
+  --c-app-bg-05: #c9d6cb;
+  --c-app-bg-06: #d6ded8;
+  --c-app-bg-07: #dbe7dc;
+  --c-app-bg-08: #dce8de;
+  --c-app-bg-09: #dfe9e0;
+  --c-app-bg-10: #e4ece4;
+  --c-app-bg-11: #e6ece8;
+  --c-app-bg-12: #e3efe4;
+  --c-app-bg-13: #e2f0e5;
+  --c-app-bg-14: #e6f0e6;
+  --c-app-bg-15: #e9f0ea;
+  --c-app-bg-16: #e7f1e7;
+  --c-app-bg-17: #e9f1e9;
+  --c-app-bg-18: #e8f2ea;
+  --c-app-bg-19: #eaf3ea;
+  --c-app-bg-20: #f6efef;
+  --c-app-bg-21: #edf2ed;
+  --c-app-bg-22: #fbeeee;
+  --c-app-bg-23: #eef2ee;
+  --c-app-bg-24: #eaf4e9;
+  --c-app-bg-25: #eef2f6;
+  --c-app-bg-26: #eef3ee;
+  --c-app-bg-27: #eef4ee;
+  --c-app-bg-28: #eef4ef;
+  --c-app-bg-29: #edf5ed;
+  --c-app-bg-30: #f0f4ef;
+  --c-app-bg-31: #eef5ee;
+  --c-app-bg-32: #eef6ee;
+  --c-app-bg-33: #eef6ef;
+  --c-app-bg-34: #eef7f0;
+  --c-app-bg-35: #f2f6f3;
+  --c-app-bg-36: #eef8f0;
+  --c-app-bg-37: #f2f7f1;
+  --c-app-bg-38: #f0f8ef;
+  --c-app-bg-39: #f4f7f3;
+  --c-app-bg-40: #f4f7f4;
+  --c-app-bg-41: #fbf5f4;
+  --c-app-bg-42: #f3f8f2;
+  --c-app-bg-43: #fdf6ef;
+  --c-app-bg-44: #f5f8f4;
+  --c-app-bg-45: #fdf6f5;
+  --c-app-bg-46: #fdf6f6;
+  --c-app-bg-47: #f6f9f5;
+  --c-app-bg-48: var(--th-app-bg);     /* 主题轴：大背景 */
+  --c-app-bg-49: #f6faf5;
+  --c-app-bg-50: #f6faf6;
+  --c-app-bg-51: #f7faf6;
+  --c-app-bg-52: #f9fbf8;
+  --c-app-bg-53: #fdfaf9;
+  --c-app-bg-54: #fbfdfa;
+  --c-app-bg-55: #fbfdfb;
+  --c-app-bg-56: #fffdf6;
+  --c-app-bg-57: var(--th-box-bg);     /* 主题轴：框底色 */
+  /* 强调色 · 边 */
+  --c-accent-line-01: #4d9a5d;
+  --c-accent-line-02: #62a86e;
+  --c-accent-line-03: #7fae86;
+  --c-accent-line-04: #8fbf90;
+  --c-accent-line-05: #bdcebf;
+  --c-accent-line-06: #bcd2c0;
+  --c-accent-line-07: #b3dab8;
+  --c-accent-line-08: #bcd8c0;
+  --c-accent-line-09: #b9dcc3;
+  --c-accent-line-10: #bfdfc1;
+  --c-accent-line-11: #c9dfcb;
+  --c-accent-line-12: #cddfcf;
+  --c-accent-line-13: #cfe0d1;
+  --c-accent-line-14: #c7e6cc;
+  --c-accent-line-15: #cfe8d3;
+  --c-accent-line-16: #d7e6d8;
+  /* 左边栏 · 底色 */
+  --c-side-bg-01: #dbe8dd;
+  --c-side-bg-02: #dce9dd;
+  --c-side-bg-03: #e4eee5;
+  --c-side-bg-04: #eaf1e9;
+  --c-side-bg-05: #fbfdfa;
+  --c-side-bg-06: #ffffff;
+  /* 左边栏 · 描边 */
+  --c-side-line-01: #d0ddd1;
+  --c-side-line-02: #dce8dd;
+  --c-side-line-03: #dfe8e0;
+  /* 警示 · 边 */
+  --c-warn-line-01: #a76d42;
+  --c-warn-line-02: #bf7e43;
+  --c-warn-line-03: #c58b57;
+  --c-warn-line-04: #d3b6a6;
+  --c-warn-line-05: #e3d3a6;
+  --c-warn-line-06: #eed7a6;
+  --c-warn-line-07: #ecd9a0;
+  --c-warn-line-08: #ecdcb4;
+  --c-warn-line-09: #eee2c9;
+  /* 强调色 · 字 */
+  --c-accent-fg-01: #245a36;
+  --c-accent-fg-02: #245c30;
+  --c-accent-fg-03: #2f5c3a;
+  --c-accent-fg-04: #2f5d3a;
+  --c-accent-fg-05: #285e38;
+  --c-accent-fg-06: #315f3c;
+  --c-accent-fg-07: #37613f;
+  --c-accent-fg-08: #4e6253;
+  --c-accent-fg-09: #1f6b3a;
+  --c-accent-fg-10: #37684a;
+  --c-accent-fg-11: #2e6b3d;
+  --c-accent-fg-12: #2f6b3d;
+  --c-accent-fg-13: #4c6553;
+  --c-accent-fg-14: #356d42;
+  --c-accent-fg-15: #496951;
+  --c-accent-fg-16: #56675a;
+  --c-accent-fg-17: #4a6b52;
+  --c-accent-fg-18: #3d7047;
+  --c-accent-fg-19: #42704f;
+  --c-accent-fg-20: #2e7442;
+  --c-accent-fg-21: #5c6b60;
+  --c-accent-fg-22: #33754a;
+  --c-accent-fg-23: #5c6d60;
+  --c-accent-fg-24: #5d6d61;
+  --c-accent-fg-25: #5c6f62;
+  --c-accent-fg-26: #5c7163;
+  --c-accent-fg-27: #58735d;
+  --c-accent-fg-28: #3d7a45;
+  --c-accent-fg-29: #647568;
+  --c-accent-fg-30: #64776a;
+  --c-accent-fg-31: #5f7a64;
+  --c-accent-fg-32: #68796c;
+  --c-accent-fg-33: #69796d;
+  --c-accent-fg-34: #4f8158;
+  --c-accent-fg-35: #5f7d67;
+  --c-accent-fg-36: #687b6d;
+  --c-accent-fg-37: #44844e;
+  --c-accent-fg-38: #687d6d;
+  --c-accent-fg-39: #6b7d6f;
+  --c-accent-fg-40: #6b7d70;
+  --c-accent-fg-41: #4f8460;
+  --c-accent-fg-42: #51865b;
+  --c-accent-fg-43: #6d7f73;
+  --c-accent-fg-44: #718075;
+  --c-accent-fg-45: #4a8a52;
+  --c-accent-fg-46: #4f8a63;
+  --c-accent-fg-47: #438c61;
+  --c-accent-fg-48: #718477;
+  --c-accent-fg-49: #6b8a71;
+  --c-accent-fg-50: #7d8d82;
+  --c-accent-fg-51: #4d9a5d;
+  --c-accent-fg-52: #7b917f;
+  --c-accent-fg-53: #5a9f62;
+  --c-accent-fg-54: #6f9b77;
+  --c-accent-fg-55: #84958a;
+  --c-accent-fg-56: #7d9a84;
+  --c-accent-fg-57: #58a66a;
+  --c-accent-fg-58: #8a9a8d;
+  --c-accent-fg-59: #8b9a8e;
+  --c-accent-fg-60: #8b9a90;
+  --c-accent-fg-61: #6ba875;
+  --c-accent-fg-62: #93a297;
+  --c-accent-fg-63: #93a396;
+  /* 强调色 · 底 */
+  --c-accent-bg-01: #1f6b3a;
+  --c-accent-bg-02: #4a8a52;
+  --c-accent-bg-03: #4f8a63;
+  --c-accent-bg-04: #6f8573;
+  --c-accent-bg-05: #4c985e;
+  --c-accent-bg-06: #4d9a5d;
+  --c-accent-bg-07: #4f9b60;
+  --c-accent-bg-08: #5fa36c;
+  --c-accent-bg-09: #58a66a;
+  --c-accent-bg-10: #6fae78;
+  --c-accent-bg-11: #7cae86;
+  --c-accent-bg-12: #7fbf89;
+  --c-accent-bg-13: #8dbe93;
+  --c-accent-bg-14: #8fbf90;
+  --c-accent-bg-15: #a8c9ae;
+  --c-accent-bg-16: #bedcbf;
+  --c-accent-bg-17: var(--th-select);   /* 主题轴：选择高亮 */
+  --c-accent-bg-18: #c7e3c8;
+  --c-accent-bg-19: #cce3ce;
+  --c-accent-bg-20: #c9e5d4;
+  --c-accent-bg-21: #cfe5d2;
+  --c-accent-bg-22: #cfe6d4;
+  --c-accent-bg-23: #cfe8d2;
+  --c-accent-bg-24: #cdead3;
+  --c-accent-bg-25: #d7e8d9;
+  --c-accent-bg-26: #dbe9d9;
+  --c-accent-bg-27: #dceddb;
+  --c-accent-bg-28: #dfeee0;
+  --c-accent-bg-29: #d9f0de;
+  --c-accent-bg-30: #dcefe1;
+  --c-accent-bg-31: #dff1e3;
+  --c-accent-bg-32: #e2f1e1;
+  --c-accent-bg-33: #e2f3e4;
+  --c-accent-bg-34: #e3f3e3;
+  --c-accent-bg-35: #e5f3e3;
+  /* 左边栏 · 文字 */
+  --c-side-fg-01: #293a30;
+  --c-side-fg-02: #33443a;
+  --c-side-fg-03: #3a4a40;
+  --c-side-fg-04: var(--th-side-fg);   /* 主题轴：左边栏文字 */
+  --c-side-fg-05: #87958a;
+  /* 描边 */
+  --c-app-line-01: #dcd0d0;
+  --c-app-line-02: #d0ddd1;
+  --c-app-line-03: #d6e4d7;
+  --c-app-line-04: #d7e4d8;
+  --c-app-line-05: #dbe4dc;
+  --c-app-line-06: #dbe5dc;
+  --c-app-line-07: #dbe6dc;
+  --c-app-line-08: #dbe6dd;
+  --c-app-line-09: #dce8dd;
+  --c-app-line-10: #dde8de;
+  --c-app-line-11: #dfe8e0;
+  --c-app-line-12: #dfe9e0;
+  --c-app-line-13: #e0e9e1;
+  --c-app-line-14: #e2eae2;
+  --c-app-line-15: #e2eae3;
+  --c-app-line-16: #e0ebe1;
+  --c-app-line-17: #e3ece3;
+  --c-app-line-18: #e8ede8;
+  --c-app-line-19: #e6eee7;
+  --c-app-line-20: #e8f0e7;
+  --c-app-line-21: #eef2ee;
+  --c-app-line-22: #eef3ee;
+  --c-app-line-23: #f0f4f0;
+  /* 警示 · 底 */
+  --c-warn-bg-01: #d39b54;
+  --c-warn-bg-02: #f5e0c6;
+  --c-warn-bg-03: #f6e6d4;
+  --c-warn-bg-04: #fbeed6;
+  --c-warn-bg-05: #f6f1e6;
+  --c-warn-bg-06: #fbf2d8;
+  --c-warn-bg-07: #fbf1e4;
+  --c-warn-bg-08: #fdf3d7;
+  --c-warn-bg-09: #fdf7e6;
+  /* 阴影 */
+  --c-shadow-01: rgba(20,40,25,.24);
+  --c-shadow-02: rgba(48,32,32,.20);
+  --c-shadow-03: rgba(33,54,38,.1);
+  --c-shadow-04: rgba(33,54,38,.16);
+  --c-shadow-05: rgba(33,54,38,.25);
+  --c-shadow-06: rgba(33,54,38,.28);
+  --c-shadow-07: rgba(36,57,40,.12);
+  --c-shadow-08: rgba(36,57,40,.14);
+  --c-shadow-09: rgba(36,57,40,.16);
+  --c-shadow-10: rgba(36,57,40,.18);
+  --c-shadow-11: rgba(41,58,48,.10);
+  --c-shadow-12: rgba(41,58,48,.12);
+  --c-shadow-13: rgba(58,91,63,.035);
+  --c-shadow-14: #a76d42;
+  --c-shadow-15: rgba(167,109,66,.14);
+  --c-shadow-16: #4d9a5d;
+  --c-shadow-17: #bf7e43;
+  --c-shadow-18: rgba(127,174,134,.18);
+  /* 危险 · 字 */
+  --c-danger-fg-01: #7a2f2f;
+  --c-danger-fg-02: #8d3f46;
+  --c-danger-fg-03: #9c3b3b;
+  --c-danger-fg-04: #a8322c;
+  --c-danger-fg-05: #6a5a5a;
+  --c-danger-fg-06: #aa3333;
+  --c-danger-fg-07: #a04a52;
+  --c-danger-fg-08: #a34b4b;
+  --c-danger-fg-09: #8a5a5a;
+  --c-danger-fg-10: #a84b53;
+  --c-danger-fg-11: #c0392b;
+  --c-danger-fg-12: rgba(192,57,43,.55);
+  --c-danger-fg-13: rgba(192,57,43,.9);
+  --c-danger-fg-14: #b04a42;
+  --c-danger-fg-15: #a2555c;
+  --c-danger-fg-16: #c04a3f;
+  --c-danger-fg-17: #b0574f;
+  --c-danger-fg-18: #8a7a7a;
+  --c-danger-fg-19: #8d7f7c;
+  --c-danger-fg-20: #c9a5a0;
+  /* 警示 · 字 */
+  --c-warn-fg-01: #8a5320;
+  --c-warn-fg-02: #8a5a1b;
+  --c-warn-fg-03: #7a652e;
+  --c-warn-fg-04: #8a6d24;
+  --c-warn-fg-05: #a8622e;
+  --c-warn-fg-06: #9a6b12;
+  --c-warn-fg-07: #8a7443;
+  --c-warn-fg-08: #a76d42;
+  --c-warn-fg-09: #c07d1e;
+  --c-warn-fg-10: #bf7e43;
+  --c-warn-fg-11: #a08a5e;
+  --c-warn-fg-12: #c8922c;
+  --c-warn-fg-13: #e0a83c;
+  /* 危险 · 底 */
+  --c-danger-bg-01: #ab3225;
+  --c-danger-bg-02: #c0392b;
+  --c-danger-bg-03: #c0574f;
+  --c-danger-bg-04: #e0603f;
+  --c-danger-bg-05: #c98b8b;
+  --c-danger-bg-06: #e0c9c9;
+  --c-danger-bg-07: rgba(224,201,201,0);
+  --c-danger-bg-08: #f6e0e1;
+  --c-danger-bg-09: #f6e6e6;
+  --c-danger-bg-10: #f8e6e6;
+  --c-danger-bg-11: #fbe9ea;
+  --c-danger-bg-12: #fbecec;
+  --c-danger-bg-13: #fdeceb;
+  --c-danger-bg-14: #fdecec;
+  /* 危险 · 边 */
+  --c-danger-line-01: #e6c6c6;
+  --c-danger-line-02: #e6c9cb;
+  --c-danger-line-03: #f0c8cb;
+  --c-danger-line-04: #f3c9c6;
+  --c-danger-line-05: #f3c9c9;
+  --c-danger-line-06: #eccfd2;
+  --c-danger-line-07: #eadbdb;
+  /* 其他 · 字 */
+  --c-misc-fg-01: #a8674a;
+  /* 其他 · 边 */
+  --c-misc-line-01: #e2d6d2;
+  /* 信息 · 字 */
+  --c-info-fg-01: #6a7c8c;
+}*{box-sizing:border-box}html,body,#root{width:100%;height:100%;margin:0}body{min-width:780px;min-height:620px;overflow:hidden}button,textarea{font:inherit}button{color:inherit;cursor:pointer}button:disabled{cursor:not-allowed}button:focus-visible,textarea:focus-visible{outline:2px solid var(--c-accent-line-02);outline-offset:2px}.shell{height:100%;display:grid;grid-template-columns:286px minmax(0,1fr);background:var(--c-app-bg-48)}.sidebar{height:100%;display:flex;flex-direction:column;padding:16px 14px 13px;background:var(--side);border-right:1px solid var(--c-side-line-03)}.brand{height:48px;display:flex;align-items:center;gap:10px;padding:0 8px 13px;border-bottom:2px solid var(--clay)}.brand img{width:30px;height:30px;object-fit:contain}.brand b{flex:1;font-size:21px;font-weight:650}.round{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--c-accent-fg-36)}.round:hover:not(:disabled){background:var(--c-app-bg-08);color:var(--c-accent-fg-06)}.brand .round{border-radius:50%;background:var(--c-accent-bg-25)}.sidebar nav{display:grid;gap:4px;padding:18px 0 16px;border-bottom:1px solid var(--c-accent-line-05)}.nav{min-height:39px;display:flex;align-items:center;gap:11px;padding:0 11px;border:0;border-radius:8px;background:transparent;text-align:left;font-size:14px;font-weight:550;color:var(--c-side-fg-04)}.nav:hover,.nav.active{background:var(--c-accent-bg-17);color:var(--c-accent-fg-05)}.nav span{flex:1}.nav small{font-size:9px;color:var(--c-accent-fg-54)}.side-section{padding:14px 0 10px;border-bottom:1px solid var(--c-accent-line-05)}.side-section h3{display:flex;align-items:center;justify-content:space-between;margin:0;padding:0 7px 8px;font-size:15px}.tasks{min-height:160px}.empty{display:grid;place-items:center;gap:8px;height:100px;color:var(--c-side-fg-05);font-size:12px}.empty button{border:0;background:transparent;color:var(--c-accent-fg-49);font-size:11px}.spaces{flex:1;min-height:70px;overflow:auto;border-bottom:0}.space{width:100%;min-height:34px;display:flex;align-items:center;gap:9px;border:0;border-radius:6px;padding:0 8px;background:transparent;text-align:left;font-size:13px}.space:hover,.space.selected{background:var(--c-side-bg-02)}.space i{width:7px;height:7px;border-radius:50%;background:var(--c-accent-bg-08)}.muted{color:var(--c-side-fg-05);font-size:12px;padding:5px 8px}.sidebar footer{padding-top:9px;border-top:1px solid var(--c-accent-line-05)}.profile{display:flex;align-items:center;gap:9px;min-height:42px;padding:0 6px;font-size:12px;font-weight:600}.profile span{width:29px;height:29px;display:grid;place-items:center;border-radius:50%;background:var(--c-accent-bg-20);color:var(--c-accent-fg-47)}.profile svg:last-child{margin-left:auto}.settings-link{width:100%;height:34px;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--c-side-line-01);border-radius:7px;background:var(--c-side-bg-04);color:var(--c-accent-fg-15);font-size:12px}.main{height:100%;min-width:0;display:flex;flex-direction:column;position:relative}.main header{height:57px;flex:0 0 57px;display:flex;align-items:center;justify-content:space-between;padding:0 25px;border-bottom:1px solid var(--c-app-line-18);background:var(--c-app-bg-52)}.header-right{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:11px}.header-right span{display:flex;align-items:center;gap:7px}.header-right span i{width:7px;height:7px;border-radius:50%;background:var(--c-app-bg-04)}.header-right span.online i{background:var(--c-accent-bg-09)}.header-right span.offline i{background:var(--c-warn-bg-01)}.header-right em{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 9px;border-radius:13px;background:var(--c-app-bg-21);font-style:normal;font-size:10px}.welcome{flex:1;min-height:0;display:grid;place-items:center;overflow:auto;padding:26px 32px 12px}.welcome-inner{width:min(860px,100%);margin-top:-20px}.welcome h1{text-align:center;margin:0 0 22px;font-size:27px;color:var(--c-app-fg-06)}.intent{width:max-content;max-width:100%;display:flex;gap:3px;margin:0 auto 29px;padding:4px;border-radius:20px;background:var(--c-app-bg-17)}.intent button{display:flex;align-items:center;gap:7px;border:0;border-radius:16px;padding:8px 13px;background:transparent;color:var(--c-accent-fg-30);font-size:12px}.intent button.selected{background:var(--c-accent-bg-05);color:var(--c-app-fg-41);font-weight:600}.quick{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;margin-bottom:15px}.quick button{height:34px;display:flex;align-items:center;gap:7px;padding:0 12px;border:1px solid var(--c-app-line-09);border-radius:18px;background:var(--c-app-bg-57);color:var(--c-accent-fg-38);font-size:11px}.composer{border:1px solid var(--c-app-line-16);border-radius:22px;padding:15px 17px 8px;background:var(--c-app-bg-57);box-shadow:0 2px 8px var(--c-shadow-13)}.composer textarea{width:100%;min-height:88px;max-height:200px;resize:vertical;border:0;outline:0;background:transparent;color:var(--ink);font-size:14px;line-height:1.65}.composer textarea::placeholder{color:var(--c-app-fg-33)}.composer-row{display:flex;align-items:center;gap:9px;min-height:36px}.attach{color:var(--c-accent-fg-53)}.modes{display:inline-flex;gap:3px;padding:3px;border-radius:8px;background:var(--c-app-bg-30)}.modes button{min-width:50px;height:27px;border:0;border-radius:6px;background:transparent;color:var(--c-accent-fg-33);font-size:11px}.modes button.selected{background:var(--c-accent-bg-19);color:var(--c-accent-fg-14);font-weight:650}.effort{height:31px;display:flex;align-items:center;gap:5px;border:0;background:transparent;color:var(--c-app-fg-18);font-size:10px}.grow{flex:1}.start{height:30px;border:0;border-radius:6px;padding:0 11px;background:var(--c-app-bg-29);color:var(--c-accent-fg-34);font-size:11px}.send{width:34px;height:34px;display:grid;place-items:center;border:0;border-radius:50%;background:var(--c-accent-bg-21);color:var(--c-accent-fg-37)}.send:disabled{background:var(--c-app-bg-21);color:var(--c-app-fg-39)}.composer-meta{min-height:38px;display:flex;align-items:center;gap:14px;color:var(--c-app-fg-19);font-size:10px}.composer-meta button{display:flex;align-items:center;gap:6px;border:0;padding:4px 2px;background:transparent;color:var(--c-accent-fg-44);font-size:10px}.composer-meta span{flex:1}.note{text-align:center;margin:8px 0 0;color:var(--c-app-fg-30);font-size:10px}.conversation{flex:1;min-height:0;overflow:auto;padding:34px 5vw 20px}.message{display:flex;align-items:flex-start;gap:11px;max-width:980px;margin:0 auto 23px}.message.user{justify-content:flex-end}.message>img{width:30px;height:30px;object-fit:contain}.bubble{max-width:min(78%,760px);white-space:pre-wrap;overflow-wrap:anywhere;padding:7px 5px;font-size:13px;line-height:1.7}.message.user .bubble{padding:12px 16px;border-radius:16px 16px 5px 16px;background:var(--c-accent-bg-29)}.message .error{max-width:78%;color:var(--c-danger-fg-10);font-size:13px}.thinking{display:flex;align-items:center;gap:10px;max-width:980px;margin:0 auto 14px;color:var(--c-app-fg-24);font-size:11px}.thinking img{width:29px;height:29px}.dots{color:var(--c-accent-fg-61)}.bottom-composer{flex:0 0 auto;padding:12px 32px 15px;border-top:1px solid var(--c-app-line-18);background:var(--c-app-bg-48)}.page{flex:1;overflow:auto;padding:42px clamp(24px,6vw,92px)}.page-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:22px;border-bottom:1px solid var(--line)}.page h1,.stub h1{margin:0;font-size:23px;color:var(--c-app-fg-04)}.page small,.settings small{color:var(--c-accent-fg-58);font-size:9px;font-weight:700;letter-spacing:.1em}.page-head button,.setting button,.settings footer button{display:flex;align-items:center;gap:7px;border:1px solid var(--c-app-line-04);border-radius:7px;padding:8px 12px;background:var(--c-app-bg-57);color:var(--c-accent-fg-27);font-size:11px}.skill-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;padding-top:18px}.skill{min-height:69px;display:flex;align-items:center;gap:11px;border:1px solid var(--c-app-line-14);border-radius:8px;padding:10px 12px;background:var(--c-app-bg-57);color:var(--c-accent-fg-42)}.skill div{display:grid;gap:4px;color:var(--ink)}.skill span{color:var(--c-app-fg-23);font-size:10px}.stub{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--c-accent-fg-48)}.backdrop{position:fixed;z-index:10;inset:0;display:grid;place-items:center;padding:24px;background:var(--c-app-bg-03);backdrop-filter:blur(2px)}.approval{position:relative;width:min(500px,92vw);border:1px solid var(--c-accent-line-10);border-radius:18px;padding:25px 28px;background:var(--c-app-bg-38);box-shadow:0 20px 65px var(--c-shadow-10)}.approval h2{margin:0 0 17px}.approval p{max-height:190px;overflow:auto;white-space:pre-wrap;line-height:1.6;color:var(--c-accent-fg-16);font-size:12px}.approval>button:not(.close){width:100%;min-height:41px;margin-top:8px;border:1px solid var(--c-accent-line-11);border-radius:7px;background:var(--c-accent-bg-35);text-align:left;padding:0 12px;font-size:12px;font-weight:600}.close{position:absolute;top:15px;right:14px;border:0;background:transparent;color:var(--c-app-fg-26)}.settings{width:min(920px,94vw);height:min(720px,88vh);display:grid;grid-template-columns:225px minmax(0,1fr);overflow:hidden;border:1px solid var(--c-app-line-09);border-radius:14px;background:var(--c-app-bg-44);box-shadow:0 20px 65px var(--c-shadow-09)}.settings aside{display:flex;flex-direction:column;gap:5px;padding:25px 15px;background:var(--c-accent-bg-34)}.settings aside h2{margin:0 0 14px 7px}.settings aside>*{padding:9px 10px;border-radius:6px;font-size:12px}.settings aside b{background:var(--c-accent-bg-18);color:var(--c-accent-fg-18)}.settings>div{display:flex;flex-direction:column;overflow:auto;padding:26px clamp(20px,4vw,44px)}.settings-head{display:flex;align-items:center;justify-content:space-between}.settings-head h2{margin:5px 0 0}.setting{min-height:95px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--c-app-line-14)}.setting>div{display:grid;gap:6px}.setting span{color:var(--c-app-fg-21);font-size:10px}.settings footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:20px;color:var(--c-app-fg-21);font-size:10px}.settings footer button{background:var(--c-accent-bg-07);color:var(--c-app-fg-41)}.toast-stack{position:fixed;z-index:20;right:62px;top:66px;max-width:70vw;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.toast{max-width:100%;padding:11px 15px;border:1px solid var(--c-app-line-03);border-radius:7px;background:var(--c-app-bg-57);color:var(--c-accent-fg-08);box-shadow:0 8px 25px var(--c-shadow-03);font-size:11px}@media(max-width:1000px){.shell{grid-template-columns:240px minmax(0,1fr)}.sidebar{padding-inline:10px}.welcome{padding-inline:20px}.welcome h1{font-size:24px}}
+
+/* ════════════════════════════════════════════════════════════════
+   主界面新增样式
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── 状态横幅：发送框上方那条绿的（随机加载句 + 本轮用时 + 本轮输出 token）── */
+.status-bar{display:flex;align-items:center;gap:10px;background:var(--c-accent-bg-34);color:var(--c-app-fg-02);
+  border-radius:12px 12px 0 0;padding:9px 16px;font-size:13px}
+.status-bar b{font-weight:600}
+.status-bar-num{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--c-app-fg-16)}
+.status-bar-spin svg{animation:ui-spin 1.1s linear infinite;color:var(--c-accent-fg-45)}
+/* 模型连接重试 —— 红底纯白字、不滚不闪。
+   连光带（`background-clip:text`）也一并关掉：那层是给绿色横幅的"扫光"，
+   红底上它会变成半透明/暗色。 */
+.status-bar.retry{background:var(--c-danger-solid);color:var(--c-on-danger)}
+.status-bar.retry b,
+.status-bar.retry .status-bar-retry-num,
+.status-bar.retry .status-bar-alert,
+.status-bar.retry .status-bar-cancel{color:var(--c-on-danger);-webkit-text-fill-color:var(--c-on-danger)}
+.status-bar-retry-text{flex:1;display:flex;align-items:center;gap:14px;
+  background:none;background-image:none;-webkit-background-clip:border-box;
+  background-clip:border-box;animation:none;color:var(--c-on-danger)}
+.status-bar-retry-num{margin-left:auto;font-variant-numeric:tabular-nums;opacity:.92}
+
+/* 正在压缩（黄横幅）。
+   与绿色那条（"模型在想"）和红色那条（"出错了"）都不同 ——
+   它是"系统正在改写这段历史"，所以给一个警告色而不是主色。
+   同样要关掉光带：那层扫描动画是绿底的装饰，黄底上会显得脏。
+
+   字色一律走 `*-fg-*`，不走 `*-line-*`：`line` 那一族是画细线用的，
+   深色推导把它们压到近背景的暗值（`--c-warn-line-01` 在深色下是 #463c34，
+   而底 `--c-warn-line-06` 是 #423a29）—— 拿它当字色，整句话就在底上看不见。
+   `fg` 那一族两边都是前景值（浅色 #8a5320 / 深色 #ca8d53）。 */
+.status-bar.compacting{background:var(--c-warn-line-06);color:var(--c-warn-fg-01)}
+.status-bar.compacting b{color:var(--c-warn-fg-01)}
+/* 关掉扫光的同时必须把字色还回来 —— 基样式是 `color:transparent` +
+   `-webkit-text-fill-color:transparent`（那是 `background-clip:text` 的配套）。
+   只关背景不还颜色，这一档下的整行字就是隐形的：浅色底上看不出、
+   深色底上被下面那条主题覆盖重新画出渐变时，表现为一块没有字的亮色矩形。 */
+.status-bar.compacting .status-bar-text{background:none;background-image:none;
+  -webkit-background-clip:border-box;background-clip:border-box;animation:none;
+  color:var(--c-warn-fg-01);-webkit-text-fill-color:var(--c-warn-fg-01)}
+.status-bar.compacting .status-bar-spin svg{color:var(--c-warn-fg-02)}
+/* 压缩计时靠右（`12s`）—— 与「N 个后台任务」那种读数同一个位置感。 */
+.status-bar-secs{margin-left:auto;font-variant-numeric:tabular-nums;opacity:.85;font-size:12px}
+/* 没得压—— 与「正在压缩」同一个警告色，
+   但没有转轮（它不是"正在做"，是一件已经确定的事），右侧一个「知道了」。
+   那个按钮的基样式是红底那套（`.status-bar-cancel` 用 `--c-on-danger`），
+   黄底上会看不见，这里逐格把颜色掰回警告色。 */
+.status-bar.notice{background:var(--c-warn-line-06);color:var(--c-warn-fg-01)}
+.status-bar.notice b,
+.status-bar.notice .status-bar-alert{color:var(--c-warn-fg-01)}
+.status-bar.notice .status-bar-text{background:none;background-image:none;
+  -webkit-background-clip:border-box;background-clip:border-box;animation:none;
+  color:var(--c-warn-fg-01);-webkit-text-fill-color:var(--c-warn-fg-01)}
+.status-bar.notice .status-bar-alert svg{color:var(--c-warn-fg-02)}
+.status-bar.notice .status-bar-cancel{margin-left:auto;color:var(--c-warn-fg-01);
+  border-color:var(--c-warn-fg-02)}
+.status-bar.notice .status-bar-cancel:hover{background:transparent;opacity:.72}
+/* 压缩完成（绿条）—— 与上面那条黄条同一套骨架，只换颜色。
+   它是一句收尾回执：完成了、现在占多少；几秒后自己收，不需要用户点确认。 */
+/* 字色用 `--green`（浅色 #4d9a5d / 深色 #a3c8aa）而不是 `--c-accent-line-01`
+   —— 同一条理由：深色下 line 那一族被压成 #3d3d3d，与底 #353535 分不开。 */
+.status-bar.compact-done{background:var(--c-accent-line-06);color:var(--green)}
+.status-bar.compact-done b,
+.status-bar.compact-done .status-bar-alert{color:var(--green)}
+.status-bar.compact-done .status-bar-text{background:none;background-image:none;
+  -webkit-background-clip:border-box;background-clip:border-box;animation:none;
+  color:var(--green);-webkit-text-fill-color:var(--green)}
+.status-bar-cancel{margin-left:10px;display:flex;align-items:center;gap:4px;
+  border:1px solid var(--c-on-danger-line);border-radius:12px;background:transparent;
+  color:var(--c-on-danger);font-size:11.5px;line-height:20px;padding:0 9px;cursor:pointer}
+.status-bar-cancel:hover{background:var(--c-on-danger-veil)}
+
+/* ── 横幅的进出场 ──────────────────────────────────────────────────────
+   ① 延迟 0.75 秒才出现 —— 判据在 `Composer.jsx`（`BAR_DELAY_MS`），这里不重复一遍。
+   ② 从发送框下面向上滑动；③ 落下去也是滑下去。
+
+   它不是"把条裁在槽里"，而是藏在发送框背后（`translateY(100%)`）。
+      两个动画同步跑，横幅顶边的算式见 `StatusBar.jsx` 抬头 ——
+      前半程它还在发送框后面，后半程从上沿升起来。走的时候对称地沉回去。
+   槽不能设 `overflow:hidden` —— 设了就变成了"裁"，那就得靠高度去追它，
+      而高度与位移同步，两条永远追平，它一辈子露不出来。
+   `.composer` 必须压在它上面（见下面那条 `z-index`）：按 CSS 绘制顺序，
+      行内内容（图标/文字）排在所有块级背景之后，不加这一条，横幅里的
+      图标和字会浮到发送框的白底上面去。 */
+/* 槽高必须跟着过渡。
+   漏了它的后果是不对称的、而且只在一边露馅：
+     · 弹出：槽一帧撑开，横幅再从发送框后面往上滑，看着是对的；
+     · 收起：槽一帧归零，横幅的"自然位置"当场变成发送框上沿
+       所以位移还没开始它就已经在发送框后面了，一帧消失。
+   两个时长要同一条曲线（都是 `.30s ease`）：位移算式是
+     `top = 发送框顶 + 38 × (1 − h − u)`（h = 槽高比例、u = 露头程度），
+     h 与 u 同步时才等价于"匀速沉下去"，并在动画过半那一刻被发送框完全盖住。
+     只改一个数（比如把高度过渡删掉、或换个时长）就会把上面那个不等价放大成
+     "一闪"或者"先沉一下再闪"。 */
+.status-slot{position:relative;z-index:0;height:0;transition:height .32s ease-in}
+.status-slot.open{height:38px;transition:height .32s ease-out}
+/* 隐藏态：整个沉到发送框背后（位移 = 自身高度，正好落在发送框顶边）。
+   `opacity:0` 是必须的，不是装饰：发送框上面两个角是圆的，
+   那两块三角里没有白底，只靠位移的话，收起来时会在两个角上各露出一小块绿。
+   进出场用不同的缓动 ——
+     判据是「横幅还看得见的时间占整个动画的几成」（= 顶边越过发送框上沿的时刻）：
+     位移算式 `top − 发送框顶 = 38 × (1 − h − u)`（h = 槽高比例、u = 露头程度）
+     所以它可见 ⟺ h + u > 1，两者同步时，就是"各自衰减到一半"的那一刻。
+       · `ease`（先快后慢）：一半行程挤在最前面，只占 35%，剩下 65% 它已经没了，像闪现
+       · `ease-out`（弹出）：越早到位越好，一露头就稳住 ✓
+       · `ease-in`（收起）：憋住前半程，可见部分拉长到 ~70% ✓ 那才像"沉下去"
+     所以这两个不能统一成一个 —— CSS 里 transition 取的是变化后那条规则，
+        正好允许"开用 ease-out、关用 ease-in"。 */
+.status-slot .status-bar{transform:translateY(100%);opacity:0;
+  transition:transform .32s ease-in,opacity .10s linear .20s}
+.status-slot.open .status-bar{transform:none;opacity:1;
+  transition:transform .32s ease-out,opacity .06s linear 0s}
+/* 横幅比发送框窄、居中，两端刻意错开。
+   它仍然是卡片的头（贴着发送框上沿、不悬空），只是不再横贯整宽 ——
+     发送框顶上那两个圆角照旧留着（下面不再抹平它），所以是
+     「一条窄一点的绿带头 + 一张完整圆角卡」。
+   这个 `30px` 就是两端各错开 15px（发送框 880 − 横幅 850）。
+      改发送框宽度时要一起想：横幅的宽是"发送框宽 − 30"，不是写死的数。
+   高度与 `.status-slot.open` 必须是同一个数（38），否则拼接处会错开一条缝。 */
+.status-bar{height:38px;width:calc(100% - 30px);margin:0 auto;border-radius:22px 22px 0 0}
+.composer{position:relative;z-index:1}
+
+/* ── `/` 候选层（React 那一半）────────────────────────────────
+   贴在输入框上方；`.composer` 本来就是 `position:relative`（见上面那条）
+   => 这一层 `position:absolute` 就够，不占位。
+   [!] `z-index` 20 = 与 `.picker-menu` 同级：它们不会同时开
+   （候选只在输入以 `/` 开头时出现），不必再往上抬。 */
+.slash-pop{position:absolute;bottom:calc(100% + 6px);left:0;right:0;z-index:20;
+  background:var(--c-app-bg-36);border:1px solid var(--c-accent-line-15);border-radius:10px;
+  box-shadow:0 6px 18px var(--c-shadow-12);padding:4px;
+  display:flex;flex-direction:column;max-height:240px;overflow-y:auto}
+.slash-item{display:flex;align-items:baseline;gap:10px;padding:6px 9px;
+  border-radius:7px;font-size:12.5px;color:var(--c-accent-fg-04);cursor:pointer}
+.slash-item:hover{background:var(--c-accent-bg-31)}
+.slash-item.sel{background:var(--c-accent-bg-24);color:var(--c-accent-fg-02)}
+.slash-cmd{flex:0 0 auto;font-weight:600;font-family:ui-monospace,Consolas,monospace}
+.slash-desc{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--c-accent-fg-17)}
+.slash-todo{flex:0 0 auto;font-size:11px;color:var(--c-warn-fg-05)}
+.slash-err{padding:6px 9px;font-size:12.5px;color:var(--c-danger-fg-06)}
+/* `@` 候选层 —— 复用 `/` 那套壳（与命令补充表一致），
+   只覆盖一处：右边是成员名、不是命令，等宽字体收回来。 */
+.mention-pop .slash-cmd{font-family:inherit}
+/* 桌面桥坏了：必须看得见，但它是读数不是拦截条 —— 附件照发，只是改走内联。 */
+.attach-err{padding:6px 9px;font-size:12.5px;color:var(--c-danger-fg-06);word-break:break-all}
+
+/* ── 活动块：详细事件流（命令原文 + 每步用时 + 模型中途说的话）── */
+.activity{border:1px solid var(--c-app-line-09);background:var(--c-app-bg-49);border-radius:12px;margin:10px 0 14px;overflow:hidden}
+.activity-head{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--c-app-bg-24);font-size:13px;color:var(--c-app-fg-02)}
+.activity-spin svg{animation:ui-spin 1.1s linear infinite;color:var(--c-accent-fg-45)}
+.activity-elapsed{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--c-accent-fg-40)}
+.activity-cancel{display:flex;align-items:center;gap:3px;background:transparent;border:0;
+  color:var(--c-danger-fg-09);cursor:pointer;font-size:12px}
+.activity-body{padding:6px 12px 10px;display:flex;flex-direction:column;gap:4px}
+.activity-step{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--c-app-fg-08)}
+.activity-step > i{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:0 0 auto;background:var(--c-app-bg-05)}
+.activity-step > i.run{background:var(--c-accent-bg-14)}
+.activity-step > i.good{background:var(--c-accent-bg-02)}
+.activity-step > i.bad{background:var(--c-danger-bg-03)}
+.activity-step-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.activity-step-name{word-break:break-word}
+/*:参数那一行压成一行：占步骤框的 3/5，超出省略号（悬停看全文）。
+    —— 用户「这个正在执行命令后面一行空隙很大，能不能加上指令内容」 */
+.activity-step-sub{display:block;max-width:60%;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;margin:0;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--c-accent-fg-40);
+  background:var(--c-app-bg-26);border-radius:5px;padding:3px 6px;white-space:pre-wrap;word-break:break-all}
+.activity-step-ms{flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--c-app-fg-25);font-size:11.5px}
+.activity-speech{margin:2px 0 2px 16px;color:var(--c-app-fg-02);font-size:13px;line-height:1.5}
+/* 草稿是渲染后的 Markdown（与正文同一个渲染器），不要再 `pre-wrap`
+   —— 那是给"原始文本"用的，套在块元素上只会多出一层空行。 */
+.activity-draft{margin:2px 0 2px 16px;color:var(--c-accent-fg-40);font-size:13px}
+
+/* ── 上拉框（模式 / 投入档）──
+   按钮和列表都用淡绿色背景（不是白底 + 灰边）。
+   只换底色与描边，尺寸/圆角/字号一个都没动 —— 那是布局，不是配色。 */
+.popover-host{position:relative}
+.picker-btn{display:flex;align-items:center;gap:4px;background:var(--c-accent-bg-29);border:1px solid var(--c-accent-line-14);
+  border-radius:8px;padding:5px 10px;font-size:12.5px;color:var(--c-accent-fg-04);cursor:pointer}
+.picker-btn:disabled{opacity:.5;cursor:default}
+.picker-menu{position:absolute;bottom:calc(100% + 6px);left:0;background:var(--c-app-bg-36);border:1px solid var(--c-accent-line-15);
+  border-radius:10px;box-shadow:0 6px 18px var(--c-shadow-12);padding:4px;display:flex;
+  flex-direction:column;min-width:110px;z-index:20;
+  /*:菜单最多 5 行，多的上下滚动。 */
+  overflow-y:auto}
+.picker-menu button{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:transparent;border:0;border-radius:7px;padding:6px 9px;font-size:12.5px;
+  color:var(--c-accent-fg-04);cursor:pointer;text-align:left}
+.picker-menu button:hover{background:var(--c-accent-bg-31)}
+.picker-menu button.on{background:var(--c-accent-bg-24);color:var(--c-accent-fg-02);font-weight:600}
+/* 设置弹窗里那个上拉框。
+   它必须是 `fixed` + portal 到 `body` —— 设置那一列是 `overflow:auto`，
+      绝对定位的子节点会被裁掉（菜单只露一半）。见 `UpPicker.jsx` 抬头。
+   `z-index:40` 要高过 `.backdrop`（10），否则菜单被弹窗罩住。 */
+.picker-menu.fixed{position:fixed;bottom:auto;z-index:40}
+/* 设置页那一列的对齐：标签在左、上拉框在右（与 toggle / number 那几行同一个节奏）。 */
+.set-pick{display:flex;align-items:center;gap:12px}
+.set-pick .picker-btn{background:var(--c-app-bg-31);border-color:var(--c-accent-line-16);color:var(--c-app-fg-17)}
+/* 设置页的「名单 / 规避目录」编辑器 —— 与 `.wl-list` 同一套节奏，只是不用 `<code>`。 */
+.li-item{display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  background:var(--c-app-bg-31);border:1px solid var(--c-accent-line-16);border-radius:6px;padding:2px 4px 2px 7px;
+  font-size:11px;color:var(--c-app-fg-13);word-break:break-all}
+.li-empty{color:var(--c-app-fg-25);font-size:11px}
+/* ── 「反馈」那一屏 —— 两档各一块（后果不一样，不许合成一块）── */
+.settings.fb{display:block;width:min(620px,94vw);height:auto;max-height:88vh;overflow:auto}
+.settings.fb>div{padding:26px clamp(20px,4vw,44px)}
+.fb-card{display:grid;gap:7px;margin:16px 0;padding:14px;border-radius:9px;background:var(--c-app-bg-31)}
+.fb-card b{font-size:13.5px}
+.fb-card textarea{width:100%;border:1px solid var(--c-accent-line-16);border-radius:7px;padding:9px 11px;
+  resize:vertical;background:var(--c-app-bg-57);color:var(--c-app-fg-02);font-size:12.5px;line-height:1.6}
+.fb-card .skill-btn{justify-self:start;margin-top:3px}
+.fb-hint{color:var(--c-app-fg-21);font-size:11px;line-height:1.6}
+.fb-warn{color:var(--c-warn-fg-10);font-size:11px;line-height:1.6}
+.fb-status{margin-top:10px;padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6}
+.fb-status.ok{background:var(--c-accent-bg-33);color:var(--c-accent-fg-12)}
+.fb-status.bad{background:var(--c-danger-bg-10);color:var(--c-danger-fg-08)}
+.fb-note{margin:14px 0 0;color:var(--c-app-fg-21);font-size:11px;line-height:1.7;text-align:center}
+
+/* ── 附件 chip ── */
+/* 一排，多了就截：`nowrap` + `hidden`。长文件名在 chip 内部省略号收尾，
+   不再把一块撑成多行（多行会把发送框整个顶高）。 */
+.attach-strip{display:flex;flex-wrap:nowrap;gap:6px;padding:8px 8px 0;overflow:hidden}
+.attach-chip{display:inline-flex;align-items:center;gap:5px;background:var(--c-app-bg-26);border:1px solid var(--c-app-line-09);
+  border-radius:8px;padding:3px 6px;font-size:12px;color:var(--c-app-fg-08);max-width:230px;overflow:hidden;
+  flex:0 1 auto;min-width:0;white-space:nowrap}
+.attach-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.attach-chip button{background:transparent;border:0;cursor:pointer;color:var(--c-app-fg-25);display:flex;padding:0;flex:0 0 auto}
+.attach-chip.image{background:var(--c-app-bg-24)}
+/*: 正文里那枚短标记（`【文本1】`），与附件清单同序号。 */
+.attach-mark{flex:0 0 auto;color:var(--c-accent-fg-33);font-size:11px}
+/*: chip 里的名字是颗按钮（点开看全文）。`.attach-chip button` 那条是
+    `flex:0 0 auto`，不覆盖的话长文件名不会省略号收尾，chip 会被顶宽。 */
+.attach-chip .attach-open{flex:1 1 auto;min-width:0;color:inherit;display:flex;
+  align-items:center;gap:5px}
+/*: 附件全文浮窗 —— 外壳复用 `.backdrop` 与 `.skill-panel-head` / `.skill-panel-close`。
+    正文按纯文本排（`pre-wrap`），不渲染 Markdown：那是用户的原文。 */
+.attach-panel{display:flex;flex-direction:column;width:min(680px,92vw);
+  max-height:min(640px,86vh);border:1px solid var(--c-app-line-09);border-radius:14px;
+  background:var(--c-app-bg-51);box-shadow:0 20px 65px var(--c-shadow-10)}
+.attach-panel-text{margin:0;flex:1;min-height:0;overflow:auto;padding:14px 18px 18px;
+  white-space:pre-wrap;word-break:break-word;color:var(--c-app-fg-02);font-size:12.5px;
+  line-height:1.7;font-family:inherit}
+.attach-panel-meta{margin:12px 18px 0;color:var(--c-app-fg-21);font-size:11px}
+.composer.dropping{outline:2px dashed var(--c-accent-line-04);outline-offset:2px}
+
+/* ── 明确回复上的动作条（只在"对用户的回复"上，不在活动块里）── */
+.msg-actions{display:flex;gap:10px;margin:2px 0 0 40px}
+.msg-actions button{background:transparent;border:0;color:var(--c-app-fg-25);font-size:12px;cursor:pointer}
+.bubble.draft{color:var(--c-accent-fg-40)}
+
+/* ── 开屏（照 WebUI 的 `chat-welcome`）──
+   三条淡入全部挂 `.welcome.on` ——
+   那个 class 由 `App.jsx` 的 `shown`（`visibilitychange`）打上。
+   根因不是动画太快：桌面壳 `main.cjs` 是
+   `ready-to-show` → 等够 `MIN_HOLD_MS`(500ms) → 才 `show()`，
+   而页面早就渲染了，动画在窗口还没显示时就播完了。
+   总长约 1.85s。 */
+.welcome-logo{width:56px;height:56px}
+.welcome-greeting{font-size:24px;font-weight:600;color:var(--c-app-fg-02);margin-top:12px}
+.welcome-hint{font-size:15px;color:var(--c-app-fg-25);margin-top:8px}
+.welcome-tags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:18px}
+.welcome.on .welcome-logo{animation:ui-pop .85s cubic-bezier(.2,.7,.3,1) .10s both}
+.welcome.on .welcome-greeting{animation:ui-pop .80s cubic-bezier(.2,.7,.3,1) .45s both}
+.welcome.on .welcome-hint{animation:ui-pop .70s cubic-bezier(.2,.7,.3,1) .75s both}
+.welcome.on .welcome-tags{animation:ui-pop .70s cubic-bezier(.2,.7,.3,1) 1.05s both}
+.welcome-tags span{background:var(--c-app-bg-26);border:1px solid var(--c-app-line-09);border-radius:999px;
+  padding:5px 12px;font-size:13px;color:var(--c-app-fg-08)}
+
+@keyframes ui-pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes ui-spin{to{transform:rotate(360deg)}}
+
+/* ── 开屏的居中（开屏没有 h1，不能靠 `.welcome h1{text-align:center}`；
+       不加这一条会左对齐 + 被 `margin-top:-20px` 顶上去）── */
+.welcome-inner{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:0}
+
+/* ── 错误边界的落点（白屏，屏幕上直接写出来）── */
+.crash{padding:32px 40px;overflow:auto;height:100%;font-family:ui-monospace,Consolas,monospace;
+  font-size:13px;color:var(--c-danger-fg-01);white-space:pre-wrap;word-break:break-word;background:var(--c-app-bg-45)}
+.crash h2{font-family:inherit;color:var(--c-danger-fg-14);font-size:17px;margin:0 0 14px}
+
+/* ════════════════════════════════════════════════════════════════
+   长回复把整个界面撑大
+   ── `.shell` 是 grid，`.main`/`.sidebar` 是 grid item；子项默认 `min-height:auto`
+      会让它不肯缩到内容以下，撑大整行。`.main` 只有 `min-width:0`
+      （横向那半）不够，纵向那半也要补齐。
+   ════════════════════════════════════════════════════════════════ */
+.main{min-height:0}
+.sidebar{min-height:0;position:relative}
+/* 拖动条 —— 细一点、好看一点。
+   两条判据分开：摸得到的区域要宽（好抓），看得见的线要细（好看）。
+   所以9px 的透明命中带 + 里面 1px 的线（平时透明，划过/拖动时才亮）。
+   [!] `z-index` 要高于栏内内容，否则鼠标压在标题上就抓不住它。
+   [!] `touch-action:none` —— 不加的话触控板/触屏会在拖动时顺便滚页面。 */
+.side-resizer{position:absolute;top:0;right:-4px;bottom:0;width:9px;z-index:6;
+  cursor:col-resize;touch-action:none;background:transparent}
+.side-resizer::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;
+  margin-left:-.5px;background:transparent;transition:background .12s ease}
+.side-resizer:hover::after{background:var(--c-accent-bg-15)}
+.side-resizer.on::after{background:var(--c-accent-bg-11);width:2px;margin-left:-1px}
+/* 拖动中：整块区域的光标与选中一起管住 —— 否则拖过主区时光标会闪回箭头、
+   而且会把正文顺手选中（看着像坏了）。不用 `!important`：
+   `.shell.resizing *` 的特异性压得住 `button{cursor:pointer}` 那条。 */
+.shell.resizing,.shell.resizing *{cursor:col-resize}
+.shell.resizing{user-select:none}
+
+/* 上一条的另一半：光给子项 `min-height:0` 不够 —— `.shell` 那一行是 `auto` track，
+   基准尺寸取子项的 max-content，内容一长行就长。把行也钉成确定值才是完整的一手。 */
+.shell{grid-template-rows:minmax(0,1fr)}
+
+/* ════════════════════════════════════════════════════════════════
+   对话区居中收窄 + 状态横幅左对齐
+   ════════════════════════════════════════════════════════════════ */
+
+/* ① 对话区与输入区收进一条居中列（参考图里消息列两边留白很宽）。
+   用 padding-inline 的 calc 而不是给 `.conversation` 加 max-width ——
+      它是滚动容器，`width` 一收，滚动条就跑到列中间去了。
+   `max(28px, …)` 是下限：窗口窄时仍留 28px 边距（不至于贴边）。 */
+.conversation{padding-left:max(28px,calc((100% - 880px)/2));padding-right:max(28px,calc((100% - 880px)/2))}
+/*:事件流断开时那条细提示（`stream.state`）。用信息色不是错误色 ——
+    它在 3 秒一次地自动重连，界面上不该看起来像"坏了"。
+    它是常驻的（不是 toast）：断着的那一整轮，用户都得知道
+    "步骤流为什么没出现"。 */
+.stream-down{position:sticky;top:8px;z-index:5;margin:0 0 12px;padding:7px 12px;
+  border:1px solid var(--c-warn-bg-05);border-radius:8px;background:var(--c-warn-bg-05);
+  color:var(--c-warn-fg-07);font-size:12px;text-align:center}
+/* 压缩摘要那一行：一条居中的细线 + 一句灰字。
+   它是边界标记，不是谁说的话 —— 摘要行按 P1 就是 `user` 角色，
+   所以判据必须是 `kind`（`history_summary`），按 role 判会画成用户气泡。
+   用两侧伪元素画线而不是 border：中间那句是流式文字，宽度不固定。 */
+.compact-divider{display:flex;align-items:center;gap:12px;max-width:980px;
+  margin:14px auto 18px;color:var(--c-app-fg-30);font-size:11px;text-align:center}
+.compact-divider::before,.compact-divider::after{content:"";flex:1;height:1px;
+  background:var(--c-app-line-18)}
+.bottom-composer{padding-left:max(28px,calc((100% - 880px)/2));padding-right:max(28px,calc((100% - 880px)/2))}
+
+/* ② 状态横幅：用时/token 跟着那句话走，不再被推到最右边。
+   （`margin-left:auto` 会把数字顶到整条横幅的另一头。） */
+.status-bar-num{margin-left:0}
+.status-bar{gap:14px}
+
+/* ── 加载句 + 用时/token 的扫光（从左到右依次缓慢高亮，且要一直循环）──
+   做法是 `background-clip:text` + 一条扫过去的高光带；不是 `text-shadow`，也不是逐字动画
+     —— 前者一次点亮全部（没有「依次」），后者要按字数拆 N 个 span，而那句话每轮都在变。
+
+   一条带，从左扫到右，`infinite` 一直扫。
+      `background-size:200%` + `no-repeat` + `position` 100%→0%：
+      图有两个元素宽，窗口只是其中一段，一个周期里那条带恰好走完一整条句子
+      （p=1 时带在左沿，p=0 时在右沿），到头再从左边进来 —— 就是「依次」那个形状。
+      两头都不留死区：图比窗口宽，且两端都是底色，任何时刻每个字都有背景
+        （不会出现"某段行程里字是隐形的"）；带只在最左/最右时有一半在句子外面，
+        而那时它正在进/出，本来就不该是重点。
+      `200%` 与那几个 stop 是配套的：带宽 = 图宽的 12% = 句子宽的 24%
+        （`56% − 44%`）。改 `background-size` 就得重算这三个 stop，
+        否则带会突然变成"整句一起亮"（44% 带宽就等于没有"依次"）。
+   代价：`color:transparent` 没有回退色 —— 不认识 `background-clip:text` 的内核里
+     整句话是隐形的（不是变黑）。Electron 走 Chromium，稳；
+     换内核、或把这层给浏览器用时，回来复查这一行。 */
+/* 渐变挂在这一层（句子与用时/token 的共同父元素）上，不是挂在句子上 ——
+   挂父元素，`background-clip:text` 一次盖住两段全部字形，一条带扫过整行。
+   各挂一份的话会变成"各闪各的"（两条带各扫各的框，永远不同步）。
+   所以这一层必须收紧到内容宽（它是个 flex item，默认就是 shrink-to-fit）——
+   撑满的话半条周期会扫在句子右边的空白上。 */
+.status-bar-text{display:flex;align-items:center;gap:14px;
+  background-image:linear-gradient(90deg,var(--c-accent-bg-04) 0%,var(--c-accent-bg-04) 44%,var(--c-app-bg-02) 50%,var(--c-accent-bg-04) 56%,var(--c-accent-bg-04) 100%);
+  background-size:200% 100%;background-repeat:no-repeat;background-position:0% 0;
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  animation:ui-phrase-sweep 2.6s linear infinite}
+/* 内层那两格自己的 `color` 会被 `-webkit-text-fill-color` 盖过（它是继承属性，
+   且优先级高于 `color`），不用逐格再写一遍。
+   .status-bar-num 那条 `color:#4a5d50` 现在只是"万一 fill-color 没生效"的兜底。 */
+@keyframes ui-phrase-sweep{from{background-position-x:100%}to{background-position-x:0%}}
+/* 这一档必须把颜色还回来 —— 只关动画的话，整行字在这一档下是隐形的。
+   顺带把横幅的滑上滑下也关掉（`prefers-reduced-motion` 问的就是"少动"）。 */
+@media (prefers-reduced-motion:reduce){
+  .status-bar-text{animation:none;background-image:none;color:var(--c-app-fg-02);-webkit-text-fill-color:var(--c-app-fg-02)}
+  .status-slot,.status-slot .status-bar{transition:none}}
+
+/* ════════════════════════════════════════════════════════════════
+   活动块的收尾形态
+   —— `task.end` 之后不删，缩成一条「已完成」小条，留在"问"与"答"之间
+   ════════════════════════════════════════════════════════════════ */
+.activity.done{border-color:var(--c-app-line-17);background:var(--c-app-bg-54);margin:10px 0 16px}
+.activity.done .activity-head{background:var(--c-app-bg-42);padding:6px 12px;cursor:pointer}
+.activity.done.open .activity-head{border-bottom:1px solid var(--c-app-line-20)}
+.activity-head.as-row{display:flex;align-items:center;gap:8px}
+.activity-ok{display:flex;align-items:center;justify-content:center;width:17px;height:17px;
+  border-radius:50%;background:var(--c-accent-bg-28);color:var(--c-accent-fg-28);flex:0 0 auto}
+.activity.done b{font-weight:500;color:var(--c-accent-fg-25);font-size:12.5px}
+.activity-sum{color:var(--c-app-fg-25);font-size:12px;font-variant-numeric:tabular-nums}
+.activity-toggle{margin-left:auto;display:flex;color:var(--c-app-fg-31)}
+/* 模型连接重试 —— 红横幅常驻，直到连上为止；
+   一旦成功连接，横幅变绿、取消常驻。
+   三个状态都用同一套色：进行中（正在重试）/ 已完成但没救回来（连接未恢复）。 */
+.activity.retry .activity-head,
+.activity.done.retry .activity-head{background:var(--c-danger-bg-03)}
+.activity.retry .activity-head b,
+.activity.done.retry b{color:var(--c-danger-fg-01)}
+.activity.retry .activity-head .activity-elapsed,
+.activity.done.retry .activity-sum{color:var(--c-danger-fg-03)}
+.activity-bad{display:flex;align-items:center;justify-content:center;width:17px;height:17px;flex:0 0 auto;
+  color:var(--c-danger-fg-01)}
+
+/* ════════════════════════════════════════════════════════════════
+   消息动作条（时间戳 · 位置 · 按钮感 · 改动文件）
+   —— 气泡与动作条包进 `.msg-col`（竖排）才排得到气泡下面。
+      若它们是 `article`（flex）的直接子项，复制会飘到气泡右边。
+   ════════════════════════════════════════════════════════════════ */
+.msg-col{display:flex;flex-direction:column;min-width:0;flex:1}
+.message.user .msg-col{align-items:flex-end}
+/* 无主理人群聊里，每条回复要说清是谁说的。
+   它只在 `data.speaker` 存在时渲染 —— 私聊 / 有主理人的群一个字节不变。 */
+.message-speaker{font-size:11px;font-weight:600;color:var(--c-app-fg-24);margin:0 0 3px 2px}
+.msg-foot{display:flex;align-items:center;gap:12px;margin-top:5px;color:var(--c-app-fg-31);font-size:11.5px}
+.message.user .msg-foot{justify-content:flex-end}
+.msg-time{font-variant-numeric:tabular-nums}
+.msg-act{display:inline-flex;align-items:center;gap:4px;background:transparent;border:0;color:var(--c-app-fg-31);
+  font-size:11.5px;cursor:pointer;padding:2px 5px;border-radius:5px}
+.msg-act:hover{background:var(--c-app-bg-26);color:var(--c-app-fg-08)}
+.files-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-top:6px;min-width:0;max-width:100%}
+.files-btn{display:inline-flex;align-items:center;gap:4px;background:var(--c-app-bg-26);border:1px solid var(--c-app-line-09);
+  border-radius:7px;padding:3px 8px;font-size:11.5px;color:var(--c-app-fg-16);cursor:pointer}
+.files-btn:hover{background:var(--c-app-bg-14)}
+.files-list{margin:0;padding:6px 10px;list-style:none;background:var(--c-app-bg-54);border:1px solid var(--c-app-line-20);
+  border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--c-accent-fg-25);
+  max-height:180px;overflow:auto;max-width:100%}
+.files-list li{padding:1px 0;word-break:break-all}
+
+/* 改动文件列表：一项一行（文件名 + 增减），名字可换行、增减不换行 */
+.files-list li{display:flex;align-items:baseline;gap:8px;padding:2px 0;word-break:break-all}
+.files-open{flex:1;min-width:0;border:0;background:transparent;padding:0;font:inherit;
+  text-align:left;color:var(--c-accent-fg-15);cursor:pointer}
+.files-open:hover{text-decoration:underline}
+.files-delta{flex:0 0 auto;font-size:11px;font-variant-numeric:tabular-nums}
+.files-delta .add{color:var(--c-accent-fg-28);font-weight:500}
+.files-delta .del{color:var(--c-danger-fg-17);font-weight:500;margin-left:4px}
+.files-more{color:var(--c-app-fg-31);font-style:italic}
+
+/* ── 改动文件浮窗（居中，大小同设置）────────────────────────
+   等宽、不折行、横向滚动：折行会把"哪一行"这件事实弄没。 */
+.diff-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding-top:12px}
+.diff-view{margin:0;flex:1;min-height:0;overflow:auto;padding:10px 12px;border:1px solid var(--c-app-line-14);
+  border-radius:8px;background:var(--c-app-bg-57);font-family:ui-monospace,Consolas,"Courier New",monospace;
+  font-size:12px;line-height:1.55;white-space:pre}
+.diff-line{white-space:pre;padding:0 4px}
+.diff-line.add{color:var(--c-accent-fg-28);background:var(--c-accent-bg-17)}
+.diff-line.del{color:var(--c-danger-fg-17);background:var(--c-danger-bg-11)}
+.diff-line.hunk{color:var(--c-app-fg-23);margin:8px 0 2px;padding-top:6px;
+  border-top:1px dashed var(--c-app-line-14)}
+.diff-note{margin:0;font-size:12.5px;line-height:1.6;color:var(--c-app-fg-16)}
+
+/* ════════════════════════════════════════════════════════════════
+   左栏收窄 + 输入框再收窄
+   ════════════════════════════════════════════════════════════════ */
+/* ① 左边栏：286 → 240px（"边界向左压缩一点" = 栏变窄）
+   加第三列 = 右侧竖排栏。
+   这条同时盖住底稿里那个 `@media(max-width:1000px)` 的 240px 版本 ——
+     两边都是 240，所以窄窗口的行为没变（不是漏改，是本来就同值）。 */
+/* 左栏与主界面之间可拖动 —— 第一列改成一个变量，
+   拖动只改 `--side-w`（另两列一个字不动）。默认 `240px` = 原来那个值
+   所以不拖的时候逐字等于改之前。
+   [!] 变量设在 `.shell` 自己身上（不是 `:root`）：它只属于这一格，
+       而 `:root` 会被别的地方读到、也更容易被别处覆盖。 */
+.shell{--side-w:240px;grid-template-columns:var(--side-w) minmax(0,1fr) 46px}
+
+/* ════════════════════════════════════════════════════════════════
+   右侧竖排栏 + 抽屉
+   形态是右侧浮出。
+   抽屉是 `position:fixed` 的浮层，不是 `.shell` 的第四列 ——
+      它是"盖在对话上"的，不该把对话区挤窄。
+   ════════════════════════════════════════════════════════════════ */
+.rail{height:100%;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:14px 0;background:var(--side);border-left:1px solid var(--c-app-line-11);
+  position:relative;z-index:6}          /* 比抽屉高：抽屉滑过去时不盖住它 */
+.rail-btn{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;
+  background:transparent;color:var(--c-accent-fg-36);cursor:pointer}
+.rail-btn:hover{background:var(--c-app-bg-08);color:var(--c-accent-fg-06)}
+.rail-btn.on{background:var(--c-accent-bg-17);color:var(--c-accent-fg-05)}
+/* 收起时的位移是 `calc(100% + 46px)`，不是 `100%` ——
+   它的 `right` 就在那条 46px 的栏上，只推自身宽度的话它会停在对话区上方
+   （看着像"关不上"），而不是推出屏幕。 */
+.drawer{position:fixed;top:0;bottom:0;right:46px;width:min(420px,42vw);
+  display:flex;flex-direction:column;background:var(--c-app-bg-54);border-left:1px solid var(--c-app-line-11);
+  box-shadow:-10px 0 28px var(--c-shadow-11);z-index:5;
+  transform:translateX(calc(100% + 46px));transition:transform .28s ease}
+.drawer.open{transform:none}
+.drawer-head{height:52px;flex:0 0 52px;display:flex;align-items:center;
+  justify-content:space-between;padding:0 14px 0 18px;border-bottom:1px solid var(--c-app-line-18)}
+.drawer-body{flex:1;min-height:0;overflow:auto;padding:18px}
+.drawer-stub{margin:0;color:var(--c-app-fg-25);font-size:12.5px;line-height:1.9}
+
+/* ── ✅ 任务清单那一栏 ──────────────────────────────────────────
+   判据见 `TodosPanel.jsx` 抬头（只读 · 状态由后端给 · "没读到" != "没有"）。 */
+.todos{flex:1;min-height:0;overflow:auto;padding:14px 16px}
+.todos-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding-bottom:10px;border-bottom:1px solid var(--c-app-line-18)}
+.todos-head b{font-size:13px;color:var(--c-app-fg-04)}
+.todos-refresh{border:1px solid var(--c-app-line-04);border-radius:7px;padding:4px 9px;
+  background:var(--c-app-bg-57);color:var(--c-accent-fg-27);font-size:11px}
+.todos-refresh:disabled{opacity:.55;cursor:not-allowed}
+.todos-err{margin:10px 0 0;color:var(--c-danger-fg-10);font-size:11.5px;line-height:1.7}
+.todo-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;
+  border-bottom:1px solid var(--c-app-line-22);font-size:12.5px;line-height:1.7}
+.todo-mark{flex:none;font-style:normal;font-family:ui-monospace,Consolas,monospace;
+  color:var(--c-app-fg-21)}
+.todo-text{color:var(--c-app-fg-10);overflow-wrap:anywhere}
+.todo-in_progress .todo-mark{color:var(--c-warn-fg-09)}
+.todo-in_progress .todo-text{color:var(--c-app-fg-04);font-weight:600}
+.todo-completed .todo-mark{color:var(--c-accent-fg-57)}
+.todo-completed .todo-text{color:var(--c-app-fg-27);text-decoration:line-through}
+.todos-note{display:flex;align-items:center;gap:6px;margin:12px 0 0;
+  color:var(--c-app-fg-30);font-size:10.5px;line-height:1.7}
+
+/* ── ⏱ 历史面板 ─────────────────────────────────────────
+   判据见 `HistoryPanel.jsx` 抬头（端点不是工具 · 全量读 · 模型不知道你看过）。 */
+/* 这一格去掉内边距：面板自己是一整块（里面有滚动区），不去掉会套出两个滚动条 */
+.drawer-body.flush{padding:0;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── 🧭 轨迹面板 ────────────────────────────────────────
+   判据见 `TracePanel.jsx` 抬头（默认关 · 按需拉 · 不回灌模型）。 */
+.trace-panel{flex:1;min-height:0;display:flex;flex-direction:column}
+.trace-head{display:flex;align-items:center;gap:8px;padding:10px 14px;
+  border-bottom:1px solid var(--c-app-line-18);background:var(--c-app-bg-42)}
+.trace-head .muted{flex:1;font-size:10.5px;line-height:1.5}
+.trace-note{margin:10px 14px 0;font-size:11px;line-height:1.7;color:var(--c-app-fg-30)}
+.trace-list{flex:1;min-height:0;overflow:auto;padding:6px 10px 14px}
+.trace-row{border-bottom:1px solid var(--c-app-line-18);padding:8px 4px}
+.trace-row-head{display:flex;align-items:baseline;gap:7px;font-size:12px}
+.trace-seq{color:var(--c-app-fg-30);font-variant-numeric:tabular-nums;font-size:10.5px}
+.trace-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trace-ms{color:var(--c-app-fg-30);font-size:10.5px}
+.trace-badge{font-size:10px;padding:0 5px;border-radius:5px;line-height:16px;
+  color:var(--c-warn-fg-01);background:var(--c-warn-bg-03)}
+.trace-detail{margin-top:5px;font-size:11px}
+.trace-detail summary{cursor:pointer;color:var(--c-app-fg-30);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trace-detail pre{margin:6px 0 0;padding:8px;border-radius:6px;white-space:pre-wrap;
+  overflow-wrap:anywhere;background:var(--c-app-bg-42);color:var(--c-app-fg-06);
+  font-size:11px;line-height:1.55;max-height:260px;overflow:auto}
+.hist{flex:1;min-height:0;display:flex;flex-direction:column}
+/* 会话切换那一行：收起时只显示当前那条的标题与读数 */
+.hist-thread{display:flex;align-items:center;gap:8px;width:100%;padding:11px 16px;
+  border:0;border-bottom:1px solid var(--c-app-line-18);background:var(--c-app-bg-42);text-align:left;cursor:pointer}
+.hist-thread-x{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.hist-thread-t{font-size:12.5px;font-weight:600;color:var(--c-app-fg-06);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-thread-m{font-size:10.5px;color:var(--c-app-fg-25)}
+.hist-thread svg{flex:0 0 auto;color:var(--c-app-fg-31);transition:transform .2s ease}
+.hist-thread svg.flip{transform:rotate(180deg)}
+.hist-threads{max-height:210px;overflow:auto;border-bottom:1px solid var(--c-app-line-18);background:var(--c-app-bg-54)}
+.hist-trow{display:flex;flex-direction:column;gap:2px;width:100%;padding:9px 16px;
+  border:0;background:transparent;text-align:left;cursor:pointer}
+.hist-trow:hover{background:var(--c-app-bg-33)}
+.hist-trow.on{background:var(--c-app-bg-13)}
+.hist-trow b{font-size:12px;font-weight:600;color:var(--c-app-fg-06);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-trow small{font-size:10.5px;color:var(--c-app-fg-25)}
+.hist-search{display:flex;align-items:center;gap:7px;padding:9px 14px;
+  border-bottom:1px solid var(--c-app-line-18);color:var(--c-app-fg-31)}
+.hist-search input{flex:1;border:0;outline:0;background:transparent;
+  font-size:12.5px;color:var(--ink)}
+.hist-clear{border:0;background:transparent;color:var(--c-app-fg-31);cursor:pointer;font-size:15px;line-height:1}
+.hist-body{flex:1;min-height:0;overflow:auto;padding:8px 0 14px}
+.hist-note{display:flex;align-items:center;gap:6px;margin:8px 16px;color:var(--c-app-fg-25);font-size:11.5px}
+.hist-note .spin{animation:ui-spin 1.1s linear infinite}
+.hist-more{display:block;width:calc(100% - 32px);margin:4px 16px 10px;padding:6px;
+  border:1px solid var(--c-app-line-09);border-radius:7px;background:var(--c-app-bg-57);color:var(--c-accent-fg-34);
+  font-size:11.5px;cursor:pointer}
+.hist-more:disabled{opacity:.5;cursor:default}
+.hist-row{padding:7px 16px;border-bottom:1px solid var(--c-app-line-23)}
+.hist-row .hist-who{margin-right:8px;font-size:11px;font-weight:650;color:var(--c-accent-fg-34)}
+.hist-row.assistant .hist-who{color:var(--c-accent-fg-28)}
+.hist-row.tool .hist-who{color:var(--c-accent-fg-58)}
+.hist-row .hist-ts{font-size:10px;color:var(--c-app-fg-34);font-variant-numeric:tabular-nums}
+.hist-text{margin:3px 0 0;font-size:12px;line-height:1.6;color:var(--c-app-fg-08);
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.hist-hit{padding:8px 16px;border-bottom:1px solid var(--c-app-line-23)}
+.hist-hit b{margin-right:8px;font-size:11px;color:var(--c-accent-fg-28)}
+.hist-hit span{font-size:12px;line-height:1.6;color:var(--c-app-fg-08)}
+.hist-err{margin:10px 16px;color:var(--c-danger-fg-10);font-size:12px}
+/* ② 输入框：760 → 880，也就是与对话列同宽（不再比对话列窄一档）。
+   只动输入框那两处 padding，对话区一直是 880。
+      想再宽（参考图里它其实比消息列更宽）就只改这两个数 —— 但那时
+      `.conversation` 那个 880 也得跟着看一眼，不然两者会反过来。
+   横幅不单独设宽（它是 `.composer-wrap` 里的块），跟着一起放宽，
+     与输入框保持同宽、仍然是同一张卡。 */
+.bottom-composer{padding-left:max(28px,calc((100% - 880px)/2));padding-right:max(28px,calc((100% - 880px)/2))}
+
+/* ══════════════════════════════════════════════════════════════════
+   收藏夹 —— `.stars*` · `.hist-star` · `.msg-star`
+   「两行 + 省略号」必须用 CSS 截行（`-webkit-line-clamp`），
+     不用 `slice()` —— 中文字宽度不定，肉眼切会切出半个字，
+     而且同一段文字窄屏三行、宽屏一行，切成定长根本不成立。 */
+.stars{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto;padding:6px 0 14px}
+
+/* 空状态：说清怎么收藏 —— 这是唯一能说这句话的地方 */
+.stars-empty{display:flex;flex-direction:column;align-items:center;gap:6px;
+  margin:56px 24px 0;color:var(--c-app-fg-31);text-align:center}
+.stars-empty p{margin:6px 0 0;font-size:13px;color:var(--c-accent-fg-24);font-weight:600}
+.stars-empty span{font-size:11.5px;line-height:1.8;color:var(--c-app-fg-25)}
+
+.stars-note{display:flex;align-items:center;gap:6px;margin:8px 16px;color:var(--c-app-fg-25);font-size:11.5px}
+.stars-note .spin{animation:ui-spin 1.1s linear infinite}
+.stars-err{margin:10px 16px;color:var(--c-danger-fg-10);font-size:12px}
+
+.stars-item{display:block;width:100%;text-align:left;background:transparent;
+  border:0;border-bottom:1px solid var(--c-app-line-23);padding:10px 16px 8px;cursor:pointer}
+.stars-item:hover{background:var(--c-app-bg-50)}
+/* 上半问 / 下半答：各两行 + 省略号 */
+.stars-line{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  overflow:hidden;font-size:12px;line-height:1.6;color:var(--c-app-fg-08);white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.stars-line.q{font-weight:600;color:var(--c-app-fg-06)}
+.stars-line.a{color:var(--c-accent-fg-24)}
+.stars-line.muted{color:var(--c-app-fg-34);font-style:italic}
+
+.stars-foot{display:flex;align-items:center;justify-content:space-between;
+  margin-top:5px;font-size:10.5px;color:var(--c-app-fg-34);font-variant-numeric:tabular-nums}
+.stars-drop{display:inline-flex;padding:3px;border-radius:6px;color:var(--c-app-fg-38)}
+.stars-drop:hover{background:var(--c-danger-bg-12);color:var(--c-danger-fg-10)}
+
+/* 历史面板每行那个（只给 `user` 行 —— 锚点就是那一轮的提问） */
+.hist-star{margin-left:8px;background:transparent;border:0;padding:2px;border-radius:5px;
+  color:var(--c-app-fg-40);cursor:pointer;line-height:0}
+.hist-star:hover{background:var(--c-app-bg-26);color:var(--c-accent-fg-34)}
+.hist-star.on{color:var(--c-warn-fg-13)}
+
+/* 聊天气泡下面那个 */
+.msg-star{padding:2px 5px;border-radius:6px}
+.msg-star.on{color:var(--c-warn-fg-13)}
+.msg-star.on:hover{color:var(--c-warn-fg-12)}
+
+/* ══════════════════════════════════════════════════════════════════
+   侧栏「任务」名册 + 历史视图横幅
+   侧栏宽 240px（`.shell` 那条覆盖规则），不是基础规则里的 286 ——
+     所以标题必须 `ellipsis`，否则一条长标题会把整栏撑歪。 */
+.thread-list{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow:auto}
+/* 删除走右键菜单，这一格是一个按钮，
+   行里不再放垃圾桶（也就不需要"按钮套按钮"那层容器）。
+   同一个选择器只有一个地方：在文件末尾追加一条新规则去覆盖这一条时，
+   层叠只覆盖它点到的属性，老规则里那句 `flex-direction:column`
+   照样生效，垃圾桶会掉到标题下面。
+   所以要改形状就改这一处。
+   所以`tests/test_desktop_css.py` 钉着（重复选择器只许降）。 */
+.thread-row{display:flex;flex-direction:column;gap:2px;width:100%;border:0;border-radius:6px;
+  padding:6px 8px;background:transparent;text-align:left;cursor:pointer}
+.thread-row:hover{background:var(--c-side-bg-02)}
+.thread-row.on{background:var(--c-accent-bg-17)}
+.thread-row b{font-size:12px;font-weight:600;color:var(--c-side-fg-02);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.thread-row small{font-size:10px;color:var(--c-side-fg-05)}
+
+/* 右键菜单 —— `position:fixed`，坐标是屏幕坐标（夹在视口里）。
+   它盖在内容上面，关它的三条路（点外面 / Esc / 滚一下）一条都不能少。 */
+.ctx-menu{position:fixed;z-index:30;min-width:168px;padding:4px;border:1px solid var(--c-app-line-07);
+  border-radius:9px;background:var(--c-app-bg-57);box-shadow:0 10px 30px var(--c-shadow-04);
+  /* 菜单里会列出「跟随默认 + N 条配置」，要能滚。
+     夹高度而不是夹条目数 —— 12 张卡 × 10 条是用户能建出来的量。 */
+  max-height:72vh;overflow-y:auto}
+.ctx-title{padding:5px 9px 6px;color:var(--c-app-fg-25);font-size:10px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ctx-item{display:flex;align-items:center;gap:7px;width:100%;border:0;border-radius:6px;
+  padding:7px 9px;background:transparent;text-align:left;font-size:12px;color:var(--c-app-fg-12);
+  cursor:pointer}
+.ctx-item:hover{background:var(--c-app-bg-27)}
+.ctx-item.danger{color:var(--c-danger-fg-15)}
+.ctx-item.danger:hover{background:var(--c-danger-bg-09);color:var(--c-danger-fg-02)}
+/* ① 当前那一条要看得出来（`aria-current` 的视觉版）；
+   ② 卡片名那一小截要退到背景里（它只是消歧义用的，不是主角）；
+   ③ 说明那一段换行（`white-space` 继承的是上面 `.ctx-title` 的 nowrap）。 */
+.ctx-item.on{background:var(--c-app-bg-16);color:var(--c-accent-fg-03);font-weight:600}
+.ctx-item .muted{margin-left:auto;font-size:10px;color:var(--c-side-fg-05);font-weight:400}
+.ctx-menu-note{padding:4px 9px 7px;font-size:10.5px;line-height:1.55;color:var(--c-app-fg-25);
+  white-space:normal}
+
+/* 正在看历史时的那一条横幅 —— 它必须在：没有它的话，
+   「这一屏是过去」与「这一屏是我的活」长得一模一样，而两者的发消息语义不同。 */
+.view-bar{flex:0 0 auto;display:flex;align-items:center;gap:9px;
+  padding:7px 5vw;border-bottom:1px solid var(--c-app-line-18);background:var(--c-app-bg-37);
+  font-size:11px;color:var(--c-accent-fg-39)}
+.view-tag{flex:0 0 auto;padding:2px 7px;border-radius:9px;background:var(--c-accent-bg-26);
+  color:var(--c-accent-fg-34);font-weight:650}
+.view-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.view-bar button{flex:0 0 auto;border:1px solid var(--c-app-line-04);border-radius:6px;padding:3px 9px;
+  background:var(--c-app-bg-57);color:var(--c-accent-fg-27);font-size:11px}
+.view-bar button:hover:not(:disabled){background:var(--c-app-bg-19)}
+.view-exit{border-color:var(--c-accent-line-11);background:var(--c-accent-bg-35)}
+
+/* ══════════════════════════════════════════════════════════════════
+   左栏信息架构 + 底部版本号 + 自动模式安全提示
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ① 抬头：`Crannia` 右边那个十字星装饰去掉，品牌行只剩图标 + 字。
+   （按钮不在 DOM 里；底稿那条 `.brand .round` 留着不碍事。） */
+
+/* ② 第一区少了「更多」一项，把上面那两处留白一起收窄，第二/三区就"提上来"了。
+   落法是一起收，不是只收某一段 —— 只收一处的话，被收掉的那格会以
+      "某一区突然贴上去"的样子出现，而不是整体上移。 */
+.sidebar nav{padding-bottom:10px}
+/* `flex:0 1 auto;min-height:0` 是并进这一条的，不是新加一条 ——
+   `test_desktop_css.py::重复选择器只许降` 钉着这一点。
+   所以判据：同一个选择器在文件里只许有一处。
+   · `min-height:0` 是 `overflow:auto` 能滚起来的前提（flex 子项默认
+     `min-height:auto` = 内容高度，不写它会先把容器撑大）。 */
+/* `flex:1 1 auto` = 让这一格吃掉剩余空间，footer 因此被顶到底部。
+   不能用 `flex:0 1 auto`（不伸） —— 那会"没人吃剩余空间"，
+   症状相反：footer 上面没有溢出，下面是一大片空的。
+   根因：`.spaces{flex:1}` 是唯一吃剩余空间的那一格，去掉它之后，
+   整列就都堆在上面。
+   `min-height:0` 仍要留着：它是 `overflow:auto` 能滚起来的前提。 */
+.side-section{padding-top:10px;flex:1 1 auto;min-height:0}
+
+/* ③ 底部：版本号 + 设置按钮（不是「本地工作区」那一行 + 通栏按钮）。
+   设置按钮收到约一半宽（不是通栏）。 */
+/* `flex:0 0 auto` 同上是并进这一条的 —— 它是"钉在底部"那一格。 */
+.sidebar footer{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex:0 0 auto}
+.app-ver{font-size:10.5px;color:var(--c-app-fg-31);font-variant-numeric:tabular-nums;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settings-link{width:50%;height:30px;font-size:11.5px}
+
+/* ══════════════════════════════════════════════════════════════════
+   底部那两格不许被上面的列表推走
+
+   判据：设置按钮不随着对话列表伸缩位置。
+
+   根因不在 `.settings-link` 自己（上面那条只管它的宽/高）——
+   在上面那一列：`.sidebar` 是 `height:100%` 的列 flex，而
+   `<section class="side-section tasks">`（对话树）与 `.spaces` 都是它的子项。
+   列表一长，它们的内容就把 footer 往下挤；而 `.sidebar` 没有 overflow、
+   `body{overflow:hidden}`，溢出的那截看不见，症状就是"按钮跑了"。
+
+   所以两道一起上（缺一条都不够）：
+     ① footer 不参与伸缩（`flex:0 0 auto`）—— 它是"钉在底部"的那一格；
+     ② 上面那些自己滚（`min-height:0` + `overflow:auto` + 一个上界）
+        —— `min-height:0` 是必须写的：flex 子项的 `min-height:auto`
+        默认等于内容高度，不写这一行，`overflow:auto` 滚不起来
+        （它会先把容器撑大，而不是出现滚动条）。
+   上界取 `46vh`：太小则列表几乎看不了，太大则又把 footer 挤出去。
+
+   两条落点分开放（不是三条都堆在这儿）：
+   · `flex:0 0 auto` 与 `min-height:0` 并进上面那两条既有规则里
+     （`.sidebar footer` / `.side-section`）—— `test_desktop_css.py`
+     「重复选择器只许降」钉着：同一个选择器在文件里只能有一处。
+   · 只有 `.tasks` 留在这儿，因为它的底稿在第 1 行那条压成一行的块里
+     （扫描器看不见那一行）—— 与 `.settings-link` 上面那条同一个写法。 */
+/* 这里不设 `max-height:46vh` —— 它和 `flex-grow` 是打架的：
+   一个说"长到填满"，另一个说"最多长这么高"，两个都写上就又留下一片空。
+   所以这一格只负责"装不下时自己滚"，长多高由上面那条 `flex:1` 决定。 */
+/* 左边栏先占满再滚动：
+   `.side-section` 已经是 `flex:1`，但里面这棵树自己挂着
+   `max-height:260px`，侧栏还有空地方，列表却先滚起来了。
+   所以这一格改成 flex 列：树拿剩下的高度（`flex:1`），装不下时才滚。 */
+.tasks{min-height:120px;overflow:auto;display:flex;flex-direction:column}
+
+/* ④ 安全提示弹窗（手动 → 自动那一次，别的切换都不弹）。
+   「安全提示」四个字：从下横线变速上浮，到位置后闪一次红光。
+   「变速」不是修辞 —— 缓动曲线带一点回弹（`cubic-bezier(…1.22)`）
+     再加上关键帧里那个过冲点，速度才是变化的；线性上浮看着像"幻灯片换页"。
+   红光只闪一次（`animation-iteration-count:1`）—— 它是个提醒，不是指示灯。 */
+.safety{position:relative;width:min(520px,92vw);border:1px solid var(--c-danger-line-07);border-radius:18px;
+  padding:28px 32px 24px;background:var(--c-app-bg-53);box-shadow:0 22px 70px var(--c-shadow-02)}
+/*: 「这次更新了什么」—— 外壳复用 `.backdrop`，正文可滚（公告长短由发版人写）。
+    刻意不带动画、不播音效：它是一次告知，不是一次安全确认。 */
+.update-notice{position:relative;display:flex;flex-direction:column;width:min(520px,92vw);
+  max-height:min(640px,86vh);border:1px solid var(--c-app-line-09);border-radius:16px;
+  padding:22px 24px 18px;background:var(--c-app-bg-38);box-shadow:0 20px 65px var(--c-shadow-10)}
+.update-notice-title{margin:0 0 14px;padding-bottom:10px;font-size:18px;font-weight:650;
+  color:var(--c-app-fg-04);border-bottom:1px solid var(--c-app-line-14)}
+/*: 公告可以很长（一次发版的全部改动）—— 正文区自己滚，不把弹窗顶出屏幕。
+    长串（URL / 路径）也要能断开：`anywhere` 而不是 `break-word`（后者只在
+    行尾有空位时才断）。 */
+.update-notice-body{flex:1 1 auto;min-height:0;overflow:auto;overflow-wrap:anywhere}
+.update-notice-sec{margin:0 0 16px}
+/*: 小节之间一条细分隔 —— 公告长了之后（一次发版几十条）没有它就分不清段。 */
+.update-notice-sec+.update-notice-sec{padding-top:11px;border-top:1px solid var(--c-app-line-22)}
+.update-notice-sec h3{margin:0 0 8px;color:var(--c-app-fg-04);font-size:14px;font-weight:700;
+  line-height:1.4}
+.update-notice-sec ol{margin:0;padding-left:22px;color:var(--c-app-fg-02);font-size:13px;
+  line-height:1.8}
+.update-notice-sec li+li{margin-top:4px}
+.update-notice-ok{align-self:flex-end;margin-top:12px;height:34px;padding:0 16px;border:0;
+  border-radius:8px;background:var(--c-accent-bg-21);color:var(--c-accent-fg-37);font-size:12px;
+  cursor:pointer}
+/*: 往期公告那一页（设置 → 其他设置 → 往期公告）：一条一折，最新的默认展开。
+    内层小节沿用 `.update-notice-sec`（弹窗与独立页同一套排版）。 */
+/*: 搜索框：钉在标题下面，不跟着列表一起滚（列表可能很长）。 */
+.notices-search{padding:10px 0 6px}
+.notices-search input{width:100%;height:34px;border:1px solid var(--c-app-line-14);
+  border-radius:8px;padding:0 11px;background:var(--c-app-bg-57);color:var(--c-app-fg-02);
+  font-size:12.5px}
+.notices-search input::placeholder{color:var(--c-app-fg-33)}
+.notices-item{border-bottom:1px solid var(--c-app-line-14);padding:10px 0}
+.notices-item summary{cursor:pointer;padding:4px 2px;font-size:14px;font-weight:650;
+  color:var(--c-app-fg-04);list-style:none}
+.notices-item summary::-webkit-details-marker{display:none}
+.notices-item summary::before{content:"▸";display:inline-block;width:14px;color:var(--c-accent-fg-33)}
+.notices-item[open] summary::before{content:"▾"}
+.notices-body{padding:8px 0 2px 14px}
+.safety-head{position:relative;padding-bottom:16px;margin-bottom:18px}
+.safety-head::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
+  background:linear-gradient(90deg,var(--c-danger-bg-05) 0%,var(--c-danger-bg-06) 55%,var(--c-danger-bg-07) 100%);
+  transform-origin:left;animation:safety-rule .55s ease-out both}
+.safety-title{margin:0;font-size:20px;font-weight:650;letter-spacing:.16em;color:var(--c-app-fg-01);
+  animation:safety-rise .78s cubic-bezier(.17,.86,.28,1.22) both,
+            safety-flash .62s ease-out .82s 1 both}
+@keyframes safety-rise{
+  0%{transform:translateY(14px);opacity:0;filter:blur(3px)}
+  55%{transform:translateY(-3px);opacity:1;filter:blur(0)}
+  100%{transform:translateY(0)}
+}
+@keyframes safety-rule{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
+@keyframes safety-flash{
+  0%,100%{color:var(--c-app-fg-01);text-shadow:none}
+  45%{color:var(--c-danger-fg-11);text-shadow:0 0 16px var(--c-danger-fg-12),0 0 3px var(--c-danger-fg-13)}
+}
+.safety-body{margin:0 0 22px;font-size:13px;line-height:1.95;color:var(--c-app-fg-11)}
+.safety-link{display:inline;padding:0;border:0;border-bottom:1px dashed var(--c-warn-line-04);background:transparent;color:var(--c-misc-fg-01);font:inherit;cursor:pointer}
+.safety-actions{display:flex;align-items:center;gap:10px}
+.safety-go{min-width:84px;height:34px;border:0;border-radius:8px;background:var(--c-danger-bg-02);color:var(--c-app-fg-41);
+  font-size:13px;font-weight:600}
+.safety-go:hover{background:var(--c-danger-bg-01)}
+.safety-no{min-width:84px;height:34px;border:1px solid var(--c-app-line-01);border-radius:8px;background:var(--c-app-bg-57);
+  color:var(--c-danger-fg-05);font-size:13px}
+.safety-no:hover{background:var(--c-app-bg-20)}
+.safety-remember{margin-left:auto;display:flex;align-items:center;gap:6px;
+  color:var(--c-danger-fg-18);font-size:12px;cursor:pointer;user-select:none}
+.safety-remember input{width:14px;height:14px;accent-color:var(--c-danger-bg-02);cursor:pointer}
+
+/* 「少动」那一档必须把色也还回来，不只是关动画：
+   `safety-flash` 与 `safety-rise` 都带 `both` 填充，关掉之后
+   文字会停在关键帧的某一帧上，而那一帧不一定是正常色
+   （同 `.status-bar-text` 那条：只关动画会留下一个"隐形"或"红着"的字）。 */
+@media (prefers-reduced-motion:reduce){
+  .safety-title,.safety-head::after{animation:none}
+  .safety-title{color:var(--c-app-fg-01);text-shadow:none;filter:none;opacity:1;transform:none}
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   定时任务面板
+
+   复用已有的令牌与形状：`.page` / `.page-head` / `.backdrop` /
+     `.settings-head` / `.modes` / `.muted` / `.round` —— 只补这一屏真正新的那几个。
+   没有 `.cron-form` 的暗色/主题分支：这一版只有一套皮（GUI 主题那件事
+     另开一批，别在这里先分叉）。
+   ══════════════════════════════════════════════════════════════════ */
+.head-actions{display:flex;align-items:center;gap:8px}
+.cron-list{display:grid;gap:9px;padding-top:18px}
+.cron-row{display:flex;align-items:flex-start;gap:12px;border:1px solid var(--c-app-line-14);
+  border-radius:9px;padding:13px 15px;background:var(--c-app-bg-57);color:var(--c-accent-fg-41)}
+/* 暂停的那条整行压暗 —— 判据：界面上必须一眼看出"它现在不会跑"，
+   而不是靠去读那一行小字。 */
+.cron-row.off{background:var(--c-app-bg-39);color:var(--c-accent-fg-60);border-style:dashed}
+.cron-main{flex:1;min-width:0;display:grid;gap:3px}
+.cron-main b{color:var(--ink);font-size:13px}
+.cron-main span{color:var(--c-app-fg-21);font-size:11px;line-height:1.5}
+.cron-stat{color:var(--c-app-fg-28);font-size:10px}
+.cron-acts{display:flex;align-items:center;gap:5px}
+.cron-acts button{display:flex;align-items:center;gap:5px;min-height:29px;border:1px solid var(--c-app-line-10);
+  border-radius:7px;padding:0 9px;background:var(--c-app-bg-51);color:var(--c-accent-fg-35);font-size:11px}
+.cron-acts button:hover:not(:disabled){background:var(--c-app-bg-12);color:var(--c-accent-fg-14)}
+.cron-acts button:disabled{opacity:.45}
+/* 二次确认 —— 「删掉一条定时任务」不可恢复，
+   所以第一次点只是举手、第二次才删。
+   那两个字必须看得见（不能只靠图标变色）：这条警戒线的全部价值
+   就是"用户看见自己在确认什么"。 */
+.cron-confirm{font-size:11px;color:var(--c-danger-fg-15);white-space:nowrap}
+.cron-acts button.danger{border-color:var(--c-danger-line-02);background:var(--c-app-bg-22);color:var(--c-danger-fg-15)}
+.cron-acts button.danger:hover:not(:disabled){background:var(--c-danger-bg-08);color:var(--c-danger-fg-02)}
+.btn-word{font-size:11px}
+.cron-form{position:relative;width:min(640px,94vw);max-height:88vh;overflow:auto;
+  border:1px solid var(--c-app-line-09);border-radius:14px;padding:22px 26px;background:var(--c-app-bg-51);
+  box-shadow:0 20px 65px var(--c-shadow-09)}
+.cron-form h2{margin:5px 0 18px}
+.field{display:grid;gap:7px;margin-bottom:15px;font-size:12px}
+.field>span{color:var(--c-accent-fg-32)}
+.field input,.field textarea{border:1px solid var(--c-app-line-07);border-radius:7px;padding:7px 10px;
+  background:var(--c-app-bg-57);color:var(--ink);font-size:12px;font-family:inherit}
+.field input[type=number]{width:66px}
+.row{display:flex;align-items:center;gap:9px}
+.chip-row{display:flex;align-items:flex-start;gap:9px;margin-top:7px}
+.chip-row em{flex:0 0 30px;padding-top:5px;color:var(--c-accent-fg-59);font-size:11px;font-style:normal}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{border:1px solid var(--c-app-line-04);border-radius:14px;padding:4px 9px;background:var(--c-app-bg-57);
+  color:var(--c-accent-fg-35);font-size:11px;line-height:1.4}
+.chip:hover{background:var(--c-app-bg-31)}
+.chip.on{background:var(--c-accent-bg-19);border-color:var(--c-accent-line-07);color:var(--c-accent-fg-11);font-weight:650}
+.datepick{display:flex;align-items:center;gap:4px;border:1px solid var(--c-app-line-04);border-radius:14px;
+  padding:3px 6px;background:var(--c-app-bg-57);font-size:11px;color:var(--c-accent-fg-32)}
+.datepick input{border:0;padding:0;width:38px;text-align:right;background:transparent}
+.datepick button{border:0;background:transparent;color:var(--c-accent-fg-62);display:flex;align-items:center}
+/* 预览那一格：它是后端算的（`/api/cron/preview`）—— 这一段只是外观。 */
+.preview{border:1px dashed var(--c-accent-line-13);border-radius:8px;padding:9px 11px;margin:4px 0 14px;
+  background:var(--c-app-bg-32);color:var(--c-accent-fg-19);font-size:12px;line-height:1.6}
+.preview.bad{border-color:var(--c-danger-line-01);background:var(--c-app-bg-22);color:var(--c-danger-fg-07)}
+.cron-form footer{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin-top:6px;color:var(--c-app-fg-21);font-size:10px}
+.cron-form footer button{border:1px solid var(--c-accent-line-13);border-radius:7px;padding:9px 15px;
+  background:var(--c-accent-bg-07);color:var(--c-app-fg-41);font-size:12px;font-weight:600}
+.cron-form footer button:disabled{background:var(--c-app-bg-09);color:var(--c-app-fg-29);border-color:var(--c-app-line-12)}
+/* 台账那一行（上一次做了哪些动作）—— 比 `.cron-stat` 再淡一档：
+   它是给查账用的，平时不该抢眼。 */
+.cron-acts-line{color:var(--c-app-fg-35);cursor:help}
+/* ══════════════════════════════════════════════════════════════════
+   Markdown 渲染 —— `.md` 包住整块，下面按块给样式。
+
+   气泡上那条 `white-space:pre-wrap` 保留（段落里的换行是模型写的，
+     不能压掉）；所以这里只加块级间距与装饰，不动空白处理。
+   `.md-link` 不是 `<a>` —— 壳没接 `will-navigate`，真 `<a href>` 被点会
+     把整页导航走；一律 `window.open` 走 `setWindowOpenHandler`（只放 http(s)）。
+     所以这里给它 `cursor:pointer` + 悬停可见的 `title`，看起来像链接但不是标签。
+   ══════════════════════════════════════════════════════════════════ */
+.md{display:block}
+.md>.md-h:first-child,.md>.md-p:first-child{margin-top:0}
+.md-h{margin:14px 0 6px;line-height:1.35;color:var(--c-app-fg-03)}
+h1.md-h{font-size:19px}h2.md-h{font-size:17px}h3.md-h{font-size:15px}
+h4.md-h,h5.md-h,h6.md-h{font-size:13.5px}
+.md-p{margin:0 0 8px}
+.md-p:last-child{margin-bottom:0}
+.md-list{margin:4px 0 8px;padding-left:20px}
+.md-list li{margin:2px 0}
+.md-icode{padding:1px 4px;border-radius:4px;background:var(--c-app-bg-26);color:var(--c-accent-fg-07);
+  font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;font-size:.92em}
+.md-pre{margin:8px 0;padding:9px 11px;border:1px solid var(--c-app-line-14);border-radius:8px;
+  background:var(--c-app-bg-47);overflow:auto}
+.md-pre code{font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;
+  font-size:12px;line-height:1.55;white-space:pre;color:var(--c-app-fg-07)}
+.md-quote{margin:8px 0;padding:2px 0 2px 11px;border-left:3px solid var(--c-accent-line-13);color:var(--c-accent-fg-26)}
+.md-hr{margin:12px 0;border:0;border-top:1px solid var(--c-app-line-13)}
+.md-tablewrap{overflow:auto;margin:8px 0}
+.md-table{border-collapse:collapse;font-size:12px}
+.md-table th,.md-table td{border:1px solid var(--c-app-line-13);padding:5px 9px;text-align:left;
+  vertical-align:top}
+.md-table th{background:var(--c-app-bg-37);color:var(--c-app-fg-15);font-weight:650}
+.md-link{color:var(--c-accent-fg-22);cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px}
+.md-link:hover{color:var(--c-accent-fg-01)}
+/* `==文字==` 的默认样子：不改色（聊天里模型偶尔会写 `==`，
+   在那里保持原样、不抢眼）。说明页那一块再单独染红。 */
+.md-mark{background:transparent;color:inherit}
+/* 「指向本机路径」的那种链接 —— 点它是在资源管理器里定位，
+   而不是打开一个网页。用虚线下划线区分（`.md-link` 是实线）——
+   一个字都不加、不加图标：正文在表格里，加东西会把版式顶歪。
+   判据：两种点击后果不同，看起来就该不同。 */
+.md-path{border-bottom:1px dashed currentColor;text-decoration:none}
+/* ══════════════════════════════════════════════════════════════════
+   试跑浮窗 —— 一个临时对话：只显示步骤流与结果，
+   关掉就把那一段清掉（`/api/cron/run/close`）。
+
+   步骤区限高：一轮可以跑十几分钟、几十步 —— 不限高会把结果挤到屏幕外，
+     而"结果"才是用户点试跑要看的东西。
+   ══════════════════════════════════════════════════════════════════ */
+.cron-run{position:relative;width:min(680px,94vw);max-height:88vh;display:flex;
+  flex-direction:column;border:1px solid var(--c-app-line-09);border-radius:14px;padding:22px 26px;
+  background:var(--c-app-bg-51);box-shadow:0 20px 65px var(--c-shadow-09)}
+.cron-run h2{margin:5px 0 12px;font-size:17px}
+.cron-run-note{margin:0 0 12px;color:var(--c-app-fg-20);font-size:11px;line-height:1.6}
+.cron-run-steps{max-height:30vh;overflow:auto;border:1px dashed var(--c-app-line-07);border-radius:8px;
+  padding:9px 11px;background:var(--c-app-bg-54)}
+.cron-run-step{display:flex;align-items:center;gap:8px;padding:3px 0;color:var(--c-accent-fg-26);
+  font-size:11.5px;line-height:1.5}
+.cron-run-step i{width:6px;height:6px;border-radius:50%;background:var(--c-accent-bg-12);flex:0 0 auto}
+.cron-run-step.muted{color:var(--c-app-fg-35)}
+.cron-run-out{flex:1;min-height:60px;overflow:auto;margin:12px 0 6px;padding:11px 13px;
+  border:1px solid var(--c-app-line-14);border-radius:9px;background:var(--c-app-bg-57);font-size:13px;line-height:1.7}
+.cron-run-wait{display:flex;align-items:center;gap:8px;color:var(--c-app-fg-24);font-size:12px}
+.spin{animation:lv-spin 1.1s linear infinite}
+@keyframes lv-spin{to{transform:rotate(360deg)}}
+/* 上面这条动画没有 `prefers-reduced-motion` 分支 —— 它只转一个图标，
+   关掉它不影响任何文字（`.cron-run-wait` 那句话本身就把状态说清了）。 */
+.cron-run footer{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding-top:8px;color:var(--c-app-fg-21);font-size:10px}
+.cron-run footer button{border:1px solid var(--c-accent-line-13);border-radius:7px;padding:8px 14px;
+  background:var(--c-accent-bg-07);color:var(--c-app-fg-41);font-size:12px;font-weight:600}
+
+/* ── 滚动条：细线 + 小圆头 ─────────────────────────────────
+   判据：更简洁更细，不要系统那种粗灰条 ——
+   目标形态是一条细细的绿线（轨道），上面挂一个小而圆的滑块，别处留白。
+   和左边那棵拼豆树是同一套语言：一根细茎 + 一颗珠子。
+
+   手法：10px 命中区 + 2px 透明边框 + `background-clip:content-box`
+   所以滑块看上去只有 6px，但可点区仍是 10px（直接写 6px 会变难按）。
+   轨道那条 2px 线是渐变画出来的（`linear-gradient` 的实色段），
+     不是 `border`/`background` 直接填的 —— 这样它只占中间那 2px，
+     两侧仍是透明，和"留白"的判据一致。
+   渐变的 `to right` 是给竖直滚动条写的；横向的（`.md-tablewrap`）会
+     得到一条竖着的小刻度 —— 就 2px、没人会盯着看，不值得为它加一套方向分支。
+
+   只用 `::-webkit-scrollbar` 这一套，不掺标准的
+   `scrollbar-width` / `scrollbar-color`：Chromium 里一旦写了那两个标准属性，
+   整套 `::-webkit-scrollbar` 会被忽略 —— 两套一起写 = 什么都不生效，
+   而症状只是"看着还是系统那条"，不会报错。Electron 是 Chromium，用这套就够。
+   挂在 `*` 上是有意的：会话区、页面、抽屉、历史、星标、设置右栏
+   各自都会滚，逐条点名迟早漏一个（漏的那个看着像"没改到"）。
+   颜色要量，不能拍：`#c3dcc4` 在 1x 下几乎看不见
+   所以判据以同一套规则真渲染出来的小样为准。 */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:linear-gradient(to right,transparent 0 4px,var(--c-accent-bg-16) 4px 6px,transparent 6px)}
+*::-webkit-scrollbar-thumb{
+  background:var(--c-accent-bg-13);border:2px solid transparent;border-radius:999px;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--c-accent-bg-10);background-clip:content-box}
+*::-webkit-scrollbar-corner{background:transparent}
+
+/* ── 上下文读数 ──────────────────────────────────────
+   顶栏那一行 + 点开的面板。判据见 `packages/ui/src/context.js` 顶上那三条，
+   而样式这一层的判据只有一条：两者必须像同一个东西（同一份数据的两个面）。 */
+.ctx-readout{
+  border:0;background:transparent;padding:5px 9px;border-radius:13px;
+  color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.ctx-readout:hover{background:var(--c-app-bg-21);color:var(--c-accent-fg-06)}
+/* `armed` / `compressed` 只改颜色，不改字号/字重 ——
+   改字重会让整条顶栏在每轮之间左右抖一下（读数每轮都在变）。 */
+.ctx-readout.armed{color:var(--c-warn-fg-08)}
+.ctx-readout.compressed{color:var(--c-accent-fg-51);font-weight:600}
+/* 面板挂在 `.main` 上（它是 `position:relative`），top 用 62px ≈ header 57 + 5 的缝隙。
+   用绝对定位而不是"插在 header 里"：header 是 flex 且高 57，塞进去会被它排版。 */
+.ctx-panel{
+  position:absolute;z-index:6;top:62px;right:25px;width:min(360px,80vw);
+  border:1px solid var(--c-app-line-11);border-radius:12px;padding:14px 16px 12px;
+  background:var(--c-app-bg-57);box-shadow:0 14px 40px var(--c-shadow-08)}
+.ctx-panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.ctx-panel-head b{font-size:12px;color:var(--c-app-fg-06)}
+.ctx-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--c-app-line-22)}
+.ctx-row:last-child{border-bottom:0}
+.ctx-sub{padding-left:14px;opacity:.75}
+.ctx-label{flex:1;font-size:11px;color:var(--c-accent-fg-08)}
+.ctx-val{font-size:11px;color:var(--c-app-fg-22);font-variant-numeric:tabular-nums}
+.ctx-delta{width:72px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;color:var(--c-app-fg-30)}
+.ctx-delta.up{color:var(--c-warn-fg-08)}
+.ctx-delta.down{color:var(--c-accent-fg-51)}
+.ctx-note{margin:8px 0 0;font-size:10px;line-height:1.6;color:var(--c-app-fg-30)}
+.ctx-error{margin:0;font-size:11px;color:var(--c-danger-fg-10)}
+/*:面板的身 —— 五格加一格子集，短的时候不该撑开，长的时候自己滚。 */
+.ctx-panel-body{max-height:min(320px,50vh);overflow:auto}
+
+/* ── 后台任务 / 子代理（批 4–5）─────────────────────
+   两枚 chip 是状态（计数 > 0 才出现）；浮窗形状照 `.ctx-panel`
+     —— 同一份数据的两个面必须像同一个东西（同 `.ctx-readout` 那条判据）。 */
+.task-chip{
+  border:0;margin-left:10px;padding:4px 10px;border-radius:12px;cursor:pointer;
+  background:var(--c-accent-bg-33);color:var(--c-accent-fg-51);
+  font-size:11px;font-variant-numeric:tabular-nums}
+.task-chip:hover{background:var(--c-app-bg-21)}
+.task-chip.on{box-shadow:0 0 0 1px var(--c-accent-fg-51) inset}
+.task-panel{width:min(420px,86vw)}
+.task-row{padding:7px 0;border-bottom:1px solid var(--c-app-line-22);cursor:default}
+.task-row:last-child{border-bottom:0}
+.task-row.clickable{cursor:pointer}
+.task-row-head{display:flex;align-items:baseline;gap:8px}
+/* 后台任务：至多 3 行摘要（`line-clamp`），点开看完整命令。
+   摘要会骗人（一条命令可能很长），所以"能点开"必须在标题里说出来。 */
+.task-row-name{
+  flex:1;min-width:0;font-size:11px;line-height:1.5;color:var(--c-app-fg-22);
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
+  white-space:pre-wrap;word-break:break-all}
+.task-row.open .task-row-name{display:block;overflow:visible}
+.task-row-ms{font-size:10px;color:var(--c-app-fg-30);font-variant-numeric:tabular-nums}
+.task-row-full{
+  margin:7px 0 0;padding:7px 9px;border-radius:7px;background:var(--c-app-bg-24);
+  font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;
+  color:var(--c-app-fg-22);max-height:240px;overflow:auto}
+/* Ctrl+B 提示—— 步骤流顶上那行淡绿色小字。
+   只在真有可转的前台任务时出现（判据在 `ActivityBlock.jsx`）。 */
+.activity-tip{
+  margin:0;padding:5px 12px;font-size:11px;color:var(--c-accent-fg-51);
+  background:var(--c-accent-bg-33);border-bottom:1px solid var(--c-app-line-22)}
+
+/* ── 审批盘：两步确认 · 键盘 · 升级项 · 停靠 ──────────
+   判据在 `approval-model.js`；这里只管看得出区别：
+     选中态、升级项的两个提示（2px 描边 + 呼吸），以及停靠那颗药丸。 */
+.approval-options{display:grid;gap:6px;margin-top:12px}
+.approval-option{display:flex;align-items:baseline;gap:9px;min-height:38px;padding:9px 12px;
+  border:1px solid var(--c-accent-line-11);border-radius:7px;background:var(--c-accent-bg-35);font-size:12px;font-weight:600;
+  cursor:pointer}
+.approval-option:hover{background:var(--c-accent-bg-27)}
+/* ② 选中态 —— 两步确认的中间那一步必须看得见，否则"点了没反应"。 */
+.approval-option.sel{border-color:var(--c-accent-line-01);background:var(--c-accent-bg-23);box-shadow:0 0 0 1px var(--c-shadow-16) inset}
+.approval-key{color:var(--c-accent-fg-52);font-variant-numeric:tabular-nums}
+.approval-label{flex:1}
+/* 提问面板 —— 每条选项下面那行说明（第二行，次要色）。 */
+.ask-desc{display:block;margin-top:3px;font-size:11.5px;color:var(--c-accent-fg-52)}
+.ask-options{margin-bottom:10px}
+/* 提问面板与审批共用 `.approval` 的外观；只把输入框与选项之间留一点气。 */
+.ask-panel .approval-input{margin-top:2px}
+/* ⑤ 升级项：范围最大的那一项，不加提示就会被整个忽略。
+   两条一起用：2px 描边（静态也认得出来）+ 呼吸动画（第一眼抓得住）。 */
+/* 合并成一条 —— 同一个选择器在文件里出现两次会撞
+   本包的棘轮（"重复的顶层选择器只许降"，`test_desktop_css`）。 */
+.approval-option.escalate{border-width:2px;border-color:var(--c-warn-line-03);background:var(--c-warn-bg-07);
+  animation:approval-breathe 2.2s ease-in-out infinite}
+.approval-option.escalate.sel{background:var(--c-warn-bg-02);box-shadow:0 0 0 1px var(--c-shadow-14) inset}
+/* 这条关键帧必须写成一行：读者按行首认顶层选择器
+   （`test_desktop_css` 的已知口径），而写成分行时里面的 `0%,100%` 会被当成一条
+   顶层规则，与 `safety-flash` 那条撞成"重复的选择器"，而那个棘轮只许降。
+   （这不是它的洞，是它的口径：`@media` 它剥了，`@keyframes` 里的百分比没剥。） */
+@keyframes approval-breathe{from{border-color:var(--c-warn-line-03)}50%{border-color:var(--c-warn-line-01);box-shadow:0 0 0 3px var(--c-shadow-15)}to{border-color:var(--c-warn-line-03)}}
+/* `prefers-reduced-motion` 停动画但保留描边（WebUI 同一条）——
+   把描边一起停掉，等于对这批用户把 ⑤ 那条判据整个删掉。 */
+@media(prefers-reduced-motion:reduce){.approval-option.escalate{animation:none;border-color:var(--c-warn-line-01)}}
+.approval-question{margin:12px 0 6px;color:var(--c-accent-fg-16);font-size:12px}
+.approval-input{width:100%;height:34px;padding:0 11px;border:1px solid var(--c-accent-line-11);border-radius:7px;
+  background:var(--c-app-bg-57);color:var(--ink);font:inherit;font-size:12px}
+.approval-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.approval-hint{color:var(--c-app-fg-21);font-size:10px}
+.approval-ok{height:32px;padding:0 16px;border:0;border-radius:7px;background:var(--c-accent-bg-07);color:var(--c-app-fg-41);
+  font-size:12px;font-weight:600}
+.approval-ok:disabled{background:var(--c-app-bg-10);color:var(--c-app-fg-37)}
+/* 停靠那颗药丸：整颗可点 —— 别只让几个字能点。 */
+.approval-pill{position:fixed;z-index:10;right:0;top:44%;display:flex;align-items:center;gap:6px;
+  padding:9px 11px 9px 13px;border:1px solid var(--c-accent-line-10);border-right:0;border-radius:11px 0 0 11px;
+  background:var(--c-app-bg-38);color:var(--c-accent-fg-18);font-size:11px;font-weight:600;
+  box-shadow:0 8px 22px var(--c-shadow-07)}
+.approval-pill:hover{background:var(--c-accent-bg-32)}
+
+/* ── 兼容性警告弹窗 ──────────────────────────────────
+   它复用 `.backdrop` + `.safety` 那一套（与手动→自动的安全提示同一个设计）
+     所以这里只补三处：红色那句、事实两行、长路径不许撑破卡片。 */
+.plugin-notice-bad{color:var(--c-danger-fg-11);margin:0 3px}
+.plugin-notice-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;
+  margin:0 0 4px;padding:11px 13px;border:1px solid var(--c-misc-line-01);border-radius:8px;background:var(--c-app-bg-41)}
+.plugin-notice-facts dt{color:var(--c-danger-fg-19);font-size:11px}
+.plugin-notice-facts dd{margin:0;color:var(--c-app-fg-05);font-size:11px;font-weight:600}
+/*:一个 `dd` 里可能排着多条（名字 / 路径各一串），条目之间给一点间距。 */
+.plugin-notice-facts dd>div+div{margin-top:3px}
+/*:路径可能很长（Windows 上限 260），折行，不许把卡片撑宽或溢出。 */
+.plugin-notice-path{overflow-wrap:anywhere;word-break:break-all;font-weight:500}
+
+/* ── 技能页：来源标 · 屏蔽红 · 卸载 ────────────────
+   判据在 `packages/ui/src/skills-view.js`（纯函数）；这里只管看得出区别。
+   这一节全是新选择器（`.skill-badge*` / `.skill-actions` 等）——
+      上面第 1 行那条大压缩行里的 `.skill` / `.skill-grid` 一个字都不动
+      （顶层重复选择器是棘轮，只许降；`!important` 必须为 0）。 */
+.skill .skill-main{min-width:0;flex:1;display:grid;gap:4px}
+.skill .skill-desc{color:var(--c-app-fg-23);font-size:10px}
+/* 外部来源那一行行为说明：比描述更弱一档（它是解释，不是内容）。 */
+.skill .skill-scope-note{font-size:9px;opacity:.75}
+.skill .skill-meta{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.skill-badge{font-style:normal;font-size:10px;line-height:1.5;padding:1px 7px;border-radius:99px;border:1px solid transparent}
+/*:绿标 = 目录内（装在仓内 `skills/` 的）。 */
+.skill-badge-repo{color:var(--c-accent-fg-20);background:var(--c-accent-bg-30);border-color:var(--c-accent-line-09)}
+/*:黄标 = 外部来源（共享目录读来的）。 */
+.skill-badge-external{color:var(--c-warn-fg-02);background:var(--c-warn-bg-04);border-color:var(--c-warn-line-06)}
+/*:灰标 = 指令型（只有 `SKILL.md`、不提供工具）—— 那是形态不是来源。 */
+.skill-badge-prompt{color:var(--c-accent-fg-21);background:var(--c-app-bg-23);border-color:var(--c-app-line-05)}
+/*:红标 = 被屏蔽了。红是承重的：它和"不支持"那句同一族。 */
+.skill-badge-blocked{color:var(--c-danger-fg-10);background:var(--c-danger-bg-11);border-color:var(--c-danger-line-03)}
+.skill.blocked{background:var(--c-app-bg-46);border-color:var(--c-danger-line-06);cursor:pointer}
+/*:已停用：整体压暗一档，与"能用"的卡片区分开。 */
+.skill.off{opacity:.62}
+/*:后台服务状态：一个圆点 + 技能自己写的一句话，单行省略。 */
+.skill .skill-service{display:flex;align-items:center;gap:5px;font-size:9px;
+  color:var(--c-app-fg-23);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.skill-dot{width:6px;height:6px;border-radius:50%;background:var(--c-app-bg-04);flex:none}
+.skill-service.on .skill-dot{background:var(--c-accent-bg-09)}
+.skill-service.warn .skill-dot{background:var(--c-warn-bg-01)}
+.skill-service.bad{color:var(--c-danger-fg-10)}
+.skill-service.bad .skill-dot{background:var(--c-danger-fg-10)}
+.skill-actions{display:flex;gap:6px;align-items:center;flex:none}
+.skill-btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 9px;border-radius:7px;border:1px solid var(--c-app-line-11);background:var(--c-app-bg-57);color:var(--c-accent-fg-08)}
+.skill-btn:hover:not(:disabled){background:var(--c-app-bg-28);color:var(--c-accent-fg-06)}
+.skill-btn:disabled{opacity:.5;cursor:not-allowed}
+.skill-btn-danger{border-color:var(--c-danger-line-03);color:var(--c-danger-fg-10)}.skill-btn-danger:disabled{border-color:var(--c-app-line-11);color:var(--c-accent-fg-08)}.skill-btn-danger:hover:not(:disabled){background:var(--c-danger-bg-11);border-color:var(--c-danger-line-03);color:var(--c-danger-fg-10)}
+
+/*:外部来源集合 —— 同一个来源下 ≥3 个包收成一行，
+    点开是一个浮窗（`.skill-panel`，建在既有的 `.backdrop` 上 —— 不新造第三种浮窗）。
+    全是新选择器：`.skill` / `.skill-grid` 那两格（第 1 行压缩行里）一个字都不动。 */
+/*:技能卡三件事 ——
+    ① 右侧那两颗按钮竖着居中；②「卸载」去掉垃圾桶图标（在 `Skills.jsx` 里）；
+    ③ 不兼容的只显示「已屏蔽」，报错全文挪进展开那一行。 */
+/*:只有被屏蔽的卡可点 ——
+    正常的卡点不开，光标也就不许说慌（`.skill` 上不放 `cursor:pointer`）。 */
+.skill{position:relative}
+/* 必须写成 `.skill .skill-actions`（两个类）才压得住第 1 行压缩行里那条
+   `.skill div{display:grid;...}` —— 那一条的特异性比单个类高（类+类型 > 类），
+   所以 `.skill-actions{display:flex}` 单独写不会生效（两个按钮会被 grid 竖着堆）。 */
+.skill .skill-actions{display:flex;flex-direction:column;gap:6px;flex:none;
+  align-items:stretch;justify-content:center}
+/*:展开那一行里的两句：为什么被屏蔽（红）+ 它在哪儿。 */
+.skill-why,.skill-where{display:block}
+.skill-why{color:var(--c-danger-fg-10);font-weight:600}
+.skill-where{color:var(--c-app-fg-28)}
+/*:被屏蔽那条的详情浮窗里那几格。
+    首页那张卡不再就地展开（`.skill.open` 那几条已撤）——
+    报错全文只住在这一屏里（头一行的小红标只说「已屏蔽」）。 */
+.skill-detail-desc{margin:10px 0 4px;color:var(--c-accent-fg-23);font-size:12px;line-height:1.8}
+.skill-detail-sec{margin-top:14px;padding-top:12px;border-top:1px solid var(--c-app-line-22)}
+.skill-detail-sec h3{margin:0 0 5px;color:var(--c-app-fg-21);font-size:10px;font-weight:700;
+  letter-spacing:.08em}
+.skill-detail-sec p{margin:0;font-size:12px;line-height:1.85}
+.skill-detail-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
+.skill-group{background:var(--c-app-bg-56);border-color:var(--c-warn-line-09);cursor:pointer}
+.skill-group-title{font-size:12px;color:var(--c-accent-fg-23);word-break:break-all}
+.skill-panel{position:relative;display:flex;flex-direction:column;width:min(620px,92vw);
+  max-height:min(560px,86vh);border:1px solid var(--c-app-line-09);border-radius:14px;background:var(--c-app-bg-51);
+  box-shadow:0 20px 65px var(--c-shadow-10)}
+.skill-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:15px 18px 12px;border-bottom:1px solid var(--c-app-line-14)}
+/* 浮窗右上角那颗「关闭」——图标按钮，与全仓的 `.round` 同一套观感
+   （此前是浏览器默认的带框按钮，很突兀）。四种浮窗共用这一颗。 */
+.skill-panel-close{flex:0 0 auto;width:30px;height:30px;display:grid;place-items:center;
+  border:0;border-radius:8px;background:transparent;color:var(--c-accent-fg-36);
+  cursor:pointer}
+.skill-panel-close:hover{background:var(--c-app-bg-08);color:var(--c-accent-fg-06)}
+.skill-panel-title{margin:0;display:flex;align-items:center;gap:7px;font-size:15px;
+  font-weight:650;color:var(--c-app-fg-04);word-break:break-all}
+.skill-panel-note{margin:0;padding:10px 18px;border-bottom:1px solid var(--c-app-line-22);
+  color:var(--c-app-fg-23);font-size:10px;line-height:1.75}
+.skill-panel-body{flex:1;min-height:0;overflow:auto;padding:10px 18px 16px}
+/*:浮窗里用小号的卡片：
+    从整行改成两列小卡片（`auto-fit` 让"只有一条"时自己撑满，
+    窄屏自动退成一列）。同一套用在集合浮窗与 MCP 浮窗上（一种外壳）。 */
+.skill-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:8px;align-items:start}
+.skill-card{display:flex;flex-direction:column;gap:4px;min-width:0;cursor:pointer;
+  border:1px solid var(--c-app-line-14);border-radius:8px;padding:9px 11px;background:var(--c-app-bg-57);
+  transition:border-color .18s ease,background .18s ease}
+.skill-card:hover{border-color:var(--c-accent-line-13)}
+.skill-card.blocked{background:var(--c-app-bg-46);border-color:var(--c-danger-line-06)}
+.skill-card-head{display:flex;align-items:flex-start;gap:8px}
+.skill-card b{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--c-app-fg-04);
+  overflow-wrap:anywhere}
+.skill-card-x{flex:none;width:18px;height:18px;display:grid;place-items:center;
+  border:0;border-radius:5px;padding:0;background:transparent;color:var(--c-app-fg-25);
+  font-size:14px;line-height:1;cursor:pointer}
+.skill-card-x:hover{background:var(--c-app-bg-15);color:var(--c-accent-fg-06)}
+/*:描述收起时最多两行、超出用省略号 —— 用 CSS 截行，不用 `slice`
+    （`slice` 会把一个中文字切成半个，而且窄屏宽屏截的地方不一样）。
+    展开那一下靠 `max-height` 过渡（`-webkit-line-clamp` 本身不可过渡）：
+    收起时 `-webkit-line-clamp:2` 定截几行、`max-height` 定那一截多高；
+    展开时把 clamp 解开、同时把 max-height 放到足够大，文字是一点点露出来的。 */
+.skill-card .skill-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;color:var(--c-app-fg-23);font-size:10px;line-height:1.6;
+  max-height:3.2em;transition:max-height .22s ease}
+.skill-card .skill-meta{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.skill-card-actions{display:flex;gap:6px;align-items:center;margin-top:2px}
+/*:展开时才露出来的那一行（技能的完整路径 / MCP 的归属键）。
+    它一直在 DOM 里、收起时 `max-height:0` —— 这样才有过渡可放；
+       用条件渲染的话它是"啪"一下出现的（看着对，手感不对）。 */
+.skill-card-more{display:block;max-height:0;opacity:0;overflow:hidden;
+  color:var(--c-app-fg-28);font-size:10px;line-height:1.65;overflow-wrap:anywhere;
+  transition:max-height .22s ease,opacity .22s ease}
+/*:展开那一组：只剩浮窗里那些成员卡（`.skill-card`）。
+    首页那张卡的展开是详情浮窗（见 `.skill-detail-*`），
+    所以这里没有 `.skill.open` —— 那不是漏了，是那条路不存在。 */
+.skill-card.open{border-color:var(--c-accent-line-08);background:var(--c-app-bg-54)}
+.skill-card.open .skill-desc{-webkit-line-clamp:unset;max-height:30em}
+.skill-card.open .skill-card-more{max-height:8em;opacity:1}
+
+/*: MCP 管理那个浮窗 —— 与上面那套 `.skill-panel*`
+    同一套壳（不新造第三种浮窗），所以这里只加它自己那两样：
+    「内置」黄标 + 页头那两个按钮的排布。 */
+.skill-head-actions{display:flex;align-items:center;gap:8px}
+.skill-badge-builtin{color:var(--c-warn-fg-02);background:var(--c-warn-bg-04);border-color:var(--c-warn-line-06)}
+
+/*:群成员头像 —— 默认是纯色几何图形，可换真资源。
+    形状与颜色只有一份，在 `avatar.js` 里（那是数据）；这里只管盒子。
+    盒子写成 `inline-flex` + 固定宽高（由组件的 `style` 给）——
+       SVG 用 `width/height=size` + `viewBox` 缩放，所以换尺寸不用改这里。 */
+.avatar{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;line-height:0;border-radius:50%}
+.avatar svg{display:block}
+
+/*: 「协作群聊」那一屏 —— 上面是群聊列表、下面是新建向导。
+    这里的类名与 `.skill-*` 不共用（两个不同的屏）—— 但按钮照用
+      `.skill-btn`（那是全仓那一种按钮，别再发明第二种）。 */
+.group-sec{margin:0 0 18px}
+.group-sec-title{display:flex;align-items:baseline;gap:8px;font-size:14px;font-weight:600;
+  color:var(--c-side-fg-01);margin:0 0 8px}
+.group-cards{display:flex;flex-direction:column;gap:8px}
+/*:卡片整张可点（展开/收起成员），`cursor:pointer`，
+    并允许展开区换行到下一行（`flex-wrap` + `.group-body{flex-basis:100%}`）。 */
+.group-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;
+  border:1px solid var(--c-side-line-02);background:var(--c-side-bg-05);
+  border-radius:12px;padding:9px 12px}
+/*:正在编辑的那张卡要看得出来是哪一张 ——
+    否则用户点了「编辑」，下面表单换了标题，而上面列表里没有任何东西指出改的是哪个群。 */
+.group-card-editing{border-color:var(--c-accent-line-03);box-shadow:0 0 0 2px var(--c-shadow-18)}
+.group-open{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;text-align:left;
+  background:transparent;border:0;padding:0;cursor:pointer;color:var(--c-side-fg-01);font:inherit}
+.group-open b{font-size:13.5px}
+.group-sub{color:var(--c-side-fg-05);font-size:11.5px}
+.group-avatars{display:flex;gap:2px;flex:0 0 auto}
+/*:群条目展开区 —— 上头像下名字的成员瓦片 +
+    单成员填单。卡片整张可点，里面的按钮与展开区都 `stopPropagation`（组件里做）。 */
+.avatar img{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.group-card-open{border-color:var(--c-accent-line-03)}
+.group-toggle{flex:0 0 auto;display:grid;place-items:center;width:22px;height:22px;
+  border:0;background:transparent;color:var(--c-side-fg-05);cursor:pointer;border-radius:6px}
+.group-toggle:hover{background:var(--c-side-bg-02)}
+.group-avatar-btn{display:inline-flex;line-height:0;padding:0;border:0;background:transparent;
+  cursor:pointer;border-radius:50%}
+.group-avatar-btn:hover{outline:2px solid var(--c-accent-line-03);outline-offset:1px}
+/*:不设黄条；主理人头像用黄色外圈（box-shadow，不占布局，所有头像同高）。 */
+.group-avatar-host .avatar{box-shadow:0 0 0 2px var(--c-warn-bg-01);border-radius:50%}
+/*:群聊对话也显示在左边栏里，展示条目叫群聊名字 ——
+    左栏单独一栏（在「任务」上面）。 */
+/*:群聊这一格不参与挤压（`flex:0 0 auto`）。
+    下面的「任务」树一展开，群聊那一栏会被往上挤，
+    条目被截掉 —— 展开是向下舒展的，不该从上面那一栏借高度。
+    高度 = 内容自然高度（3 条约 133px，全看得见），超过 `max-height` 才自己滚。 */
+.side-chats{display:flex;flex-direction:column;gap:2px;padding:10px 0 8px;
+  border-bottom:1px solid var(--c-side-line-02);max-height:190px;overflow:auto;
+  flex:0 0 auto}
+.side-chats-title{margin:0 0 4px;padding:0 7px;font-size:12px;font-weight:600;
+  color:var(--c-side-fg-05)}
+.side-chat{display:flex;align-items:center;gap:8px;min-height:30px;padding:0 9px;
+  border:0;border-radius:7px;background:transparent;color:var(--c-side-fg-04);
+  font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.side-chat:hover{background:var(--c-side-bg-02)}
+.side-chat.on{background:var(--c-accent-bg-17);color:var(--c-accent-fg-05);font-weight:600}
+.side-chat-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/*:展开区自己不再冒泡到卡片（否则点一下表单就收起来了）—— `cursor:default` 是
+    给用户的读数："这块不负责收起"。 */
+.group-body{flex:1 0 100%;width:100%;margin-top:8px;padding-top:8px;
+  border-top:1px solid var(--c-side-line-02);cursor:default}
+.group-members{display:flex;flex-wrap:wrap;gap:8px}
+.group-member{display:flex;flex-direction:column;align-items:center;gap:3px;width:82px;
+  padding:6px 4px;border:1px solid transparent;border-radius:10px;background:transparent;
+  color:inherit;font:inherit;cursor:pointer;text-align:center}
+.group-member:hover{background:var(--c-side-bg-02);border-color:var(--c-side-line-02)}
+/*:显示不完名字就省略号 —— 三行 `overflow/text-overflow/nowrap` 一件不能少。 */
+.group-member-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:11.5px;color:var(--c-side-fg-01)}
+.group-member-role{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:10.5px;color:var(--c-side-fg-05)}
+.group-member-badge{font-size:9.5px;color:var(--c-accent-fg-40)}
+.group-empty{color:var(--c-warn-fg-02)}
+.group-form-hint{margin:0 0 7px;font-size:11.5px;color:var(--c-warn-fg-02);line-height:1.5}
+.group-member-form{display:flex;flex-direction:column;gap:7px;margin-top:9px;padding:9px;
+  border:1px solid var(--c-side-line-02);border-radius:10px;background:var(--c-side-bg-05)}
+.group-member-title{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+  font-size:12.5px;font-weight:600;color:var(--c-side-fg-01)}
+.group-member-hint{font-size:10.5px;font-weight:400;color:var(--c-warn-fg-02)}
+.group-member-field{display:flex;flex-direction:column;gap:4px;font-size:11.5px;
+  color:var(--c-side-fg-03)}
+.group-member-field textarea,.group-role-row textarea{flex:1;min-width:0;resize:vertical;
+  border:1px solid var(--c-app-line-14);border-radius:7px;padding:6px 8px;font:inherit;
+  font-size:12px;color:var(--c-app-fg-02);background:var(--c-app-bg-57)}
+.group-member-field textarea{min-height:52px}
+.group-member-note{margin:0;font-size:10.5px;color:var(--c-side-fg-05);line-height:1.5}
+.group-member-error{margin:0;font-size:11px;color:var(--c-danger-fg-02)}
+.group-member-actions{display:flex;gap:8px}
+.group-role-row{display:flex;align-items:flex-start;gap:9px;font-size:12.5px}
+.group-role-row > span{flex:0 0 84px;padding-top:5px;color:var(--c-accent-fg-40)}
+.group-role-row textarea.over,.group-name-row input.over{border-color:var(--c-danger-line-02)}
+/*: ══ 群表单改版 ════════════════════════════════════════════════
+    基本信息三行、主理人一段、员工（总数 − 1）张小卡，
+    最后一张确认弹窗。这里只用令牌（机械读者会查字面量）。 */
+.group-form-table{display:flex;flex-direction:column;max-width:640px;margin-bottom:4px;
+  border:1px solid var(--c-side-line-02);border-radius:12px;overflow:hidden;
+  background:var(--c-side-bg-05)}
+.group-form-row{display:flex;align-items:center;gap:12px;padding:10px 14px;
+  border-bottom:1px solid var(--c-side-line-02)}
+.group-form-row:last-child{border-bottom:0}
+.group-form-label{flex:0 0 190px;font-size:12.5px;color:var(--c-side-fg-03)}
+.group-form-input{flex:0 1 300px;min-width:120px;border:1px solid var(--c-app-line-14);
+  border-radius:7px;padding:6px 9px;font:inherit;font-size:12.5px;
+  background:var(--c-app-bg-57);color:var(--c-app-fg-02)}
+.group-form-input.num{flex:0 0 88px}
+/* 群背景那一格是多行文本 —— 与单行输入同一套外观，只放开高度。 */
+.group-brief{flex:1 1 100%;resize:vertical;min-height:46px}
+/*:复选框那一句：字号与其他统一，只加粗 ——
+    锁到 12.5px，只靠字重区分。 */
+.group-form-row .group-check span{font-size:12.5px;font-weight:600}
+/*:`.group-form-hint` 已经有一条 —— 这里不许再写一条
+    （重复的顶层选择器有棘轮，`test_desktop_css` 当场红）。 */
+.group-sub-title{font-size:13px;font-weight:600;color:var(--c-side-fg-01);margin:16px 0 8px}
+/*:把整个框宽度缩小：主理人卡 640 → 320；
+    员工卡同理（两列各 ~320）。框里那句话塞不下就拆两行或者换行
+    （占位那句话在 320 宽里自动换行）。 */
+.group-host-sec{max-width:320px}
+.group-staff-sec{max-width:660px}
+/*:每张卡就是上图那个宽盒子 ——
+    头像居中、名字居中、模型按钮整宽、职能框整宽。员工卡与主理人卡同一套。 */
+.group-staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:10px;margin-bottom:10px;max-width:660px}
+.group-staff-card{display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:12px 14px;border:1px solid var(--c-side-line-02);border-radius:14px;
+  background:var(--c-side-bg-05)}
+.group-staff-host{border-color:var(--c-accent-line-03)}
+.group-staff-name{width:auto;max-width:100%;text-align:center;border:1px solid transparent;
+  border-radius:6px;background:transparent;padding:4px 8px;font:inherit;font-size:12.5px;
+  font-weight:600;color:var(--c-side-fg-01)}
+/*:点击名称可以自定义 —— 平时像文本，悬停/聚焦才显出输入框。 */
+.group-staff-name:hover,.group-staff-name:focus{background:var(--c-app-bg-57);
+  border-color:var(--c-app-line-14);outline:0}
+.group-staff-name.over{border-color:var(--c-danger-line-02)}
+/*:模型按钮要缩小到红框那样 ——
+    不再拉满整卡宽度，按内容自适应、居中放。 */
+.group-staff-card .picker{width:auto}
+.group-staff-card .picker-btn{width:auto;justify-content:center;font-size:11.5px;
+  padding:4px 10px}
+/*:窄卡里那句占位会换 2~3 行 —— 高度要留够，否则换行后的后半句看不见。 */
+.group-staff-role{width:100%;min-height:76px;resize:vertical;border:1px solid var(--c-app-line-14);
+  border-radius:7px;padding:6px 8px;font:inherit;font-size:11.5px;line-height:1.5;
+  color:var(--c-app-fg-02);background:var(--c-app-bg-57)}
+.group-staff-role.over{border-color:var(--c-danger-line-02)}
+.group-ok{display:inline-block;margin-left:9px;font-size:11.5px;color:var(--c-accent-fg-40)}
+/*:确认弹窗：从上到下「群名称 / 主理人 / 员工」，底下一对按钮，右上角 ×。 */
+.group-summary{position:relative;width:min(540px,92vw);max-height:82vh;overflow:auto;
+  border:1px solid var(--c-app-line-09);border-radius:16px;padding:22px 26px;
+  background:var(--c-side-bg-05);box-shadow:0 20px 65px var(--c-shadow-10)}
+.group-summary h2{margin:0 0 14px;font-size:18px;color:var(--c-side-fg-01)}
+.group-summary-sec{margin:0 0 12px}
+.group-summary-sec > b{display:block;margin-bottom:6px;font-size:11px;letter-spacing:.08em;
+  color:var(--c-side-fg-05)}
+.group-summary-row{display:flex;align-items:center;gap:9px;padding:6px 0;
+  border-bottom:1px solid var(--c-side-line-02)}
+.group-summary-row:last-child{border-bottom:0}
+.group-summary-name{font-size:12.5px;font-weight:600;color:var(--c-side-fg-01)}
+.group-summary-model{margin-left:auto;font-size:11px;color:var(--c-side-fg-05);text-align:right}
+.group-summary-actions{display:flex;gap:9px;margin-top:16px}
+/*:主理人群聊的开屏 —— 头像从下往上升、居中；
+    下面一个淡绿色说明框。形态像开屏动画那个 logo 一样向上居中。 */
+.group-welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;min-height:45vh;padding:20px 10px;text-align:center}
+.group-welcome-avatar{animation:group-welcome-rise .65s cubic-bezier(.2,.7,.3,1) both}
+@keyframes group-welcome-rise{
+  from{transform:translateY(44px);opacity:0}
+  to{transform:none;opacity:1}
+}
+/*:无主理人群聊的开屏 —— 顶部一个圆形群像图标
+    居中浮现，下面一排成员头像；宽度按"4 个 44px +
+    3 个 10px 间距"封顶（= 206px），5–8 人自动排成两排。 */
+.group-welcome-emblem{width:96px;height:96px;display:grid;place-items:center;
+  border-radius:50%;background:var(--c-accent-bg-35);
+  border:1px solid var(--c-accent-line-11);color:var(--c-accent-fg-40);
+  animation:group-welcome-rise .65s cubic-bezier(.2,.7,.3,1) both}
+.group-welcome-members{display:flex;flex-wrap:wrap;justify-content:center;
+  align-content:center;gap:10px;max-width:206px;
+  /*:复用 `group-welcome-rise`，不新建 keyframes —— 新 keyframe 的
+      `from/to`（或 `0%/100%`）会被 `test_desktop_css` 的重复选择器扫描
+      当成重复的顶层选择器；这里只要比图标晚 0.1s 起来就够了。 */
+  animation:group-welcome-rise .65s cubic-bezier(.2,.7,.3,1) .1s both}
+.group-welcome-member{display:inline-flex}
+/*:无主理人群聊的成员状态条 —— 替代单 agent 的步骤流。
+    多人协作不需要那个步骤流。这里只回答"谁在工作"，
+    一行一个成员：头像 + 名字 + 状态（工作中… / 已完成 / 被拦住）。 */
+.group-work{max-width:980px;margin:0 auto 18px;padding:11px 14px;
+  border:1px solid var(--c-app-line-14);border-radius:12px;background:var(--c-app-bg-57)}
+.group-work-head{font-size:11px;font-weight:600;color:var(--c-accent-fg-40);margin-bottom:8px}
+.group-work-members{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.group-work-member{display:flex;align-items:center;gap:7px;min-width:0}
+.group-work-name{font-size:11.5px;color:var(--ink);max-width:90px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.group-work-state{font-size:10px;color:var(--c-app-fg-30)}
+.group-work-member.working .group-work-state{color:var(--c-accent-fg-36)}
+.group-work-member.working .avatar{animation:group-work-pulse 1.2s ease-in-out infinite}
+.group-work-member.done .group-work-state{color:var(--c-accent-fg-09)}
+.group-work-member.error .group-work-state{color:var(--c-danger-fg-10)}
+.group-work-empty{font-size:11px;color:var(--c-app-fg-30)}
+@keyframes group-work-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.group-welcome-box{max-width:430px;background:var(--c-accent-bg-35);
+  border:1px solid var(--c-accent-line-11);border-radius:14px;padding:13px 18px;
+  font-size:12.5px;line-height:1.65;color:var(--c-accent-fg-04)}
+/*:新建向导。`.group-names` 里那些名字格只在勾了自定义时才在 DOM 里 ——
+    与浮窗里那些 `.skill-card-more` 不同，这里不需要过渡（它是一次展开，不是折叠）。 */
+.group-form{display:flex;flex-direction:column;gap:9px;max-width:460px}
+.group-field{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--c-side-fg-03)}
+.group-field > span:first-child{flex:0 0 84px;color:var(--c-accent-fg-40)}
+.group-field input[type=text],.group-field input:not([type]){flex:1;min-width:0}
+.group-check{gap:7px}
+.group-check > span{flex:1}
+.group-name-row{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.group-name-row > span{flex:0 0 84px;color:var(--c-accent-fg-40)}
+.group-name-row input{flex:1;min-width:0}
+.group-names{display:flex;flex-direction:column;gap:5px;padding-left:14px}
+.group-actions{display:flex;align-items:center;gap:8px}
+.group-next{align-self:flex-start}
+/*:群聊横幅 —— 与 `.view-bar` 同一个壳（`App.jsx` 里那一段说清了为什么必须有）。
+    只加它自己那一样：中间那句副标题（"只有主理人 X 看得见"）。 */
+.group-bar-sub{color:var(--c-side-fg-05);font-size:11.5px;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/*:指令文件那行的软告警色。
+    超了只提示、不限制，它是提示色（暖黄），不是危险红 ——
+    红会说"出错了"，而这里没有错（文件大小是用户的自由）。 */
+.setting .warn{color:var(--c-warn-fg-06)}
+/*:设置页那个「子 agent 用什么模型」的下拉。
+    只加它自己那一样 —— 盒子的规矩沿用 `.setting` 那一套。 */
+.setting select.subagent-model{border:1px solid var(--c-app-line-02);border-radius:7px;background:var(--c-app-bg-57);
+  padding:5px 8px;font:inherit;font-size:12.5px;color:var(--c-app-fg-02);max-width:220px}
+/*: ══ 设置页 ══════════════════════════════════════════════════
+    四栏（工作 / 对话 / 安全 / 其他），每一栏是一串 `.set-row`：
+    左边「标题 + 说明」、右边「开关 / 下拉 / 数字 / 按钮」。
+    整页的壳（`.backdrop` / `.settings` / `.settings-head` / `.round`）
+      与表单（`.skill-btn` / `.muted`）全部沿用现成的 —— 只加这里这几样。
+    两处如实标的状态色：`.set-flag.elsewhere`（在别处）与
+      `.set-flag.todo`（尚未实现）—— 它们不是错误，所以都不是红的。 */
+.set-tab{display:block;width:100%;text-align:left;border:0;background:transparent;
+  padding:8px 10px;border-radius:8px;font:inherit;font-size:12.5px;color:var(--c-accent-fg-08);
+  cursor:pointer}
+/*:高亮与内容标题必须自洽 —— 侧栏高亮的那一项与内容标题
+    不能各说各的（只有一项是 `<b>`、标题却写死另一屏）。 */
+.set-tab:hover{background:var(--c-app-bg-27)}
+.set-tab.on{background:var(--c-app-bg-16);color:var(--c-accent-fg-03);font-weight:600}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:11px 2px;border-bottom:1px solid var(--c-app-line-21)}
+.set-row:last-of-type{border-bottom:0}
+.set-row > div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.set-row b{font-size:12.5px;color:var(--c-app-fg-02);font-weight:600}
+.set-row span{font-size:11px;color:var(--c-app-fg-25);line-height:1.5}
+/*:没做 / 在别处的那两格不置灰整个盒子（置灰会让人以为那一屏坏了），
+    只把右边那枚标记做成浅色。 */
+.set-row.off{opacity:.72}
+/*:那一列按钮不许被挤扁：`.set-row` 是 `space-between`，左边那段长
+    （英文说明比中文长一截）时，右边那颗按钮会被压到换行——
+    中文两个字的「恢复」被掰成上下两行（英文界面截图）。
+    所以按钮按内容定宽、绝不换行。 */
+.set-row > .skill-btn{flex:0 0 auto;white-space:nowrap}
+
+/* 技能配置卡（步 3）—— 表驱动，字段来自 manifest 的 `settings`。
+   只加这几样；按钮/输入框/删除键沿用现成的（`.skill-btn` / `.set-input` / `.wl-del`）。 */
+.skill-cfg{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:4px}
+.skill-cfg-entry{border:1px solid var(--c-app-line-14);border-radius:9px;padding:8px 10px;
+  display:flex;flex-direction:column;gap:6px;background:var(--c-app-bg-57)}
+.skill-cfg-entry.is-default{border-color:var(--c-accent-line-13)}
+.skill-cfg-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.skill-cfg-head label{display:flex;align-items:center;gap:6px;font-size:12px}
+/* 「默认条目」那颗圆点：更深一点的绿（用户）——
+   浏览器默认的灰点看不出它是什么意思。 */
+.skill-cfg-head input[type=radio]{width:14px;height:14px;cursor:pointer;
+  accent-color:var(--green-dark)}
+/* 新建条目那一行：名字是行内输入（不许 prompt —— 桌面壳里会抛）。 */
+.skill-cfg-head label > .set-input{width:180px;height:26px}
+.skill-cfg-actions-row{display:flex;align-items:center;gap:6px}
+.skill-cfg-warn{color:var(--c-danger-fg-10);font-size:11px}
+/* 删除那颗：垫红底（用户指定），红底沿用现成的那一套 token。 */
+.skill-cfg .cfg-del{background:var(--c-danger-bg-11);border-color:var(--c-danger-line-03);
+  color:var(--c-danger-fg-10)}
+.skill-cfg .cfg-del:hover:not(:disabled){background:var(--c-danger-bg-11);
+  border-color:var(--c-danger-fg-10)}
+/* 密钥那一格 + 眼睛（显示/隐藏）。眼睛只改 `type`，不碰值。 */
+.skill-cfg-secret{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px}
+.skill-cfg-secret > .set-input{flex:1 1 auto;min-width:0}
+.skill-cfg-eye{flex:0 0 auto;width:26px;height:26px;display:grid;place-items:center;
+  border:1px solid var(--c-app-line-11);border-radius:7px;background:var(--c-app-bg-57);
+  color:var(--c-accent-fg-08);font-size:14px;line-height:1;cursor:pointer}
+.skill-cfg-eye:hover:not(:disabled){background:var(--c-app-bg-28)}
+.skill-cfg-eye:disabled{opacity:.5;cursor:not-allowed}
+.skill-cfg-field{display:flex;align-items:center;gap:8px;font-size:12px}
+/* 只给标签那一格定宽（`.skill-cfg-label`）—— 写成 `.skill-cfg-field > span`
+   会把密钥那半（`.skill-cfg-secret` 也是个 span）一起压成 76px
+   所以 API Key 输入框只有几十像素宽。 */
+.skill-cfg-label{flex:0 0 76px;color:var(--c-app-fg-21)}
+.skill-cfg-field > .set-input{flex:1 1 auto;min-width:0}
+.skill-cfg-actions{display:flex;gap:8px;justify-content:flex-end}
+.set-flag{flex:0 0 auto;font-size:10px;border-radius:999px;padding:2px 8px}
+.set-flag.elsewhere{background:var(--c-app-bg-25);color:var(--c-info-fg-01)}
+.set-flag.todo{background:var(--c-warn-bg-05);color:var(--c-warn-fg-07)}
+/*:多出来的那几格（有真键、有真行为，只是目标形状里没有）
+    —— 标出来是免得验收时对不上。 */
+.set-extra{font-size:10px;color:var(--c-warn-fg-11)}
+.set-input{flex:0 0 auto;min-width:150px;max-width:240px;border:1px solid var(--c-app-line-02);
+  border-radius:7px;background:var(--c-app-bg-57);padding:5px 8px;font:inherit;font-size:12.5px;
+  color:var(--c-app-fg-02)}
+.set-input.num{min-width:78px;max-width:110px;text-align:right}
+/*:访问白名单那一格（`kind:"allowlist"`）。
+    它不复用 `.set-row` 的水平布局 —— 名单会长，撑不下右边那一列
+    所以改成竖排（`.col`），列表跟在标题下面。 */
+.set-row.col{align-items:flex-start;flex-direction:column;gap:8px}
+.wl-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.wl-item{display:inline-flex;align-items:center;gap:4px;background:var(--c-app-bg-35);
+  border:1px solid var(--c-app-line-08);border-radius:999px;padding:2px 4px 2px 10px}
+.wl-item code{font-size:11.5px;color:var(--c-app-fg-09)}
+.wl-del{border:0;background:transparent;cursor:pointer;color:var(--c-app-fg-21);
+  font-size:13px;line-height:1;padding:3px 6px;border-radius:999px}
+.wl-del:hover{background:var(--c-app-bg-11);color:var(--c-app-fg-14)}
+.wl-del:disabled{cursor:not-allowed;opacity:.5}
+.wl-empty{font-size:11px;color:var(--c-app-fg-32)}
+/* 监听器那一格：圆点是"真的在跑"，与右边那个开关是两件事
+   （目录不存在时正是"开着但不会触发"，只画开关就是标签在说谎）。 */
+.wt-item{gap:7px}
+.wt-path{word-break:break-all}
+.wt-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--c-app-bg-04)}
+.wt-dot.on{background:var(--c-accent-bg-09)}
+/* `.set-row > div` 的 `flex-direction:column` 特异性更高，
+   把 `.wl-add` 压成了竖排（输入框、选择、添加各占一行）。
+   所以这一条必须比 `.set-row > div` 更具体，且输入框吃掉剩余宽度。 */
+.set-row > .wl-add{display:flex;flex-direction:row;align-items:center;gap:8px;width:100%}
+.wl-add .set-input{flex:1 1 auto;min-width:180px}
+.wl-pick-label{font-size:11px;color:var(--c-app-fg-25);white-space:nowrap}
+/*:名单类那一行的摘要（几条 / 几个在跑）—— 具体条目在子页里。 */
+.set-row span.set-sum{color:var(--c-app-fg-32)}
+.set-num{display:flex;align-items:center;gap:6px}
+.set-num em{font-style:normal;font-size:11px;color:var(--c-app-fg-25)}
+/*:开关：一颗圆钮在一条轨道上滑。`aria-checked` 与视觉同一处决定
+    （组件里两处都取自同一个 `v`）—— 分两处就会漂。 */
+.switch{flex:0 0 auto;width:38px;height:22px;border:0;border-radius:999px;padding:0;
+  background:var(--c-app-bg-06);position:relative;cursor:pointer;transition:background .15s}
+.switch i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+  background:var(--c-app-bg-57);box-shadow:0 1px 2px var(--c-shadow-05);transition:left .15s}
+.switch.on{background:var(--c-accent-bg-06)}
+.switch.on i{left:19px}
+.switch:disabled{opacity:.5;cursor:not-allowed}
+/*:关 ICE 总闸时那张警告（+ 5 秒倒计时）。
+    它是独立一层（不是 `.backdrop` 的重用）：它盖在设置弹窗上面，
+      而设置弹窗自己也是 `.backdrop`，复用一个类会让两层互相点掉。 */
+.ice-warn-box{position:fixed;inset:0;z-index:40;display:flex;align-items:center;
+  justify-content:center;background:var(--c-app-bg-01)}
+.ice-warn{width:min(460px,92vw);background:var(--c-app-bg-57);border-radius:14px;padding:22px 22px 16px;
+  box-shadow:0 18px 50px var(--c-shadow-06)}
+.ice-warn h2{font-size:17px;margin:0 0 8px;color:var(--c-app-fg-02)}
+.ice-warn p{font-size:12px;color:var(--c-accent-fg-08);line-height:1.7;margin:0 0 8px}
+.ice-alarm{background:var(--c-danger-bg-14);border:1px solid var(--c-danger-line-05);border-radius:9px;
+  padding:9px 11px;margin:10px 0}
+.ice-alarm p{color:var(--c-danger-fg-03);margin:0 0 4px;font-weight:600}
+.ice-alarm p:last-child{margin-bottom:0}
+.ice-acts{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}
+
+/*: ══ 端配置页 ══════════════════════════════════════════════
+    12 张卡 + 「管理此配置」浮窗。整页骨架（`.page` / `.page-head` /
+    `.head-actions` / `.muted`）与浮窗壳（`.backdrop` / `.settings-head` /
+    `.round`）与表单（`.field`）全部沿用现成的 —— 这里只加它自己那几样。
+    两处颜色是规范定值：「默认启用」的高亮 `#BF7E43`、右上角那个
+      深绿色圆点。 */
+.ep-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));
+  gap:10px;margin:14px 0 4px}
+/*:卡片底色 = 左边栏那个色（`--side`）——
+    白底上有几个厂商图标看不清（它们里有整条 `fill="#fff"` 的白笔画，
+    比如 Moonshot 那个 "K"，在白卡上是隐形的）。 */
+.ep-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;
+  gap:3px;padding:12px 12px 10px;border:1px solid var(--c-app-line-06);border-radius:10px;
+  background:var(--side);cursor:pointer;font:inherit;text-align:left;
+  animation:cardFadeIn .4s ease both}
+.ep-card:hover{border-color:var(--c-accent-line-06);background:var(--c-app-bg-07)}
+.ep-card b{font-size:13.5px;color:var(--c-app-fg-02)}
+/*:厂商图标：`web/static/img/provider-*.svg`，出处与许可见 `THIRD-PARTY.md`。
+    「其他」那张卡走自绘字形（`.ep-logo svg`），尺寸与 `<img>` 对齐 ——
+       12 张卡摆在一起时，一张大一帧小是最扎眼的。 */
+.ep-logo{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;color:var(--c-accent-fg-46)}
+.ep-logo img{width:22px;height:22px;object-fit:contain}
+.ep-logo svg{width:18px;height:18px}
+/*:请求地址那一格的提示（跟着卡片变的那句话）。
+    它紧贴在输入框下面，所以字号往下压一点、颜色比正文轻 —— 免得被当成报错。 */
+.ep-hint{margin:-2px 0 4px;font-size:11.5px;color:var(--c-accent-fg-43);line-height:1.55}
+/*:默认那条所属的卡片边缘也高亮（不只是条目本身）。 */
+.ep-card-default{border-color:var(--c-warn-line-02);box-shadow:inset 0 0 0 1px var(--c-shadow-17)}
+.ep-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;
+  background:var(--c-accent-bg-01)}
+.ep-panel{width:min(720px,94vw);max-height:88vh;overflow:auto;background:var(--c-app-bg-57);
+  border-radius:14px;padding:16px 18px 18px;box-shadow:0 18px 48px var(--c-shadow-01)}
+.ep-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
+.ep-row{display:flex;align-items:center;gap:10px;padding:9px 11px;
+  border:1px solid var(--c-app-line-15);border-radius:9px;background:var(--c-app-bg-55)}
+/*:被设为默认的那条目高亮 `#BF7E43`。 */
+.ep-row-default{border-color:var(--c-warn-line-02);background:var(--c-app-bg-43)}
+.ep-row-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.ep-row-main b{font-size:13px;color:var(--c-app-fg-02)}
+.ep-row-main .muted{font-size:11.5px;overflow-wrap:anywhere}
+/* 配置条目的只读能力 chips（图片 / 音频 / 纯文本）。 */
+.ep-caps{display:inline-flex;gap:4px;margin-top:2px}
+.ep-caps > span{font-size:10.5px;padding:0 6px;border-radius:6px;line-height:17px;
+  color:var(--c-accent-fg-17);background:var(--c-accent-bg-31);
+  border:1px solid var(--c-accent-line-15)}
+/* 用户自己勾过覆盖口 —— 必须看得出来（"强制关"与"自动判定为没有"
+   在 chips 上一模一样就是标签在说谎）。 */
+.ep-caps .ep-caps-override{color:var(--c-warn-fg-01);background:var(--c-warn-bg-03);
+  border-color:var(--c-warn-fg-01)}
+.ep-badge{align-self:flex-start;font-size:10.5px;color:var(--c-warn-fg-01);background:var(--c-warn-bg-03);
+  border-radius:5px;padding:1px 6px}
+.ep-row-acts{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.ep-form{display:flex;flex-direction:column;gap:9px;border-top:1px solid var(--c-app-line-19);
+  padding-top:12px}
+.ep-form h3{margin:0 0 2px;font-size:13px;color:var(--c-app-fg-02)}
+.ep-check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--c-app-fg-12)}
+.ep-check input{accent-color:var(--c-accent-bg-03)}
+/*:容量输入框上方的警示文案。
+    是警示不是错误：它不拦任何东西（留空就是合法值）。 */
+.ep-danger{margin:0;padding:7px 10px;border-radius:7px;background:var(--c-danger-bg-13);
+  border:1px solid var(--c-danger-line-04);color:var(--c-danger-fg-04);font-size:12px;line-height:1.5}
+.ep-probe{margin:0;font-size:12px;color:var(--c-app-fg-12);overflow-wrap:anywhere;
+  background:var(--c-app-bg-40);border-radius:7px;padding:7px 10px}
+.ep-probe.ok{color:var(--c-accent-fg-09);background:var(--c-app-bg-34)}
+.ep-probe.bad{color:var(--c-danger-fg-04);background:var(--c-danger-bg-13)}
+.ep-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ep-note{margin:2px 0 0;font-size:11.5px;color:var(--c-accent-fg-50);line-height:1.5}
+
+/* ══════════════════════════════════════════════════════════════════════
+   开屏两态 —— 输入框那一格
+
+   两态是同一个 DOM 节点（`App.jsx` 里那份 JSX 只写了一遍）——
+      换父节点 = 组件重挂载，那"掉回下面"这条过渡根本不会播。
+
+   "掉回下面"怎么实现的：`.composer-dock` 绝对定位挂在底边，
+      草稿态把它挪到垂直中线（`bottom:50%` + `translateY(50%)`，
+      于是它的中心落在中线上）。`bottom` 与 `transform` 都是可过渡属性
+      所以这就是那条动画。
+   不用 `rAF` 驱动（`backgroundThrottling:false` 下窗口被遮挡时
+      `rAF` 不触发，过渡卡住）。
+
+   `.bottom-composer` 那一族规则已无人使用（这一批把它换成
+      `.composer-dock`）—— 留着是为了不动那条压缩行；新代码一律用新名字。 */
+.chat-main{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column}
+
+/* 不绝对定位 —— 绝对定位（`bottom:50%` + `translateY(50%)`）会
+   让它盖在问候语上（两个东西各自居中，必然重叠），而且丢掉 880px 的宽度上限
+   所以输入框横跨整屏，看起来"变大了"。
+   所以现在是普通流布局：草稿态整个 `.chat-main` 居中，三样（logo+问候 / 输入框 /
+   选择工作区）作为一个整体居中。 */
+.composer-dock{flex:0 0 auto;position:relative;padding:12px 32px 15px;
+  padding-left:max(28px,calc((100% - 780px)/2));
+  padding-right:max(28px,calc((100% - 780px)/2));
+  border-top:1px solid var(--c-app-line-18);background:var(--c-app-bg-48);
+  /*: 「回到底部」—— 只在用户自己往上翻（不再贴底）时出现。
+    用户往上翻时不要被强行拽回底部；这一颗是他自己回去的路。 */
+.scroll-bottom{position:absolute;right:18px;top:-40px;z-index:7;display:flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:999px;border:1px solid var(--c-app-line-14);background:var(--c-app-bg-57);
+  color:var(--c-accent-fg-08);font-size:11px;box-shadow:0 2px 8px var(--c-shadow-03);cursor:pointer}
+.scroll-bottom:hover{background:var(--c-app-bg-28)}
+
+/* "掉回下面"是一条真会播的过渡 —— 见下面草稿态那条 `padding-bottom`。
+     `padding` 可插值（不像 `justify-content`），整个下移是连续的，不是瞬移。
+     不用 rAF 驱动（`backgroundThrottling:false` 下窗口被遮挡时
+     rAF 不触发，过渡会卡住）。 */
+  transition:padding-bottom .34s cubic-bezier(.2,.7,.3,1),
+             padding .34s cubic-bezier(.2,.7,.3,1),
+             background .34s ease}
+
+/* 草稿态：那一格用下内边距把自己顶上去（不是另一次布局切换）——
+   所以"发送"那一刻它只是内边距从 30vh 收回 12px，位置连续地滑到底部。
+   不能用"绝对定位到中线"：那会让它盖在问候语上（两个各自居中的东西必然重叠）。
+   也不能用 `justify-content:center`：那是布局切换，视觉上是"瞬移"。 */
+.chat-main.draft .composer-dock{padding-bottom:30vh;border-top:0;background:transparent}
+
+/* ── 左栏批量删除 ──────────────────────────────── */
+/* 「任务 + 按钮」那个左组 —— `h3` 是 `space-between`，不包起来按钮会被推到另一头 */
+.h3-left{display:flex;align-items:center;gap:8px;min-width:0}
+/* 红字按钮 —— 它不可逆，所以视觉上要和别的动作分得开 */
+.batch-del{border:0;background:transparent;padding:1px 0;color:var(--c-danger-fg-16);
+  font-size:12px;font-weight:700}
+.batch-del:hover{text-decoration:underline}
+/* 一段都没选时它是暗的（点了会说"先点几段"，不装死） */
+.batch-del.dim{color:var(--c-danger-fg-20)}
+.batch-cancel{border:0;background:transparent;padding:1px 4px;color:var(--c-accent-fg-58);font-size:11px}
+.batch-cancel:hover{color:var(--c-accent-fg-13)}
+/* 勾上的那一行：整行高亮 + 左侧色条（`.thread-row` 是纵向 flex，塞不了勾选框） */
+.thread-row.picked{background:var(--c-accent-bg-22);box-shadow:inset 3px 0 0 var(--c-shadow-16)}
+
+/* ── 草稿态那个「选择工作区」（框外 · 居中）──────────────────────── */
+.ws-pick{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px}
+.ws-pick-btn{height:32px;display:flex;align-items:center;gap:7px;padding:0 14px;
+  border:1px solid var(--c-app-line-09);border-radius:999px;background:var(--c-app-bg-57);color:var(--c-accent-fg-31);font-size:12px}
+.ws-pick-btn:hover:not(:disabled){background:var(--c-app-bg-27);color:var(--c-accent-fg-18)}
+.ws-pick-btn:disabled{color:var(--c-app-fg-36)}
+.ws-pick-btn.on{background:var(--c-app-bg-18);border-color:var(--c-accent-line-11);color:var(--c-accent-fg-10);font-weight:600}
+.ws-pick-reset{height:26px;display:flex;align-items:center;gap:5px;border:0;border-radius:999px;
+  padding:0 10px;background:transparent;color:var(--c-accent-fg-55);font-size:11px}
+.ws-pick-reset:hover{background:var(--c-app-bg-26);color:var(--c-accent-fg-31)}
+
+/* ── 发送后那一句（长版写法）────────────── */
+/* 「内容由ai生成」那句要加深：
+   原来的 `#9ca79e` 在 `#f7f9f6` 底上对比度只有 2.35:1（WCAG AA 对正文要 4.5:1）
+   所以加深是有依据的。现在 `#647568` = 4.63:1（过 AA）。
+   再深一点会开始"抢戏" —— 它是一句提示，不是正文；4.6 上下正合适。 */
+.ai-note{text-align:center;margin:7px 0 0;color:var(--c-accent-fg-29);font-size:11px}
+/* 新版本已下载 —— 挂在上面那句后面的一行黄字（用户要的颜色与位置）。
+   用 warn 那三只令牌：它们已经在浅色/深色两套里都有值，不另造一根。 */
+.update-ready-banner{text-align:center;margin:4px 0 0;color:var(--c-warn-fg);
+  font-size:12px;font-weight:600}
+/* 「手动检查更新」下面浮出的那一行（是/否 或 正在获取）。 */
+.update-ask{background:var(--c-warn-bg);border:1px solid var(--c-warn-line);border-radius:8px}
+.update-ask b{color:var(--c-warn-fg)}
+.update-ask-btns{display:flex;gap:8px}
+
+/* ── 左栏「任务」按目录分组的树 ─────────────
+   `.thread-list`（扁平那一版）已无人使用 —— 换成 `.thread-tree`。
+   组内那一层缩进一格，让"这条挂在哪个目录下"一眼看得出来。 */
+/* `max-height:260px` 已删 —— 它与 `flex:1` 打架：
+   判据是「先占满再滚动」。现在它拿剩下的高度（`flex:1`）、装不下才滚；
+   footer 由 `.sidebar footer{flex:0 0 auto}` 钉住，不会被顶走。
+   横向那条滚动条是另一个病：`display:grid` 的隐式列是 `auto`
+   所以被 `white-space:nowrap` 的长标题撑宽（`.thread-row b` 的 `ellipsis` 永远轮不到）
+   所以出现在列表底部那条横向滚动条，文字还被竖条压掉一截。
+   所以`grid-template-columns:minmax(0,1fr)`：列宽钉死在容器，长标题才真的省略号。
+   组那一层同理（它的隐式列也是 auto）。 */
+.thread-tree{display:grid;gap:3px;min-width:0;flex:1 1 auto;min-height:0;
+  grid-template-columns:minmax(0,1fr);overflow-y:auto;overflow-x:hidden;
+  /* 行按内容高度排，不摊剩余高度。`align-content` 默认是 `stretch`：
+     只有一条会话时那一行会被撑满整栏，选中色于是变成"半栏绿"。 */
+  align-content:start}
+.thread-group{display:grid;gap:2px;min-width:0;grid-template-columns:minmax(0,1fr);
+  align-content:start}
+.group-row{display:flex;align-items:center;gap:6px;padding:5px 7px;border:0;border-radius:6px;
+  background:transparent;color:var(--c-accent-fg-13);font-size:12px;text-align:left}
+.group-row:hover{background:var(--c-side-bg-01)}
+.group-row b{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.group-row small{color:var(--c-side-fg-05);font-size:10px;font-weight:600}
+/* `.thread-row` 本体是 `width:100%`（上面那条），再加 `margin-left` 就超出 18px
+   —— 而 `.thread-tree` 是 grid，那一列被撑宽，组头上那个计数也跟着飘到栏外
+   （"对话数显示超出去了"）。缩进改成"宽度减掉那 18px"。 */
+.thread-group .thread-row{width:calc(100% - 18px);margin-left:18px}
+.group-more{width:calc(100% - 18px);margin-left:18px;border:0;border-radius:6px;background:transparent;
+  padding:3px 7px;text-align:left;color:var(--c-accent-fg-56);font-size:11px}
+.group-more:hover{background:var(--c-side-bg-03);color:var(--c-accent-fg-13)}
+
+/* ── 左栏那一行上的两格会话级状态 ─────────── */
+/* 「排队中」＝ 黄。 */
+.row-queued{flex:0 0 auto;padding:1px 6px;border-radius:999px;font-style:normal;
+  background:var(--c-warn-bg-08);border:1px solid var(--c-warn-line-07);color:var(--c-warn-fg-04);font-size:9px;font-weight:600}
+/* 红点＝「这一段跑完了、而用户没有停在它上面」。 */
+.row-unread{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--c-danger-bg-04)}
+
+/* ── 50 条存储提醒那一支横幅 ────────────────
+   形状是横幅不是 modal —— 它告知，不要求用户做决定。
+   「不再提醒」写的是持久化的"不许"，撤回口在设置 → 对话那一格。 */
+.thread-notice{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:7px 9px;
+  border:1px solid var(--c-warn-line-08);border-radius:7px;background:var(--c-warn-bg-09);color:var(--c-warn-fg-03);font-size:11px}
+.thread-notice span{flex:1;line-height:1.45}
+.thread-notice b{font-weight:700}
+.thread-notice button{flex:0 0 auto;border:1px solid var(--c-warn-line-05);border-radius:6px;
+  padding:3px 8px;background:var(--c-side-bg-06);color:var(--c-warn-fg-04);font-size:10px}
+.thread-notice button:hover{background:var(--c-warn-bg-06)}
+
+/* ── 置顶 ──────────────────────────────────────────────────────
+   置顶区在最上面、平铺；组头 `置顶` 用一个比文件夹更小的标。 */
+.pinned-block{margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--c-accent-line-12)}
+.pin-head{display:flex;align-items:center;gap:5px;padding:3px 7px;color:var(--c-accent-fg-49);
+  font-size:10px;font-weight:700;letter-spacing:.06em}
+/* 标题那一行里的置顶标（`<b>` 内联，不占新行） */
+.pin-mark{vertical-align:-1px;margin-right:4px;color:var(--c-accent-fg-51)}
+.group-row.pinned b{color:var(--c-accent-fg-18)}
+.group-row.pinned b::after{content:" · 置顶";color:var(--c-accent-fg-56);font-size:10px;font-weight:400}
+
+/* ════════════════════════════════════════════════════════════════
+   配色编辑器那一格
+   —— 六个 `<input type="color">` + 恢复默认。色板本身由 `theme.js` 驱动，
+      这里只管摆位；一个颜色字面量都不许有（`test_every_color_is_a_token`）。
+   ════════════════════════════════════════════════════════════════ */
+/* 主题模式（浅色 / 深色 / 跟随系统）—— 一个上拉框，与「工作模式」那一排同款。 */
+.theme-mode{display:flex;align-items:center;gap:9px;justify-content:flex-end;margin:0 0 10px;
+  font-size:11px;color:var(--c-app-fg-21)}
+.theme-grid{display:flex;flex-wrap:wrap;gap:9px 16px;justify-content:flex-end;max-width:430px}
+.theme-cell{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--c-app-fg-21);
+  white-space:nowrap}
+.theme-cell input[type=color]{width:30px;height:24px;padding:0;border:1px solid var(--c-app-line-14);
+  border-radius:6px;background:var(--c-app-bg-57);cursor:pointer}
+.theme-cell input[type=color]:disabled{opacity:.5;cursor:not-allowed}
+
+/* ════════════════════════════════════════════════════════════════
+   一条回复产出的东西（图 / 音 / 视频）
+   —— 形状：单图最大 500，多图网格 280。
+      颜色一律走 token（`test_every_color_is_a_token` 钉着）。
+   ════════════════════════════════════════════════════════════════ */
+.artifacts{margin-top:6px;display:flex;flex-direction:column;gap:6px;max-width:100%}
+.artifact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,280px));
+  gap:6px;max-width:100%}
+.artifact-grid.single{display:block}
+.artifact-thumb{padding:0;border:1px solid var(--c-app-line-14);border-radius:8px;
+  background:var(--c-app-bg-57);overflow:hidden;cursor:zoom-in;line-height:0;max-width:100%}
+.artifact-grid.single .artifact-thumb{max-width:500px}
+.artifact-thumb img{display:block;width:100%;height:auto;max-height:500px;object-fit:contain}
+.artifact-grid.single .artifact-thumb img{max-height:500px}
+.artifact-media{display:block;max-width:100%;border-radius:8px;border:1px solid var(--c-app-line-14);
+  background:var(--c-app-bg-57)}
+.artifact-loading{font-size:11px;color:var(--c-app-fg-21);padding:4px 2px}
+/* 超过内联闸的产物：一行下载，不塞 <img>/<video>（判据见 artifacts-view.js）。 */
+.artifact-file{display:flex;align-items:center;gap:8px;max-width:100%;padding:7px 10px;
+  border:1px solid var(--c-app-line-14);border-radius:8px;background:var(--c-app-bg-57);
+  color:inherit;text-decoration:none;font-size:12px}
+.artifact-file:hover{border-color:var(--c-accent-line-13);background:var(--c-app-bg-07)}
+.artifact-file-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.artifact-file-size{flex:0 0 auto;font-size:11px;color:var(--c-app-fg-21)}
+.artifact-large{max-width:92vw;max-height:92vh;object-fit:contain;border-radius:10px;
+  background:var(--c-app-bg-57)}
+.artifact-close{position:fixed;top:14px;right:14px;display:flex;align-items:center;
+  justify-content:center;width:32px;height:32px;border-radius:50%;cursor:pointer;
+  border:1px solid var(--c-app-line-14);background:var(--c-app-bg-57);color:var(--c-app-fg-21)}
+
+/* ── 用户消息下面那一排附件（图 = 缩略图 · 文件 = 图标 + 名字）──
+   排在气泡下面；单张长边 240，
+     多张缩成 64 方贴片 —— 多张时叠着排（负边距互相压住，
+     悬停抬起来的那张浮到最上面）。 */
+.msg-attachments{display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+  margin-top:6px;max-width:min(78%,760px)}
+.att-files{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.att-file{display:inline-flex;align-items:center;gap:7px;max-width:300px;padding:6px 10px;
+  border:1px solid var(--c-app-line-14);border-radius:9px;background:var(--c-app-bg-57);
+  color:var(--c-app-fg-02);font-size:11px}
+.att-file svg{flex:0 0 auto;color:var(--c-accent-fg-33)}
+.att-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-file-size{flex:0 0 auto;color:var(--c-app-fg-21);font-size:10px}
+.att-images{display:flex;align-items:center}
+.att-img{position:relative;padding:1px;border:1px solid var(--c-app-line-14);border-radius:10px;
+  background:var(--c-app-bg-57);line-height:0;cursor:zoom-in;overflow:hidden}
+.att-img.single img{display:block;max-width:240px;max-height:240px;width:auto;height:auto;
+  object-fit:contain}
+.att-images.stack .att-img{width:64px;height:64px;flex:0 0 auto;
+  box-shadow:0 2px 8px var(--c-shadow-03)}
+.att-images.stack .att-img+.att-img{margin-left:-18px}
+.att-images.stack .att-img:hover{transform:translateY(-2px)}
+.att-images.stack .att-img img{display:block;width:100%;height:100%;object-fit:cover}
+.att-img-missing{display:grid;place-items:center;width:100%;height:100%;padding:4px;
+  font-size:9px;line-height:1.2;color:var(--c-app-fg-21);white-space:normal}
+
+/* ── 全屏看大图（`image-viewer.jsx`，产物与用户附件共用一份）── */
+.img-viewer{padding:0}
+.img-nav{position:fixed;top:50%;transform:translateY(-50%);display:grid;place-items:center;
+  width:42px;height:42px;border-radius:50%;cursor:pointer;z-index:12;
+  border:1px solid var(--c-app-line-14);background:var(--c-app-bg-57);color:var(--c-app-fg-21)}
+.img-nav.prev{left:18px}
+.img-nav.next{right:18px}
+.img-counter{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  padding:3px 10px;border-radius:12px;border:1px solid var(--c-app-line-14);
+  background:var(--c-app-bg-57);color:var(--c-app-fg-02);font-size:12px}
+
+/* ════════════════════════════════════════════════════════════════
+   模型写的 SVG / Mermaid（` ```svg ` / ` ```mermaid `）
+   —— 图片本体是 `<img src="data:image/svg+xml,…">`；这里只管摆位与"看源码"。
+   ════════════════════════════════════════════════════════════════ */
+.md-svg{display:flex;flex-direction:column;gap:5px;max-width:100%}
+.md-svg-img{display:block;max-width:100%;max-height:480px;object-fit:contain;
+  border:1px solid var(--c-app-line-14);border-radius:8px;background:var(--c-app-bg-57)}
+.md-svg-note{font-size:11px;color:var(--c-app-fg-21);padding:2px 0}
+.md-svg-actions{display:flex;gap:6px}
+.md-svg-btn{border:1px solid var(--c-app-line-14);border-radius:6px;background:var(--c-app-bg-57);
+  color:var(--c-app-fg-21);font-size:11px;padding:3px 9px}
+.md-svg-btn:hover{color:var(--c-accent-fg-18)}
+.md-svg-pre{max-height:320px;overflow:auto;margin:0;padding:8px 10px;border-radius:8px;
+  border:1px solid var(--c-app-line-14);background:var(--c-app-bg-57);
+  font-size:11px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* 不设 `.fa-badge`（完全权限的常驻红徽标）——
+   说明在模式 chip 的 `title` 里；「完全权限」四个字本身就是常驻标识。 */
+
+/* ── 接管按钮 ───────────────────────────────────────
+   位置在投入档右侧，颜色深一级，仅「完全权限」可用。
+   禁用不只要灰掉，还要说得清为什么（悬停提示在 `span` 上 —— 原生
+     `disabled` 的按钮收不到鼠标事件，`title` 挂在按钮上等于没挂）。 */
+.takeover-wrap{display:inline-flex}
+.takeover-btn{height:31px;display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;
+  padding:0 10px;background:var(--green-dark);color:var(--c-app-fg-41);font-size:10px;font-weight:650;letter-spacing:.02em}
+.takeover-btn:hover:not(:disabled){background:var(--green)}
+.takeover-btn.on{background:var(--clay)}
+.takeover-btn:disabled{background:var(--c-app-bg-29);color:var(--c-app-fg-33);cursor:not-allowed}
+.takeover-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--c-app-fg-41);animation:takeover-pulse 1.6s ease-in-out infinite}
+@keyframes takeover-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* 「我知道了」= 只改"以后还弹不弹"。放最右，不与
+   「启用 / 取消」抢位置 —— 它不是第三个动作，是一次偏好设置。 */
+.safety-ack{margin-left:auto;border:0;background:transparent;color:var(--c-danger-fg-18);
+  font-size:12px;text-decoration:underline;text-underline-offset:3px}
+.safety-ack:hover{color:var(--c-app-fg-01)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   首启引导 + 端配置通道卡 + 微信扫码
+   只补这一屏真正新的那几个类；布局/令牌全复用已有的
+     （`.page` / `.backdrop` / `.settings-head` / `.field` / `.skill-btn`）。
+   一行一个选择器 —— `tests/test_desktop_css.py` 按行首认规则。
+   一个 `!important` 都没有（那边也是这么钉的）。 */
+
+.onboard-overlay{position:fixed;z-index:2000;inset:0;display:grid;place-items:center;
+  padding:24px;background:var(--c-app-bg-48)}
+.onboard-panel{position:relative;width:min(620px,94vw);max-height:90vh;overflow:auto;
+  border:1px solid var(--c-app-line-07);border-radius:16px;padding:30px 36px 22px;
+  background:var(--c-app-bg-57);box-shadow:0 20px 65px var(--c-shadow-09);text-align:center}
+.onboard-close{position:absolute;top:14px;right:14px}
+.onboard-steps{display:flex;justify-content:center;gap:8px;margin-bottom:22px}
+.onboard-step-dot{width:8px;height:8px;border-radius:50%;background:var(--c-app-bg-21);display:inline-block}
+.onboard-step-dot-done{background:var(--c-accent-bg-21)}
+.onboard-step-dot-current{background:var(--c-accent-bg-21);box-shadow:0 0 0 3px var(--c-accent-bg-34)}
+.onboard-body{min-height:280px}
+.onboard-offline{margin:0 0 14px;padding:8px 12px;border-radius:8px;font-size:11px;
+  color:var(--c-warn-fg-01);background:var(--c-warn-bg-02);text-align:left}
+.onboard-logo{width:64px;height:64px;object-fit:contain;margin-bottom:12px}
+.onboard-version{font-size:11px;color:var(--c-app-fg-30);margin-bottom:6px}
+.onboard-title{margin:0 0 6px;font-size:21px;color:var(--c-app-fg-04)}
+.onboard-sub{margin:0 0 16px;font-size:13px;color:var(--c-app-fg-21)}
+.onboard-note{margin:10px 0;font-size:11px;line-height:1.6;color:var(--c-app-fg-21)}
+.onboard-warn{margin:10px 0;font-size:11px;line-height:1.6;color:var(--c-danger-fg-10)}
+.onboard-error{margin:10px 0;font-size:11px;line-height:1.6;color:var(--c-danger-fg-10)}
+.onboard-actions{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;
+  gap:10px;margin-top:18px}
+.onboard-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:34px;padding:0 16px;border-radius:8px;border:1px solid var(--c-app-line-04);
+  background:var(--c-app-bg-57);color:var(--c-accent-fg-27);font-size:12px}
+.onboard-btn:disabled{opacity:.5;cursor:not-allowed}
+.onboard-btn-primary{background:var(--green-dark);border-color:var(--green-dark);color:var(--c-app-fg-41);font-weight:650}
+.onboard-btn-primary:hover:not(:disabled){background:var(--green)}
+.onboard-btn-ghost{background:transparent}
+.onboard-btn-browse{white-space:nowrap}
+.onboard-input-row{display:flex;gap:8px;margin-top:6px}
+.onboard-input{flex:1;min-width:0;border:1px solid var(--c-app-line-07);border-radius:7px;
+  padding:8px 10px;font-size:12px;background:var(--c-app-bg-57);color:var(--ink)}
+.onboard-input:focus{outline:none;border-color:var(--c-accent-line-02)}
+.onboard-provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+  gap:7px;margin:12px 0}
+.onboard-provider-chip{display:flex;align-items:center;justify-content:center;gap:6px;
+  min-height:34px;padding:0 8px;border:1px solid var(--c-app-line-07);border-radius:8px;
+  background:var(--c-accent-bg-34);color:var(--c-app-fg-04);font-size:11px}
+.onboard-provider-chip:hover{border-color:var(--c-accent-line-13);background:var(--c-accent-bg-25)}
+.onboard-provider-chip-selected{border-color:var(--green-dark);background:var(--c-accent-bg-17);font-weight:650}
+.onboard-provider-chip img{width:18px;height:18px;object-fit:contain}
+.onboard-platform-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
+  gap:8px;margin:12px 0}
+.onboard-platform-chip{display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:10px 6px;border:1px solid var(--c-app-line-07);border-radius:10px;
+  background:var(--c-accent-bg-34);color:var(--c-app-fg-04);font-size:12px}
+.onboard-platform-chip:hover{border-color:var(--c-accent-line-13);background:var(--c-accent-bg-25)}
+.onboard-platform-chip-selected{border-color:var(--green-dark);background:var(--c-accent-bg-17);font-weight:650}
+.onboard-platform-chip img{width:26px;height:26px;object-fit:contain}
+.onboard-platform-chip small{font-size:9px;color:var(--c-app-fg-30);font-weight:400}
+.onboard-config-form{margin:12px auto 0;max-width:420px;text-align:left}
+.onboard-config-form .field{margin-bottom:10px}
+.onboard-summary{max-width:480px;margin:0 auto;display:grid;gap:6px;text-align:left}
+.onboard-summary-row{display:flex;justify-content:space-between;gap:14px;padding:8px 10px;
+  border-radius:8px;background:var(--c-app-bg-46);font-size:11px}
+.onboard-summary-row span{color:var(--c-app-fg-21);flex:none}
+.onboard-summary-row b{font-weight:600;color:var(--c-app-fg-04);overflow-wrap:anywhere;text-align:right}
+.onboard-steps-text{margin-top:16px;font-size:10px;color:var(--c-app-fg-30)}
+
+/* ── 端配置页：通道卡 ───────────────────────────────────────────── */
+.ch-section{margin-top:34px;padding-top:24px;border-top:1px solid var(--line)}
+.ch-head{display:flex;align-items:center;justify-content:space-between}
+.ch-head h2{margin:5px 0 0}
+.ch-head button{display:flex;align-items:center;gap:7px;border:1px solid var(--c-app-line-04);
+  border-radius:7px;padding:8px 12px;background:var(--c-app-bg-57);
+  color:var(--c-accent-fg-27);font-size:11px}
+.ch-card-err{margin:6px 8px 0;font-size:10px;line-height:1.55;color:var(--c-danger-fg-10)}
+.ch-note{margin:10px 0;font-size:11px;line-height:1.6;color:var(--c-app-fg-21)}
+.ch-error{margin:10px 0;font-size:11px;line-height:1.6;color:var(--c-danger-fg-10)}
+.ch-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:10px;padding-top:14px}
+/* 外层是 div（里面要放「设为默认」那颗按钮 —— button 套 button 是非法 HTML）；
+   整张卡可点的部分 = `.ch-card-main`。 */
+.ch-card{position:relative;display:flex;flex-direction:column;align-items:stretch;
+  min-height:92px;padding:0;overflow:hidden;border:1px solid var(--c-app-line-14);
+  border-radius:10px;background:var(--c-app-bg-57);text-align:left;color:var(--ink);
+  animation:cardFadeIn .4s ease both}
+.ch-card-main{display:flex;flex-direction:column;align-items:flex-start;gap:6px;flex:1;
+  padding:12px 14px 8px;border:0;background:transparent;color:inherit;text-align:left}
+.ch-card:hover{border-color:var(--c-accent-line-13)}
+/* 运行中：每一条都描绿框（多通道可以同时亮）——
+   用户「多通道激活时也没有做对应的多高亮边框」。
+   用 inset 阴影加粗，不改边框宽度，不会把卡撑大/挤位。 */
+.ch-card-running{background:var(--c-accent-bg-34);border-color:var(--green);
+  box-shadow:inset 0 0 0 1px var(--green)}
+.ch-card-active{border-color:var(--green-dark);box-shadow:inset 0 0 0 1px var(--green-dark)}
+/* 既默认又运行：外面再套一圈深绿，两种状态都看得见 */
+.ch-card-running.ch-card-active{box-shadow:inset 0 0 0 1px var(--green),0 0 0 2px var(--green-dark)}
+/*: 「停止」在卡的右上角（用户指定位置）。
+   它必须与 `.ch-card-main` 平级：那颗本身就是 `<button>`，
+      `<button>` 里套 `<button>` 是非法 HTML（浏览器会把它们拆开）。
+   所以绝对定位 + `z-index`，盖在整张可点区域之上。 */
+.ch-stop-btn{position:absolute;top:8px;right:8px;z-index:1;
+  display:grid;place-items:center;width:24px;height:24px;padding:0;
+  border:1px solid var(--c-app-line-09);border-radius:6px;
+  background:var(--c-app-bg-57);color:var(--c-app-fg-30)}
+.ch-stop-btn:hover:not(:disabled){border-color:var(--c-danger-solid);
+  color:var(--c-danger-solid)}
+.ch-stop-btn:disabled{opacity:.55}
+.ch-card-foot{display:flex;align-items:center;gap:6px;min-height:24px;padding:0 12px 10px}
+.ch-default-btn{border:1px solid var(--c-app-line-04);border-radius:6px;padding:2px 8px;
+  background:var(--c-app-bg-57);color:var(--c-accent-fg-27);font-size:10px}
+.ch-default-btn:hover:not(:disabled){border-color:var(--green-dark);color:var(--green-dark)}
+.ch-default-tag{font-size:10px;font-weight:650;color:var(--green-dark);
+  border:1px solid var(--green-dark);border-radius:6px;padding:2px 8px}
+.ch-run-tag{margin-left:auto;font-size:10px;color:var(--green-dark)}
+/* 卡片右下角的「启动」（取代那颗「运行中」字样）。
+   `margin-left:auto` 把它顶到右边 —— 与左边那颗「设为默认」分开。 */
+.ch-start-btn{margin-left:auto;border:1px solid var(--green-dark);border-radius:6px;
+  padding:2px 10px;background:none;color:var(--green-dark);font-size:10px}
+.ch-start-btn:hover:not(:disabled){background:var(--c-app-bg-57)}
+.ch-start-btn:disabled{opacity:.45}
+.ch-logo{display:grid;place-items:center;width:30px;height:30px;font-size:18px}
+.ch-logo img{width:28px;height:28px;object-fit:contain}
+.ch-status{font-size:10px;color:var(--c-app-fg-30)}
+.ch-status-ok{color:var(--green-dark)}
+.ch-status-warn{color:var(--c-warn-fg-01)}
+.ch-status-idle{color:var(--c-app-fg-30)}
+.ch-panel{width:min(620px,94vw);max-height:88vh;overflow:auto;border:1px solid var(--c-app-line-09);
+  border-radius:14px;padding:22px 26px;background:var(--c-app-bg-57);
+  box-shadow:0 20px 65px var(--c-shadow-09)}
+.ch-form{margin-top:14px}
+.ch-hint{margin:8px 0;font-size:11px;line-height:1.6;color:var(--c-app-fg-21)}
+.ch-saved{font-style:normal;font-size:10px;color:var(--c-app-fg-30)}
+.ch-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px}
+
+/* ── 微信扫码（引导页 / 通道弹窗共用）──────────────────────────── */
+.wx-login{margin-top:10px;text-align:left}
+.wx-status{margin:6px 0;font-size:12px;color:var(--c-app-fg-04)}
+.wx-qr{display:grid;place-items:center;margin:10px 0}
+.wx-qr-img{width:200px;height:200px;object-fit:contain;border-radius:8px;
+  background:var(--th-box-bg);border:1px solid var(--c-app-line-07);padding:6px}
+.wx-qr-key{display:block;max-width:100%;overflow-wrap:anywhere;padding:8px 10px;
+  border-radius:8px;background:var(--c-app-bg-46);font-size:11px;color:var(--c-app-fg-04)}
+.wx-note{margin:8px 0;font-size:11px;line-height:1.6;color:var(--c-app-fg-21)}
+.wx-connected{margin:8px 0;font-size:12px;color:var(--green-dark);font-weight:600}
+.wx-bot{font-weight:400;color:var(--c-app-fg-21)}
+.wx-error{margin:8px 0;font-size:11px;line-height:1.6;color:var(--c-danger-fg-10)}
+.wx-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0}
+
+/*:端配置页卡片一个一个浮现（照旧 WebUI 的 `cardFadeIn`：0.4s + 每条 50ms 错开）。
+   动画名只有这一处；`.ep-card` / `.ch-card` 各自的规则里引用它。 */
+@keyframes cardFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/*:没配模型 API 时那条亮红色横幅（点它去端配置页）。
+   用户逐字给的文案在 `Composer.jsx`。 */
+.api-missing{display:block;width:100%;margin:0 0 8px;padding:9px 12px;
+  border:1px solid var(--c-danger-solid);border-radius:8px;
+  background:var(--c-danger-solid);color:var(--c-on-danger);
+  font-size:12px;font-weight:650;text-align:center;cursor:pointer}
+.api-missing:hover{filter:brightness(.95)}
+
+/*:引导「交流平台」里微信那一支的居中（状态行 / 扫码按钮）。
+   只改微信这一格；表单类的字段仍左对齐（标签与输入框要对齐）。 */
+.onboard-config-form.onboard-platform-wx{text-align:center}
+.onboard-config-form.onboard-platform-wx .wx-actions{justify-content:center}
+
+/*:设置页「恒定生效、没有开关」那一类（如删除保护）的状态标。 */
+.set-flag.on{background:var(--c-accent-bg-34);color:var(--c-accent-fg-15)}
+/* ── 记忆库（设置弹窗里的独立页）──────────────────────── */
+.settings.mem-shell{grid-template-columns:minmax(0,1fr)}
+.mem-page{display:flex;flex-direction:column;height:100%;min-height:0;padding:20px clamp(18px,3vw,32px)}
+.mem-head{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--c-app-line-14)}
+.mem-head h2{margin:0;font-size:18px}
+.mem-head h2 small{font-size:11px;color:var(--c-app-fg-23);margin-left:6px;font-weight:400}
+.mem-back{border:1px solid var(--c-app-line-14);border-radius:7px;background:var(--c-app-bg-57);color:var(--c-accent-fg-27);font-size:11px;padding:6px 10px}
+.mem-seal{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--c-app-fg-21)}
+.mem-body{display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px;flex:1;min-height:0;padding-top:14px}
+.mem-list{display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:4px;min-height:0}
+.mem-item{display:grid;gap:3px;text-align:left;border:1px solid transparent;border-radius:8px;background:transparent;padding:8px 10px;color:var(--ink)}
+.mem-item:hover{background:var(--c-app-bg-30)}
+.mem-item.on{background:var(--c-accent-bg-17);border-color:var(--c-accent-line-05)}
+.mem-item b{font-size:12.5px;font-weight:600}
+.mem-item span{font-size:10.5px;color:var(--c-app-fg-21);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem-item em{font-size:9.5px;color:var(--c-app-fg-30);font-style:normal}
+.mem-tombs{margin-top:10px;border-top:1px solid var(--c-app-line-14);padding-top:8px}
+.mem-tombs h3{margin:0 0 6px;font-size:11px;color:var(--c-app-fg-21)}
+.mem-tomb{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--c-app-fg-23);padding:3px 0}
+.mem-tomb span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem-page .link{border:0;background:transparent;color:var(--c-accent-fg-15);font-size:11.5px;padding:2px 4px;text-decoration:underline}
+/* ── 名单类子页（访问白名单 / 规避目录 / 监听目录）────────── */
+.le-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding-top:14px;overflow:auto}
+.le-add{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--c-app-line-14)}
+.le-add .set-input{flex:1 1 auto;max-width:none;min-width:220px}
+.le-list{display:flex;flex-direction:column;gap:6px;padding-bottom:4px}
+.le-item{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;
+  border:1px solid var(--c-app-line-08);border-radius:8px;background:var(--c-app-bg-57)}
+/*:条目是可扫读的路径/命令/域名 —— 13px 等宽 + 正文字色。
+     12px 的比例字体在浅底上只剩抗锯齿那层灰（对比度 8:1 也照样发虚）。 */
+.le-val{flex:1 1 auto;min-width:0;font-size:13px;line-height:1.5;word-break:break-all;
+  color:var(--c-app-fg-02);font-family:ui-monospace,Consolas,"Courier New",monospace}
+code.le-val{font-size:12.5px}
+.le-empty{font-size:12px;color:var(--c-app-fg-21);padding:6px 0}
+/*:多选那一栏：勾中的行换底色，删除按钮在栏里（不逐行摆一个红叉）。 */
+.le-selbar{display:flex;align-items:center;gap:10px;margin-top:12px;padding:8px 10px;
+  border:1px solid var(--c-app-line-08);border-radius:8px;background:var(--c-app-bg-35);font-size:12px}
+.le-selbar span{color:var(--c-app-fg-09)}
+.le-item.on{border-color:var(--c-accent-line-05);background:var(--c-accent-bg-17);cursor:pointer}
+.le-item input[type="checkbox"]{flex:0 0 auto;margin:0}
+/* 运行日志子页：顶栏右侧的动作按钮 + 一块可滚动的只读文本区。 */
+.log-acts{margin-left:auto;display:flex;gap:8px}
+.log-view{flex:1;min-height:0;overflow:auto;margin-top:14px;padding:12px;
+  border:1px solid var(--c-app-line-14);border-radius:8px;background:var(--c-app-bg-57)}
+.log-view pre{margin:0;font-family:ui-monospace,Consolas,"Courier New",monospace;
+  font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word;
+  color:var(--c-app-fg-05)}
+.log-view .warn{color:var(--c-danger-fg-01);margin:0 0 8px}
+.mem-detail{display:flex;flex-direction:column;gap:10px;min-height:0}
+.mem-field{display:grid;gap:4px}
+/* 正文那一格要吃掉剩下的高度 —— 但它父亲是 `display:grid`，
+   默认 `align-content:stretch` 会把多出来的空间平摊到每一行上：
+   「正文」那个 label 也跟着变高，字浮在行首，底下空出一大片。
+   把行模板写死成「label 自然高 + 正文吃掉其余」，label 就回到它该有的高度。 */
+.mem-field.grow{flex:1;min-height:0;grid-template-rows:auto minmax(0,1fr)}
+.mem-field label{font-size:10.5px;color:var(--c-app-fg-21)}
+.mem-field input,.mem-field textarea{border:1px solid var(--c-app-line-16);border-radius:7px;background:var(--c-app-bg-57);padding:8px 10px;font-size:12px;color:var(--ink)}
+/* 正文不给人拖高度：右栏本来就撑满剩余高度，正文超出了就自己上下滚。
+   留 `resize:vertical` 的代价是拖一次就把版面顶出去 —— 文本域长高但不改
+   网格行高，于是压到下面「保存 / 删除」那一行上（2026-11-02 现场）。 */
+.mem-field textarea{min-height:180px;flex:1;resize:none;line-height:1.65}
+/* 列表顶部的筛选框：与新建那条按钮同一列、同一套边框。 */
+.mem-search{border:1px solid var(--c-app-line-16);border-radius:7px;
+  background:var(--c-app-bg-57);padding:7px 10px;font-size:12px;color:var(--ink)}
+.mem-search::placeholder{color:var(--c-app-fg-33)}
+.mem-acts{display:flex;align-items:center;gap:10px}
+
+/* @generated dark-palette:start */
+/* 本块由 scripts/derive_dark_palette.py 生成 —— 别手改，改浅色那一侧后重跑。 */
+:root[data-theme="dark"]{
+  --th-side-bg: #17181a;
+  --th-side-fg: #cfd2d4;
+  --th-app-bg: #0f1011;
+  --th-box-bg: #191a1c;
+  --th-box-fg: #e6e7e8;
+  --th-select: #2e3238;
+  --muted: #bebebe;
+  --line: #333333;
+  --mint: #171717;
+  --green: #a3c8aa;
+  --green-dark: #8ac39a;
+  --clay: #cdb29e;
+  --c-warn-bg: #201b09;
+  --c-warn-line: #47402a;
+  --c-warn-fg: #eec22f;
+  --c-danger-solid: #d3524b;
+  --c-on-danger: #ebebeb;
+  --c-on-danger-line: rgba(255,255,255,.55);
+  --c-on-danger-veil: rgba(255,255,255,.14);
+  --c-app-fg-01: #9b9b9b;
+  --c-app-fg-03: #9a9a9a;
+  --c-app-fg-04: #9d9d9d;
+  --c-app-fg-05: #a1a1a1;
+  --c-app-fg-06: #9e9e9e;
+  --c-app-fg-07: #9e9e9e;
+  --c-app-fg-08: #a0a0a0;
+  --c-app-fg-09: #a2a2a2;
+  --c-app-fg-10: #a3a3a3;
+  --c-app-fg-11: #a7a7a7;
+  --c-app-fg-12: #a4a4a4;
+  --c-app-fg-13: #a5a5a5;
+  --c-app-fg-14: #ababab;
+  --c-app-fg-15: #a5a5a5;
+  --c-app-fg-16: #a8a8a8;
+  --c-app-fg-17: #a6a6a6;
+  --c-app-fg-18: #bbbbbb;
+  --c-app-fg-19: #bcbcbc;
+  --c-app-fg-20: #bdbdbd;
+  --c-app-fg-21: #bebebe;
+  --c-app-fg-22: #bebebe;
+  --c-app-fg-23: #bfbfbf;
+  --c-app-fg-24: #c0c0c0;
+  --c-app-fg-25: #c0c0c0;
+  --c-app-fg-26: #c1c1c1;
+  --c-app-fg-27: #c7c7c7;
+  --c-app-fg-28: #c8c8c8;
+  --c-app-fg-29: #c8c8c8;
+  --c-app-fg-30: #c8c8c8;
+  --c-app-fg-31: #c8c8c8;
+  --c-app-fg-32: #c8c8c8;
+  --c-app-fg-33: #cacaca;
+  --c-app-fg-34: #cbcbcb;
+  --c-app-fg-35: #cccccc;
+  --c-app-fg-36: #cecece;
+  --c-app-fg-37: #cecece;
+  --c-app-fg-38: #d2d2d2;
+  --c-app-fg-39: #d3d3d3;
+  --c-app-fg-40: #d8d8d8;
+  --c-app-fg-41: #ebebeb;
+  --c-app-bg-01: rgba(63,63,63,0.72);
+  --c-app-bg-02: #3e3e3e;
+  --c-app-bg-03: rgba(61,61,61,0.30);
+  --c-app-bg-04: #222222;
+  --c-app-bg-05: #1b1b1b;
+  --c-app-bg-06: #191919;
+  --c-app-bg-07: #181818;
+  --c-app-bg-08: #181818;
+  --c-app-bg-09: #171717;
+  --c-app-bg-10: #161616;
+  --c-app-bg-11: #161616;
+  --c-app-bg-12: #161616;
+  --c-app-bg-13: #161616;
+  --c-app-bg-14: #161616;
+  --c-app-bg-15: #161616;
+  --c-app-bg-16: #161616;
+  --c-app-bg-17: #151515;
+  --c-app-bg-18: #151515;
+  --c-app-bg-19: #151515;
+  --c-app-bg-20: #141414;
+  --c-app-bg-21: #151515;
+  --c-app-bg-22: #141414;
+  --c-app-bg-23: #151515;
+  --c-app-bg-24: #151515;
+  --c-app-bg-25: #141414;
+  --c-app-bg-26: #151515;
+  --c-app-bg-27: #151515;
+  --c-app-bg-28: #151515;
+  --c-app-bg-29: #151515;
+  --c-app-bg-30: #151515;
+  --c-app-bg-31: #151515;
+  --c-app-bg-32: #141414;
+  --c-app-bg-33: #141414;
+  --c-app-bg-34: #141414;
+  --c-app-bg-35: #141414;
+  --c-app-bg-36: #141414;
+  --c-app-bg-37: #141414;
+  --c-app-bg-38: #141414;
+  --c-app-bg-39: #141414;
+  --c-app-bg-40: #141414;
+  --c-app-bg-41: #131313;
+  --c-app-bg-42: #141414;
+  --c-app-bg-43: #141414;
+  --c-app-bg-44: #141414;
+  --c-app-bg-45: #131313;
+  --c-app-bg-46: #131313;
+  --c-app-bg-47: #131313;
+  --c-app-bg-49: #131313;
+  --c-app-bg-50: #131313;
+  --c-app-bg-51: #131313;
+  --c-app-bg-52: #131313;
+  --c-app-bg-53: #131313;
+  --c-app-bg-54: #131313;
+  --c-app-bg-55: #121212;
+  --c-app-bg-56: #131313;
+  --c-accent-line-01: #3d3d3d;
+  --c-accent-line-02: #3b3b3b;
+  --c-accent-line-03: #3a3a3a;
+  --c-accent-line-04: #383838;
+  --c-accent-line-05: #363636;
+  --c-accent-line-06: #353535;
+  --c-accent-line-07: #363636;
+  --c-accent-line-08: #353535;
+  --c-accent-line-09: #353535;
+  --c-accent-line-10: #353535;
+  --c-accent-line-11: #343434;
+  --c-accent-line-12: #343434;
+  --c-accent-line-13: #343434;
+  --c-accent-line-14: #343434;
+  --c-accent-line-15: #343434;
+  --c-accent-line-16: #333333;
+  --c-side-bg-01: #181818;
+  --c-side-bg-02: #181818;
+  --c-side-bg-03: #161616;
+  --c-side-bg-04: #151515;
+  --c-side-bg-05: #131313;
+  --c-side-bg-06: #121212;
+  --c-side-line-01: #343434;
+  --c-side-line-02: #333333;
+  --c-side-line-03: #333333;
+  --c-warn-line-01: #463c34;
+  --c-warn-line-02: #463b31;
+  --c-warn-line-03: #453a31;
+  --c-warn-line-04: #3d3530;
+  --c-warn-line-05: #403a2c;
+  --c-warn-line-06: #423a29;
+  --c-warn-line-07: #423c29;
+  --c-warn-line-08: #40392a;
+  --c-warn-line-09: #3d372a;
+  --c-accent-fg-01: #9f9f9f;
+  --c-accent-fg-02: #9f9f9f;
+  --c-accent-fg-03: #a2a2a2;
+  --c-accent-fg-04: #a2a2a2;
+  --c-accent-fg-05: #a1a1a1;
+  --c-accent-fg-06: #a3a3a3;
+  --c-accent-fg-07: #a5a5a5;
+  --c-accent-fg-08: #aaaaaa;
+  --c-accent-fg-09: #a2a2a2;
+  --c-accent-fg-10: #a6a6a6;
+  --c-accent-fg-11: #a5a5a5;
+  --c-accent-fg-12: #a5a5a5;
+  --c-accent-fg-13: #aaaaaa;
+  --c-accent-fg-14: #a7a7a7;
+  --c-accent-fg-15: #aaaaaa;
+  --c-accent-fg-16: #acacac;
+  --c-accent-fg-17: #ababab;
+  --c-accent-fg-18: #a9a9a9;
+  --c-accent-fg-19: #aaaaaa;
+  --c-accent-fg-20: #a7a7a7;
+  --c-accent-fg-21: #aeaeae;
+  --c-accent-fg-22: #a8a8a8;
+  --c-accent-fg-23: #afafaf;
+  --c-accent-fg-24: #afafaf;
+  --c-accent-fg-25: #afafaf;
+  --c-accent-fg-26: #b0b0b0;
+  --c-accent-fg-27: #afafaf;
+  --c-accent-fg-28: #ababab;
+  --c-accent-fg-29: #b2b2b2;
+  --c-accent-fg-30: #b3b3b3;
+  --c-accent-fg-31: #b2b2b2;
+  --c-accent-fg-32: #b4b4b4;
+  --c-accent-fg-33: #b4b4b4;
+  --c-accent-fg-34: #b0b0b0;
+  --c-accent-fg-35: #b3b3b3;
+  --c-accent-fg-36: #b4b4b4;
+  --c-accent-fg-37: #afafaf;
+  --c-accent-fg-38: #b5b5b5;
+  --c-accent-fg-39: #b5b5b5;
+  --c-accent-fg-40: #b5b5b5;
+  --c-accent-fg-41: #b1b1b1;
+  --c-accent-fg-42: #b2b2b2;
+  --c-accent-fg-43: #b6b6b6;
+  --c-accent-fg-44: #b7b7b7;
+  --c-accent-fg-45: #b1b1b1;
+  --c-accent-fg-46: #b2b2b2;
+  --c-accent-fg-47: #b0b0b0;
+  --c-accent-fg-48: #b8b8b8;
+  --c-accent-fg-49: #b8b8b8;
+  --c-accent-fg-50: #bcbcbc;
+  --c-accent-fg-51: #b5b5b5;
+  --c-accent-fg-52: #bdbdbd;
+  --c-accent-fg-53: #b9b9b9;
+  --c-accent-fg-54: #bcbcbc;
+  --c-accent-fg-55: #c0c0c0;
+  --c-accent-fg-56: #bfbfbf;
+  --c-accent-fg-57: #bababa;
+  --c-accent-fg-58: #c2c2c2;
+  --c-accent-fg-59: #c2c2c2;
+  --c-accent-fg-60: #c2c2c2;
+  --c-accent-fg-61: #bebebe;
+  --c-accent-fg-62: #c5c5c5;
+  --c-accent-fg-63: #c6c6c6;
+  --c-accent-bg-01: #373737;
+  --c-accent-bg-02: #303030;
+  --c-accent-bg-03: #2f2f2f;
+  --c-accent-bg-04: #2c2c2c;
+  --c-accent-bg-05: #2e2e2e;
+  --c-accent-bg-06: #2e2e2e;
+  --c-accent-bg-07: #2d2d2d;
+  --c-accent-bg-08: #2b2b2b;
+  --c-accent-bg-09: #2b2b2b;
+  --c-accent-bg-10: #282828;
+  --c-accent-bg-11: #272727;
+  --c-accent-bg-12: #252525;
+  --c-accent-bg-13: #242424;
+  --c-accent-bg-14: #232323;
+  --c-accent-bg-15: #202020;
+  --c-accent-bg-16: #1c1c1c;
+  --c-accent-bg-18: #1a1a1a;
+  --c-accent-bg-19: #1a1a1a;
+  --c-accent-bg-20: #1a1a1a;
+  --c-accent-bg-21: #191919;
+  --c-accent-bg-22: #191919;
+  --c-accent-bg-23: #191919;
+  --c-accent-bg-24: #191919;
+  --c-accent-bg-25: #181818;
+  --c-accent-bg-26: #181818;
+  --c-accent-bg-27: #171717;
+  --c-accent-bg-28: #171717;
+  --c-accent-bg-29: #171717;
+  --c-accent-bg-30: #171717;
+  --c-accent-bg-31: #161616;
+  --c-accent-bg-32: #161616;
+  --c-accent-bg-33: #161616;
+  --c-accent-bg-34: #161616;
+  --c-accent-bg-35: #161616;
+  --c-side-fg-01: #999999;
+  --c-side-fg-02: #9e9e9e;
+  --c-side-fg-03: #a0a0a0;
+  --c-side-fg-05: #c0c0c0;
+  --c-app-line-01: #343434;
+  --c-app-line-02: #343434;
+  --c-app-line-03: #343434;
+  --c-app-line-04: #333333;
+  --c-app-line-05: #333333;
+  --c-app-line-06: #333333;
+  --c-app-line-07: #333333;
+  --c-app-line-08: #333333;
+  --c-app-line-09: #333333;
+  --c-app-line-10: #333333;
+  --c-app-line-11: #333333;
+  --c-app-line-12: #333333;
+  --c-app-line-13: #333333;
+  --c-app-line-14: #333333;
+  --c-app-line-15: #333333;
+  --c-app-line-16: #333333;
+  --c-app-line-17: #333333;
+  --c-app-line-18: #323232;
+  --c-app-line-19: #323232;
+  --c-app-line-20: #323232;
+  --c-app-line-21: #323232;
+  --c-app-line-22: #323232;
+  --c-app-line-23: #323232;
+  --c-warn-bg-01: #34291b;
+  --c-warn-bg-02: #221a0f;
+  --c-warn-bg-03: #1f180f;
+  --c-warn-bg-04: #20190c;
+  --c-warn-bg-05: #1b1710;
+  --c-warn-bg-06: #201b0c;
+  --c-warn-bg-07: #1d160c;
+  --c-warn-bg-08: #211b0b;
+  --c-warn-bg-09: #1e190b;
+  --c-shadow-01: rgba(30,30,30,0.38);
+  --c-shadow-02: rgba(40,40,40,0.32);
+  --c-shadow-03: rgba(44,44,44,0.16);
+  --c-shadow-04: rgba(44,44,44,0.26);
+  --c-shadow-05: rgba(44,44,44,0.40);
+  --c-shadow-06: rgba(44,44,44,0.45);
+  --c-shadow-07: rgba(47,47,47,0.19);
+  --c-shadow-08: rgba(47,47,47,0.22);
+  --c-shadow-09: rgba(47,47,47,0.26);
+  --c-shadow-10: rgba(47,47,47,0.29);
+  --c-shadow-11: rgba(50,50,50,0.16);
+  --c-shadow-12: rgba(50,50,50,0.19);
+  --c-shadow-13: rgba(74,74,74,0.06);
+  --c-shadow-14: #a76d42;
+  --c-shadow-15: rgba(117,117,117,0.22);
+  --c-shadow-16: #4d9a5d;
+  --c-shadow-17: #bf7e43;
+  --c-shadow-18: rgba(150,150,150,0.29);
+  --c-danger-fg-01: #b96464;
+  --c-danger-fg-02: #b36a71;
+  --c-danger-fg-03: #ba6464;
+  --c-danger-fg-04: #c75c57;
+  --c-danger-fg-05: #978787;
+  --c-danger-fg-06: #c25b5b;
+  --c-danger-fg-07: #b26c72;
+  --c-danger-fg-08: #b26c6c;
+  --c-danger-fg-09: #a37b7b;
+  --c-danger-fg-10: #b36a71;
+  --c-danger-fg-11: #cb5e52;
+  --c-danger-fg-12: rgba(203,94,82,0.88);
+  --c-danger-fg-13: rgba(203,94,82,0.92);
+  --c-danger-fg-14: #ba6a63;
+  --c-danger-fg-15: #ad7176;
+  --c-danger-fg-16: #bf675f;
+  --c-danger-fg-17: #b3716b;
+  --c-danger-fg-18: #958989;
+  --c-danger-fg-19: #958b88;
+  --c-danger-fg-20: #a97b75;
+  --c-warn-fg-01: #ca8d53;
+  --c-warn-fg-02: #cf974f;
+  --c-warn-fg-03: #baa264;
+  --c-warn-fg-04: #c7a757;
+  --c-warn-fg-05: #c58758;
+  --c-warn-fg-06: #daa643;
+  --c-warn-fg-07: #b09b6e;
+  --c-warn-fg-08: #b88965;
+  --c-warn-fg-09: #d49b49;
+  --c-warn-fg-10: #be8d60;
+  --c-warn-fg-11: #a89776;
+  --c-warn-fg-12: #cca252;
+  --c-warn-fg-13: #d4a54a;
+  --c-danger-bg-01: #41221f;
+  --c-danger-bg-02: #3d211e;
+  --c-danger-bg-03: #35201f;
+  --c-danger-bg-04: #381f18;
+  --c-danger-bg-05: #2a1c1c;
+  --c-danger-bg-06: #1e1616;
+  --c-danger-bg-07: rgba(30,22,22,0.00);
+  --c-danger-bg-08: #1c0f10;
+  --c-danger-bg-09: #1b1010;
+  --c-danger-bg-10: #1c0f0f;
+  --c-danger-bg-11: #1c0d0e;
+  --c-danger-bg-12: #1b0d0d;
+  --c-danger-bg-13: #1d0c0b;
+  --c-danger-bg-14: #1d0b0b;
+  --c-danger-line-01: #3b2d2d;
+  --c-danger-line-02: #3b2d2e;
+  --c-danger-line-03: #3e292b;
+  --c-danger-line-04: #3f2928;
+  --c-danger-line-05: #3f2828;
+  --c-danger-line-06: #3b2c2d;
+  --c-danger-line-07: #382e2e;
+  --c-misc-fg-01: #b7b7b7;
+  --c-misc-line-01: #343434;
+  --c-info-fg-01: #b8b8b8;
+}
+/* @generated dark-palette:end */
+
+/* 状态条那句「处理中… / 用时 / token」的扫光在深色下要换一对颜色。
+   浅色是「浅绿字 + 更亮的一条带」，两个令牌各自推导；到了深色，同一个
+   `*-bg-*` 令牌会被推成暗值 —— 文字跟着暗下去（现场：整行只有 ~#5a5a5a，
+   在黑底上几乎读不到）。这一对是**成对**的（带必须比字亮），逐令牌推导
+   做不出这种关系，所以这一格手写；只用主题轴，不碰生成块。 */
+/* 选择器套 `:where()` 是有意的：这一条只负责给"默认那一档"换一对颜色，
+   而后面的 `.status-bar.compacting / .notice / .compact-done` 三条状态规则
+   要能盖过它。直接写 `:root[data-theme="dark"] .status-bar-text` 与它们
+   权重相同（都是三个类级），而这一条在文件更靠后，于是状态分支关掉的
+   `background-image` 会被重新加回来，画的是一块亮色矩形、字是透明的。
+   `:where()` 把主题那一半的权重压到 0，状态那三条就照旧胜出。
+
+   外面那层 media 同理：`prefers-reduced-motion` 那一档里基样式把
+   `background-image` 关成 `none` 并还回字色，权重与本条相同且在文件更前
+   —— 不圈起来的话，深色 + 减少动效的用户会重新拿到透明字。 */
+@media (prefers-reduced-motion: no-preference){
+:where(:root[data-theme="dark"]) .status-bar-text{
+  background-image:linear-gradient(90deg,
+    var(--c-app-fg-20) 0%, var(--c-app-fg-20) 44%,
+    var(--c-app-fg-41) 50%,
+    var(--c-app-fg-20) 56%, var(--c-app-fg-20) 100%)}
+}
+
+/* 活动流每一步前面那个小圆点：深色下保留「绿 / 浅绿 / 红」。
+   它用的三枚 `*-bg-*` 令牌在中性深色里被压成近黑，三种状态长得一样。 */
+:root[data-theme="dark"] .activity-step > i.run{background:var(--green)}
+:root[data-theme="dark"] .activity-step > i.good{background:var(--green-dark)}
+:root[data-theme="dark"] .activity-step > i.bad{background:var(--c-danger-solid)}
+
+/* 接管那颗按钮：浅色拿 `--green-dark` / `--clay` 当**底色**，深色里这两个
+   令牌按"文字"推导（被推亮）—— 底色成了亮绿 / 浅陶土，再配浅色字读不清。
+   深色下：未接管 = 中性底 + 绿字；接管中 = 亮绿底 + 深色字（状态靠"实心"表达）。 */
+:root[data-theme="dark"] .takeover-btn{
+  background:var(--c-accent-bg-04);color:var(--green)}
+:root[data-theme="dark"] .takeover-btn:hover:not(:disabled){
+  background:var(--c-accent-bg-01)}
+:root[data-theme="dark"] .takeover-btn.on{
+  background:var(--green);color:var(--th-app-bg)}
+:root[data-theme="dark"] .takeover-btn.on .dot{background:var(--th-app-bg)}
+
+/* 排队中的那条用户消息：上方一行「排队中...」+ 呼吸黄框。
+   只在这一条还没轮到自己时出现，回复一到就撤（`queued` 标记由发送方维护）。 */
+@keyframes queued-breathe{0%{border-color:var(--c-warn-line-04);box-shadow:0 0 0 0 var(--c-warn-bg-05)}50%{border-color:var(--c-warn-fg-02);box-shadow:0 0 0 3px var(--c-warn-bg-05)}100%{border-color:var(--c-warn-line-04);box-shadow:0 0 0 0 var(--c-warn-bg-05)}}
+.message.user .bubble.queued{border:1px solid var(--c-warn-line-04);
+  animation:queued-breathe 1.8s ease-in-out infinite}
+.queued-note{width:100%;display:flex;align-items:center;justify-content:flex-end;
+  gap:8px;margin:0 0 5px;color:var(--c-warn-fg-02);font-size:10px;letter-spacing:.06em}
+.queued-undo{border:1px solid var(--c-warn-line-04);border-radius:6px;padding:2px 8px;
+  background:transparent;color:var(--c-warn-fg-02);font-size:10px;letter-spacing:.06em}
+.queued-undo:hover{background:var(--c-warn-bg-05)}
+/* 技能配置表单（`has_config` 的技能才有）。凭据只从这里进 —— 不回显。 */
+.cfg-field{display:flex;flex-direction:column;gap:4px;margin:10px 0;font-size:12px}
+.cfg-field input{font-size:12px;padding:6px 8px;border-radius:7px;
+  border:1px solid var(--c-app-line-11);background:var(--c-app-bg-57);
+  color:var(--c-app-fg-08)}
+.cfg-guide{margin:10px 0;font-size:11px}
+.cfg-guide pre{white-space:pre-wrap;font-size:11px;line-height:1.5;
+  background:var(--c-app-bg-57);padding:8px;border-radius:7px}
+.skill-btn-primary{background:var(--c-accent-bg-30);color:var(--c-accent-fg-20);
+  border-color:var(--c-accent-line-09)}
+/* 配置条目列表（`named: true` 的技能才有）。 */
+.cfg-list{margin:0 0 12px;display:flex;flex-direction:column;gap:6px}
+.cfg-item{display:flex;align-items:center;gap:8px;font-size:12px;
+  padding:6px 9px;border-radius:8px;border:1px solid var(--c-app-line-11);
+  background:var(--c-app-bg-57)}
+.cfg-item.active{border-color:var(--c-accent-line-09)}
+.cfg-item-actions{margin-left:auto;display:flex;gap:5px}
+
+/* ── 帮助文档────────────────────────────────────────────
+   说明页：设置页的「其他 · 帮助文档」→ 子页；安全弹窗里点《…说明》→ 同一张卡片变大。
+   正文是 `docs/help/*.md`（渲染用 `.md-*` 那套，这里只补容器与列表）。 */
+.help-list{display:flex;flex-wrap:wrap;gap:8px}
+.help-page{height:100%}
+.help-body{flex:1;min-height:0;overflow:auto;padding:4px 6px 4px 0;
+  font-size:13px;line-height:1.9;color:var(--c-app-fg-11)}
+.help-body .md-p{margin:0 0 12px}
+.help-body .md-list{margin:0 0 12px;padding-left:20px}
+.help-body .md-list li{margin:3px 0}
+.help-body .md-h{letter-spacing:0}
+/* 说明页里的 `==红字==` —— 只在这一块是红的（正文里要标一句要紧的话）。 */
+.help-body .md-mark{color:var(--c-danger-fg-10);font-weight:650}
+/* ── 自动审查配置（独立页，形状同记忆库）────────────────────────── */
+.auto-rules-tabs{display:flex;gap:6px;padding:14px 0 4px}
+.auto-rules-tab{display:flex;align-items:center;gap:7px;border:1px solid var(--c-app-line-14);
+  border-radius:8px;background:var(--c-app-bg-57);padding:7px 12px;font-size:12px;
+  color:var(--c-accent-fg-27)}
+.auto-rules-tab.on{background:var(--c-accent-bg-18);color:var(--c-accent-fg-18);font-weight:650}
+.auto-rules-tab small{font-size:10px;color:var(--c-app-fg-23)}
+.auto-rules-hint{margin:10px 0 2px;font-size:12px;color:var(--c-app-fg-11)}
+.auto-rules-note{margin:2px 0 10px;font-size:11px;color:var(--c-app-fg-19)}
+.auto-rules-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;
+  gap:6px;padding:4px 0}
+.auto-rules-item{display:flex;align-items:center;gap:6px;
+  border:1px solid var(--c-app-line-14);border-radius:8px;background:var(--c-app-bg-57);
+  padding:7px 9px;font-size:12px}
+.auto-rules-text{flex:1;min-width:0;overflow-wrap:anywhere}
+.auto-rules-item .set-input{flex:1}
+.auto-rules-add{display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--c-app-line-14)}
+.auto-rules-add .set-input{flex:1}
+.safety-link:hover{color:var(--c-accent-fg-06);border-bottom-color:var(--c-accent-fg-06)}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   设置包 / 记忆包
+   只补这两块真正新的类；外壳复用 `.backdrop` + `.safety` / `.mem-head`。
+   颜色一律走令牌（`--c-*`），别在这里写死十六进制。 */
+.xfer{position:relative;width:min(680px,94vw);max-height:86vh;display:flex;flex-direction:column;
+  gap:10px;overflow:auto;border:1px solid var(--c-app-line-09);border-radius:16px;
+  padding:24px 28px 20px;background:var(--c-app-bg-44);box-shadow:0 20px 65px var(--c-shadow-09)}
+.xfer .safety-head{margin-bottom:6px;padding-bottom:12px}
+.xfer-muted{color:var(--c-app-fg-21);font-size:11px;line-height:1.7;margin:0}
+.xfer-warn{color:var(--c-danger-fg-10);font-size:11px;line-height:1.7;margin:6px 0 0}
+.xfer-pick{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+.xfer-pick button{height:30px;padding:0 12px;border:1px solid var(--c-app-line-09);
+  border-radius:7px;background:transparent;color:var(--c-app-fg-05);
+  font-size:12px;cursor:pointer}
+.xfer-pick button:hover:not(:disabled){border-color:var(--c-accent-line-09)}
+.xfer-pick button:disabled{opacity:.5;cursor:default}
+.xfer-line{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--c-app-fg-11);cursor:pointer}
+.xfer-line input[type="checkbox"]{width:14px;height:14px;accent-color:var(--c-accent-bg-21);cursor:pointer}
+.xfer-pw{display:flex;flex-direction:column;gap:8px;padding:10px 0 2px}
+.xfer-pw input{height:32px;border:1px solid var(--c-app-line-09);border-radius:7px;padding:0 10px;
+  background:var(--c-app-bg-57);color:var(--ink);font-size:12px}
+.xfer-file{font-size:11px;color:var(--c-app-fg-21)}
+.xfer-plan{display:flex;flex-direction:column;gap:8px;min-height:0}
+.xfer-plan h3{margin:8px 0 0;font-size:12px;font-weight:650;color:var(--c-app-fg-06)}
+.xfer-table{width:100%;border-collapse:collapse;font-size:11px}
+.xfer-table th{text-align:left;padding:4px 6px;color:var(--c-app-fg-21);font-weight:500;
+  border-bottom:1px solid var(--c-app-line-14)}
+.xfer-table td{padding:4px 6px;vertical-align:top;border-bottom:1px solid var(--c-app-line-18)}
+.xfer-table td code{font-size:10.5px;color:var(--c-accent-fg-27)}
+.xfer-table td em{display:block;font-style:normal;font-size:10px;color:var(--c-warn-fg-01);margin-top:2px}
+.xfer-table tr.hot td{background:var(--c-warn-bg-03)}
+.xfer-conflicts{list-style:none;margin:4px 0 0;padding:0;max-height:150px;overflow:auto;
+  display:flex;flex-direction:column;gap:3px}
+.xfer-conflicts li{display:flex;gap:8px;align-items:baseline;font-size:11px}
+.xfer-conflicts b{font-weight:600;color:var(--c-app-fg-06)}
+.safety-muted{margin:0;color:var(--c-app-fg-21);font-size:11px}
+
+/* `#02` 组件异常横幅 —— 只在新建对话页（发送框下方、居中）出现。
+   可见性由 JSX 的 `empty` 决定（用户离开那一屏就不再提），这里只管样子。 */
+.incidents-banner{
+  margin:14px auto 0;max-width:560px;padding:10px 16px;border-radius:10px;
+  background:var(--c-warn-bg);border:1px solid var(--c-warn-line);
+  color:var(--c-warn-fg);font-size:13px;line-height:1.55;text-align:center;
+}
+.incidents-list{
+  margin:8px 0 0;padding:0;list-style:none;
+  font-size:12px;line-height:1.6;text-align:left;
+}
+.incidents-list li{word-break:break-all}
+.incidents-list li+li{margin-top:4px}
+
+/* ── `/btw` 浮窗：题外话 ──
+   分流在服务端（`POST /api/btw` 不进调度器），所以主线程在跑时也能问；
+   内容不写进 messages，关掉即丢弃 —— 这个浮窗是它唯一的载体。 */
+.btw-backdrop{position:fixed;z-index:30;inset:0;display:grid;place-items:center;padding:24px;
+  background:var(--c-app-bg-03);backdrop-filter:blur(2px)}
+.btw-panel{width:min(520px,90vw);max-height:70vh;overflow:auto;padding:16px 18px 18px;
+  border:1px solid var(--c-app-line-09);border-radius:16px;background:var(--c-app-bg-38);
+  box-shadow:0 20px 65px var(--c-shadow-10)}
+.btw-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.btw-q{margin-left:auto;width:max-content;max-width:88%;padding:8px 12px;border-radius:12px;
+  background:var(--c-accent-bg-29);color:var(--c-app-fg-02);font-size:13px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word}
+.btw-a{margin-top:12px;color:var(--c-app-fg-02);font-size:13px;line-height:1.7;
+  white-space:pre-wrap;word-break:break-word}
+.btw-wait{display:inline-flex;align-items:center;gap:7px;color:var(--c-app-fg-18)}
+.btw-spin{animation:ui-spin 1.1s linear infinite;color:var(--c-accent-fg-45)}

@@ -1,0 +1,891 @@
+{% extends "base.html" %}
+{% block header_title %}技能管理{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h2>🔧 已加载的技能</h2>
+  <p style="font-size:13px;color:var(--text-dim)">Crannia 框架当前可用的 Skill 插件。每个 Skill 包含一组工具，供 Agent 调用。<br>带 <span style="color:var(--accent)">⚙️</span> 标记的 Skill 需要配置才能使用，点击"配置"按钮按引导填写即可。</p>
+</div>
+
+<div class="skill-grid" id="skill-grid">加载中...</div>
+
+<!-- ================================================================ -->
+<!-- Config Modal -->
+<!-- ================================================================ -->
+<div class="modal-overlay" id="config-modal" style="display:none">
+  <div class="modal-panel config-modal-panel">
+    <div class="modal-header">
+      <span id="config-modal-title">⚙️ 配置 Skill</span>
+      <button class="modal-close" onclick="closeConfigModal()">✕</button>
+    </div>
+    <div class="modal-body" id="config-modal-body">
+      <!-- Filled by openConfigModal() -->
+    </div>
+  </div>
+</div>
+
+<script>
+// State
+let _currentSkill = null;       // skill entry from API
+let _accounts = {};             // {acc_id: {label, email_address, ...}}
+let _activeId = "";            // currently active account ID
+let _selectedId = null;        // account ID being edited (null = new)
+
+// Load skills
+async function loadSkills() {
+  try {
+    const r = await api('/api/skills');
+    const skills = r.skills || [];
+    const grid = document.getElementById('skill-grid');
+
+    if (skills.length === 0) {
+      grid.innerHTML = '<div class="card" style="text-align:center;padding:40px"><p style="color:var(--text-dim)">暂无已加载的 Skill。将 Skill 放入 skills/ 目录即可自动加载。</p></div>';
+      return;
+    }
+
+    grid.innerHTML = skills.map(s => {
+      const isMCP = s.name === '_mcp_builtin_';
+      const cfgBadge = s.configured
+        ? '<span class="skill-badge configured">✅️ 已配置</span>'
+        : (s.has_config ? (isMCP
+            ? '<span class="skill-badge needs-config">🔌 可添加外部 MCP 服务器</span>'
+            : '<span class="skill-badge needs-config">至少配置一个邮箱以启用此 Skill</span>') : '');
+
+      const cfgBtn = s.has_config
+        ? `<button class="btn btn-sm btn-config" onclick="openConfigModal('${esc(s.name)}')">${s.configured ? '⚙️ 修改配置' : '⚙️ 配置'}</button>`
+        : '';
+
+      const noAnim = localStorage.getItem('crannia-anim-disabled') === '1';
+      const skIdx = skills.indexOf(s);
+      const animStyle = noAnim ? '' : 'animation: skillFadeIn 0.4s ease forwards; animation-delay: ' + (skIdx * 0.05) + 's; opacity: 0;';
+      return `
+      <div class="skill-card" style="${animStyle}" data-skill="${escAttr(s.name)}">
+        <div class="skill-card-header">
+          <span class="skill-name">${esc(s.name)}</span>
+          <span class="skill-version">v${esc(s.version)}</span>
+          ${s.draft ? '<span class="skill-badge draft">草稿</span>' : ''}
+        </div>
+        <div class="skill-desc">${esc(s.description || '暂无简介')}</div>
+        <div class="skill-meta">
+          <span>🛠 ${s.tool_count} 个工具</span>
+          ${s.loaded ? '<span style="color:var(--green)">✅ 已加载</span>' : '<span style="color:var(--orange)">⏳ 待启动框架</span>'}
+        </div>
+        <div class="skill-actions">
+          ${cfgBadge}
+          ${cfgBtn}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('skill-grid').innerHTML = '<p style="color:var(--red)">⚠️ 加载失败: ' + e.message + '</p>';
+  }
+}
+
+// Config modal — multi-account management
+let _savingConfig = false;  // guard against double-submit
+
+async function openConfigModal(skillName) {
+  // MCP skill has its own config UI
+  if (skillName === '_mcp_builtin_') {
+    openMCPConfigModal();
+    return;
+  }
+
+  // Load skill metadata + any saved config in parallel
+  const [skillsR, cfgR] = await Promise.all([
+    api('/api/skills'),
+    api('/api/skills/' + skillName + '/config')
+  ]);
+
+  const skill = (skillsR.skills || []).find(s => s.name === skillName);
+  if (!skill || !skill.config) {
+    alert('该 Skill 没有可配置项');
+    return;
+  }
+
+  _currentSkill = skill;
+
+  // Parse multi-account config (server already normalizes old format)
+  const config = cfgR.config || {};
+  _accounts = config.accounts || {};
+  _activeId = config.active || '';
+
+  // Determine which account to select initially
+  if (_activeId && _accounts[_activeId]) {
+    _selectedId = _activeId;
+  } else if (Object.keys(_accounts).length > 0) {
+    _selectedId = Object.keys(_accounts)[0];
+  } else {
+    _selectedId = null;
+  }
+
+  document.getElementById('config-modal-title').textContent = '⚙️ ' + skillName + ' 配置';
+  const body = document.getElementById('config-modal-body');
+
+  renderConfigBody(body, skill);
+  document.getElementById('config-modal').style.display = 'flex';
+}
+
+function renderConfigBody(body, skill) {
+  const cfg = skill.config;
+  const presets = cfg.provider_presets || {};
+  const fields = cfg.fields || [];
+  const guide = cfg.setup_guide || '';
+  const presetKeys = Object.keys(presets);
+
+  // Determine current account's provider
+  const currentAccount = _selectedId ? _accounts[_selectedId] : null;
+  const currentProvider = currentAccount ? (currentAccount._provider || '') : '';
+
+  // ── Account tabs ──
+  const accountIds = Object.keys(_accounts);
+  let tabsHTML = '';
+  accountIds.forEach(id => {
+    const acc = _accounts[id];
+    const isActive = id === _activeId;
+    const isSelected = id === _selectedId;
+    tabsHTML += `
+      <div class="account-tab-row" onclick="selectAccount('${id}')">
+        <div class="account-tab${isSelected ? ' selected' : ''}">
+          <span class="account-tab-label">${esc(acc.label || id)}</span>
+        </div>
+        <div class="account-tab-actions">
+          ${isActive
+            ? '<span style="font-size:11px;color:var(--accent);font-weight:600">★ 默认</span>'
+            : `<button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();setActiveAccount('${id}')">设为默认</button>`
+          }
+          <span class="account-tab-del" onclick="deleteAccount(event, '${id}')" title="删除此账户">✕</span>
+        </div>
+      </div>`;
+  });
+
+  // ── Provider presets ──
+  let presetHTML = '';
+  if (presetKeys.length > 0) {
+    presetHTML = `
+      <div class="config-section">
+        <div class="config-section-title">📮 选择邮箱提供商</div>
+        <div class="preset-grid">
+          ${presetKeys.map(key => {
+            const p = presets[key];
+            const isSelected = key === currentProvider;
+            return `
+              <div class="preset-card${isSelected ? ' selected' : ''}"
+                   data-provider="${key}"
+                   onclick="selectPreset('${key}')">
+                <span class="preset-icon">${p.icon || '📮'}</span>
+                <span class="preset-label">${esc(p.label)}</span>
+                ${isSelected ? '<span class="preset-check">✅</span>' : ''}
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  // ── Form fields (include hidden label field) ──
+  const allFields = [{key: 'label', label: '账户标签', type: 'text', placeholder: '如：工作邮箱、个人邮箱', required: false}, ...fields];
+  const fieldsHTML = allFields.map(f => {
+    const val = currentAccount ? (currentAccount[f.key] || '') : '';
+    const inputType = f.type === 'password' ? 'password' : 'text';
+    return `
+      <div class="form-group">
+        <label>${esc(f.label)}${f.required ? ' <span style="color:var(--red)">*</span>' : ''}</label>
+        <input type="${inputType}" id="cfg-field-${f.key}" value="${esc(val)}"
+               placeholder="${esc(f.placeholder || '')}" autocomplete="off">
+        ${f.help ? `<div class="hint"><a href="#" onclick="scrollToGuide();return false;">${esc(f.help)}</a></div>` : ''}
+      </div>`;
+  }).join('');
+
+  // ── Guide ──
+  let guideHTML = '';
+  if (guide) {
+    guideHTML = `
+      <div class="config-section" id="setup-guide-section">
+        <div class="config-section-title">📖 配置指南</div>
+        <div class="guide-box">${renderMarkdown(guide)}</div>
+      </div>`;
+  }
+
+  // ── 不询问的收件人（持久白名单）──
+  //    判据是 manifest 声明了 `send_email`（后端给的 `recipient_gate`），
+  //      不是写死 skill 名 —— 那会是第二套真相源。
+  //    零 `innerHTML` 拼用户数据：地址是用户输的，一律走 textContent
+  //      （模型/用户写的文本进 innerHTML = 持久化 XSS）。
+  let allowHTML = '';
+  if (skill.recipient_gate) {
+    allowHTML = `
+      <div class="config-section" id="rcpt-section">
+        <div class="config-section-title">✉️ 不询问的收件人</div>
+        <div class="hint" style="margin-bottom:8px">
+          发给这些地址**不会**再弹审批窗。⚠️ 名单是**永久**的（写在
+          <code>data/allowlist.json</code>），不是「本次对话内」——
+          永久放行只能在这里加，弹窗里那个选项只管这一次对话。
+        </div>
+        <div id="rcpt-list" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="rcpt-input" placeholder="someone@example.com"
+                 autocomplete="off" style="flex:1">
+          <button class="btn btn-sm btn-primary" onclick="addRecipient()"
+                  style="padding:3px 14px;font-size:12px">+ 加入</button>
+        </div>
+        <div id="rcpt-feedback" style="display:none;margin-top:8px;font-size:12px"></div>
+      </div>`;
+  }
+
+  body.innerHTML = `
+    <div class="config-section">
+      <div class="config-section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>📧 邮箱账户 <span style="font-size:11px;color:var(--text-dim);font-weight:normal">（${accountIds.length} 个）</span></span>
+        <button class="btn btn-sm btn-primary" onclick="addAccount()" style="padding:3px 12px;font-size:12px">+ 新增</button>
+      </div>
+      <div class="account-tabs">
+        ${tabsHTML || '<span style="color:var(--text-dim);font-size:13px">暂无账户，点击「+ 新增」添加</span>'}
+      </div>
+    </div>
+    ${presetHTML}
+    ${allowHTML}
+    <div class="config-section">
+      <div class="config-section-title">🔐 邮箱凭据</div>
+      ${fieldsHTML}
+    </div>
+    ${guideHTML}
+    <div id="config-feedback" style="display:none;margin:12px 0;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+    <div class="config-actions">
+      <button class="btn btn-secondary" onclick="closeConfigModal()">取消</button>
+      <button class="btn btn-primary" id="btn-test-save" onclick="testAndSave()">
+        📨 测试连接并保存
+      </button>
+    </div>
+  `;
+
+  // 白名单那块是异步拉的（它在 `data/allowlist.json`，不在这份 skill 配置里）
+  //   所以画完 DOM 再去取一次。取不到就那格空着并说一声（不留一个假空表）。
+  if (skill.recipient_gate) loadRecipients();
+}
+
+// 「不询问的收件人」—— 持久白名单（skill 页里的那一块）
+//
+// 零 `innerHTML` 拼数据：地址是用户自己打的，一律 `textContent`。
+//   这不是洁癖 —— 正文进 innerHTML = 持久化 XSS。
+// 读写都走 `/api/allowlist`（按 kind 通用）——
+//   前端不自己拼文件路径、不自己解析 JSON。
+
+async function loadRecipients() {
+  const list = document.getElementById('rcpt-list');
+  if (!list) return;
+  try {
+    const r = await api('/api/allowlist');
+    renderRecipients(r.email_to || []);
+  } catch (e) {
+    list.textContent = '读取失败：' + e.message;
+  }
+}
+
+function renderRecipients(addrs) {
+  const list = document.getElementById('rcpt-list');
+  if (!list) return;
+  list.textContent = '';
+  if (!addrs.length) {
+    const d = document.createElement('div');
+    d.style.cssText = 'color:var(--text-dim);font-size:13px';
+    d.textContent = '（名单是空的 —— 每一封都会先问你）';
+    list.appendChild(d);
+    return;
+  }
+  addrs.forEach(a => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0';
+    const s = document.createElement('span');
+    s.textContent = a;                       // 用户输入的文本 -> textContent
+    s.style.cssText = 'flex:1;font-size:13px';
+    const b = document.createElement('button');
+    b.className = 'btn btn-sm';
+    b.style.cssText = 'font-size:11px;padding:2px 10px';
+    b.textContent = '移除';
+    b.onclick = function () { changeRecipient('remove', a); };
+    row.appendChild(s);
+    row.appendChild(b);
+    list.appendChild(row);
+  });
+}
+
+function addRecipient() {
+  const el = document.getElementById('rcpt-input');
+  const v = (el && el.value || '').trim();
+  if (!v) return;
+  changeRecipient('add', v);
+}
+
+async function changeRecipient(action, subject) {
+  const fb = document.getElementById('rcpt-feedback');
+  try {
+    const r = await api('/api/allowlist', {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'email_to', action: action, subject: subject })
+    });
+    renderRecipients(r.email_to || []);
+    const el = document.getElementById('rcpt-input');
+    if (el) el.value = '';
+    if (fb) { fb.style.display = 'none'; }
+  } catch (e) {
+    if (fb) {
+      fb.style.display = 'block';
+      fb.style.color = 'var(--red)';
+      fb.textContent = '失败了：' + e.message;
+    }
+  }
+}
+
+function closeConfigModal() {
+  if (_savingConfig) return;
+  if (_mcpPollTimer) { clearInterval(_mcpPollTimer); _mcpPollTimer = null; }
+  document.getElementById('config-modal').style.display = 'none';
+  _currentSkill = null;
+  _accounts = {};
+  _activeId = '';
+  _selectedId = null;
+  _savingConfig = false;
+}
+
+// MCP config modal
+let _mcpPollTimer = null;
+
+async function openMCPConfigModal() {
+  document.getElementById('config-modal-title').textContent = '🔌 MCP 配置';
+  const body = document.getElementById('config-modal-body');
+
+  body.innerHTML = `
+    <div id="mcp-config-feedback" style="display:none;margin:8px 0;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+    <div class="config-section">
+      <div class="config-section-title">✅️ 已注册工具 <span id="mcp-tool-count" style="font-size:11px;color:var(--text-dim);font-weight:normal"></span></div>
+      <div id="mcp-tools-list" style="max-height:200px;overflow-y:auto;font-size:12px;color:var(--text-dim)">加载中...</div>
+    </div>
+    <div class="config-section">
+      <div class="config-section-title">📥 安装指令</div>
+      <div class="form-group">
+        <input type="text" id="mcp-install-cmd" placeholder="npm install -g @anthropic/mcp-document-loader" style="width:100%">
+        <div class="hint">粘贴包管理器安装指令，点击安装后在终端执行</div>
+      </div>
+      <button class="btn btn-primary" id="btn-mcp-install" onclick="mcpInstall()">📦 安装</button>
+      <span id="mcp-install-status" style="margin-left:8px;font-size:12px"></span>
+    </div>
+    <div class="config-section" id="mcp-autoimport-section">
+      <div class="config-section-title">🔧 自动导入</div>
+      <div class="form-group">
+        <input type="text" id="mcp-autoimport-cmd" placeholder="粘贴安装指令以提取 MCP 名称并自动配置">
+        <div class="hint">粘贴指令后自动解析包名，写入 data/mcp_servers.json</div>
+      </div>
+      <button class="btn btn-primary" id="btn-mcp-autoimport" onclick="mcpAutoImport()">📥 导入配置</button>
+    </div>
+    <div class="config-actions">
+      <button class="btn btn-secondary" onclick="closeConfigModal()">关闭</button>
+    </div>
+  `;
+
+  document.getElementById('config-modal').style.display = 'flex';
+  loadMCPTools();
+}
+
+async function loadMCPTools() {
+  try {
+    const r = await api('/api/mcp/tools');
+    const list = document.getElementById('mcp-tools-list');
+    const count = document.getElementById('mcp-tool-count');
+
+    const builtin = r.builtin_count || 2;
+    const extTools = r.tools || [];
+    const connected = r.external_connected || {};
+    const configured = r.external_configured || {};
+
+    count.textContent = `（${builtin + extTools.length} 个工具）`;
+
+    let html = '';
+    // Built-in
+    html += `<div style="margin-bottom:4px">📦 内置: web_search, web_fetch (${builtin} tools)</div>`;
+    // Connected external
+    for (const [sname, info] of Object.entries(connected)) {
+      html += `<div style="margin-bottom:4px;color:var(--green)">✅ ${esc(sname)} (${info.tool_count} tools)</div>`;
+    }
+    // Configured but not connected
+    for (const [sname, info] of Object.entries(configured)) {
+      html += `<div style="margin-bottom:4px;color:var(--orange)">⏳ ${esc(sname)} (${info.command} ${(info.args||[]).join(' ')}) — 重启后生效</div>`;
+    }
+    // External tools list
+    for (const t of extTools) {
+      html += `<div style="margin-bottom:2px;padding-left:12px">└ ${esc(t.tool)} <span style="color:var(--text-dim)">(${esc(t.server)})</span></div>`;
+    }
+    list.innerHTML = html || '<span style="color:var(--text-dim)">暂无已注册的 MCP 工具</span>';
+  } catch(e) {
+    document.getElementById('mcp-tools-list').innerHTML = '<span style="color:var(--red)">加载失败: ' + e.message + '</span>';
+  }
+}
+
+async function mcpInstall() {
+  const cmdEl = document.getElementById('mcp-install-cmd');
+  const cmd = cmdEl.value.trim();
+  if (!cmd) { mcpFeedback('请输入安装指令', 'error'); return; }
+
+  const btn = document.getElementById('btn-mcp-install');
+  const status = document.getElementById('mcp-install-status');
+  btn.disabled = true; btn.textContent = '⏳ 安装中...'; status.textContent = '';
+
+  try {
+    const r = await api('/api/mcp/install', { method: 'POST', body: JSON.stringify({command: cmd}) });
+    if (!r.ok) {
+      mcpFeedback('拒绝执行️ ' + (r.error || '请使用正确的指令'), 'error');
+      cmdEl.value = '';  // auto-clear
+      btn.disabled = false; btn.textContent = '📦 安装'; return;
+    }
+
+    // Collapse auto-import, show waiting
+    const aiSection = document.getElementById('mcp-autoimport-section');
+    if (aiSection) aiSection.innerHTML = `
+      <div class="config-section-title">🔧 自动导入</div>
+      <div style="padding:12px;text-align:center;color:var(--accent);font-size:13px">
+        ⏳ 等待安装...准备自动配置<br>
+        <span style="font-size:11px;color:var(--text-dim)">安装完成后将自动解析并写入配置文件</span>
+      </div>
+    `;
+
+    _mcpPollTimer = setInterval(async () => {
+      try {
+        const s = await api('/api/mcp/install/' + r.task_id);
+        if (s.status === 'done') {
+          clearInterval(_mcpPollTimer); _mcpPollTimer = null;
+          status.innerHTML = '<span style="color:var(--green)">✅ 安装完成</span>';
+          btn.disabled = false; btn.textContent = '📦 安装';
+          cmdEl.value = '';  // clear on success
+          await _doAutoImport(cmd, true);
+        } else if (s.status === 'error') {
+          clearInterval(_mcpPollTimer); _mcpPollTimer = null;
+          status.innerHTML = '<span style="color:var(--red)">❌ ' + esc(s.output?.slice(0, 100) || '失败') + '</span>';
+          btn.disabled = false; btn.textContent = '📦 重试';
+          restoreAutoImportSection();
+        }
+      } catch(e) { clearInterval(_mcpPollTimer); _mcpPollTimer = null; }
+    }, 2000);
+  } catch(e) {
+    mcpFeedback('拒绝执行️ ' + e.message, 'error');
+    cmdEl.value = '';  // auto-clear
+    btn.disabled = false; btn.textContent = '📦 安装';
+  }
+}
+
+async function mcpAutoImport() {
+  const cmdEl = document.getElementById('mcp-autoimport-cmd');
+  const cmd = cmdEl?.value?.trim();
+  if (!cmd) { mcpFeedback('请粘贴安装指令', 'error'); return; }
+  await _doAutoImport(cmd, false, cmdEl);
+}
+
+async function _doAutoImport(cmd, silent, cmdEl) {
+  try {
+    const r = await api('/api/mcp/auto-import', { method: 'POST', body: JSON.stringify({install_command: cmd}) });
+    if (r.ok) {
+      mcpFeedback('✅ ' + r.message, 'success');
+      if (silent) {
+        const aiSection = document.getElementById('mcp-autoimport-section');
+        if (aiSection) aiSection.innerHTML = `
+          <div class="config-section-title">🔧 自动导入</div>
+          <div style="padding:12px;color:var(--green);font-size:13px">✅ ${esc(r.message)}</div>
+        `;
+      } else if (cmdEl) {
+        cmdEl.value = '';  // clear on success
+      }
+      loadMCPTools();
+    } else {
+      mcpFeedback('❌️ ' + (r.error || '错误的指令'), 'error');
+      if (cmdEl) cmdEl.value = '';
+      else { const el = document.getElementById('mcp-autoimport-cmd'); if (el) el.value = ''; }
+      if (silent) restoreAutoImportSection();
+    }
+  } catch(e) {
+    mcpFeedback('❌️ ' + e.message, 'error');
+    if (cmdEl) cmdEl.value = '';
+    else { const el = document.getElementById('mcp-autoimport-cmd'); if (el) el.value = ''; }
+    if (silent) restoreAutoImportSection();
+  }
+}
+
+function restoreAutoImportSection() {
+  const aiSection = document.getElementById('mcp-autoimport-section');
+  if (aiSection) aiSection.innerHTML = `
+    <div class="config-section-title">🔧 自动导入</div>
+    <div class="form-group">
+      <input type="text" id="mcp-autoimport-cmd" placeholder="粘贴安装指令以提取 MCP 名称并自动配置">
+      <div class="hint">粘贴指令后自动解析包名，写入 data/mcp_servers.json</div>
+    </div>
+    <button class="btn btn-primary" onclick="mcpAutoImport()">📥 导入配置</button>
+  `;
+}
+
+function mcpFeedback(msg, type) {
+  const el = document.getElementById('mcp-config-feedback');
+  if (!el) return;
+  el.style.display = 'block'; el.textContent = msg;
+  el.style.background = type === 'success' ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+  el.style.color = type === 'success' ? 'var(--green)' : 'var(--red)';
+  el.style.border = '1px solid ' + (type === 'success' ? 'var(--green)' : 'var(--red)');
+}
+
+// ── Account management ─────────────────────────────────────────────
+
+function selectAccount(accId) {
+  if (!_currentSkill) return;
+  _selectedId = accId;
+  const body = document.getElementById('config-modal-body');
+  renderConfigBody(body, _currentSkill);
+}
+
+async function addAccount() {
+  if (!_currentSkill) return;
+  _selectedId = null;
+  const body = document.getElementById('config-modal-body');
+  renderConfigBody(body, _currentSkill);
+  // Focus on email field
+  setTimeout(() => {
+    const el = document.getElementById('cfg-field-email_address');
+    if (el) el.focus();
+  }, 100);
+}
+
+async function deleteAccount(event, accId) {
+  event.stopPropagation();  // prevent triggering tab select
+  if (!confirm('确定要删除账户「' + (_accounts[accId]?.label || accId) + '」吗？此操作不可撤销。')) return;
+  if (!_currentSkill) return;
+
+  // Remove from accounts
+  delete _accounts[accId];
+
+  // Update active if needed
+  if (_activeId === accId) {
+    const remaining = Object.keys(_accounts);
+    _activeId = remaining.length > 0 ? remaining[0] : '';
+    _selectedId = _activeId;
+  }
+  if (_selectedId === accId) {
+    const remaining = Object.keys(_accounts);
+    _selectedId = remaining.length > 0 ? remaining[0] : null;
+  }
+
+  // Save to server
+  try {
+    await api('/api/skills/' + _currentSkill.name + '/config', {
+      method: 'POST',
+      body: JSON.stringify({ active: _activeId, accounts: _accounts })
+    });
+  } catch(e) {
+    console.error('Failed to save after delete:', e);
+  }
+
+  // Re-render
+  const body = document.getElementById('config-modal-body');
+  renderConfigBody(body, _currentSkill);
+  loadSkills();  // refresh badge
+}
+
+async function setActiveAccount(accId) {
+  if (!_currentSkill) return;
+  _activeId = accId;
+  _selectedId = accId;
+
+  // Save to server
+  try {
+    await api('/api/skills/' + _currentSkill.name + '/config', {
+      method: 'POST',
+      body: JSON.stringify({ active: _activeId, accounts: _accounts })
+    });
+  } catch(e) {
+    console.error('Failed to save active:', e);
+  }
+
+  const body = document.getElementById('config-modal-body');
+  renderConfigBody(body, _currentSkill);
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function _findAccountByProvider(provider) {
+  for (const [id, acc] of Object.entries(_accounts)) {
+    if (acc._provider === provider) return id;
+  }
+  return null;
+}
+
+function _clearProviderFields() {
+  ['label', 'email_address', 'password'].forEach(k => {
+    const el = document.getElementById('cfg-field-' + k);
+    if (el) el.value = '';
+  });
+}
+
+// ── Provider preset ─────────────────────────────────────────────────
+
+function selectPreset(key) {
+  // Update visual state — unselect all, select target
+  document.querySelectorAll('.preset-card').forEach(card => {
+    const isTarget = card.dataset.provider === key;
+    card.classList.toggle('selected', isTarget);
+    let check = card.querySelector('.preset-check');
+    if (isTarget && !check) {
+      check = document.createElement('span');
+      check.className = 'preset-check';
+      check.textContent = '✅';
+      card.appendChild(check);
+    } else if (!isTarget && check) {
+      check.remove();
+    }
+  });
+
+  // UX: if no account uses this provider → auto new-account mode
+  const existingId = _findAccountByProvider(key);
+  if (!existingId) {
+    _selectedId = null;
+    // Deselect all account tabs (no re-render — would lose provider selection)
+    document.querySelectorAll('.account-tab').forEach(t => t.classList.remove('selected'));
+    // Clear provider-dependent fields directly
+    _clearProviderFields();
+    const el = document.getElementById('cfg-field-email_address');
+    if (el) el.focus();
+  }
+  // If existing account found, do NOT auto-switch; conflict handled at save time
+}
+
+// ── Feedback ────────────────────────────────────────────────────────
+
+function showFeedback(msg, type) {
+  const el = document.getElementById('config-feedback');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'success'
+    ? 'rgba(81,207,102,0.12)'
+    : 'rgba(255,107,107,0.12)';
+  el.style.color = type === 'success' ? 'var(--green)' : 'var(--red)';
+  el.style.border = '1px solid ' + (type === 'success' ? 'var(--green)' : 'var(--red)');
+}
+
+// ── Test & Save ─────────────────────────────────────────────────────
+
+async function testAndSave() {
+  if (_savingConfig || !_currentSkill) return;
+
+  const cfg = _currentSkill.config || {};
+  const fields = cfg.fields || [];
+  const presets = cfg.provider_presets || {};
+
+  // Collect all field values (including label)
+  const allFields = [{key: 'label', required: false}, ...fields];
+  const data = {};
+  for (const f of allFields) {
+    const el = document.getElementById('cfg-field-' + f.key);
+    if (!el) continue;
+    const val = el.value.trim();
+    if (f.required && !val) {
+      showFeedback('请填写必填字段：' + (f.label || f.key), 'error');
+      el.focus();
+      return;
+    }
+    if (val) data[f.key] = val;
+  }
+
+  if (!data.email_address) {
+    showFeedback('请填写邮箱地址', 'error');
+    return;
+  }
+  if (!data.password) {
+    showFeedback('请填写授权码', 'error');
+    return;
+  }
+  if (!data.label) {
+    data.label = data.email_address.split('@')[0];
+  }
+
+  // Determine selected provider
+  const selectedPreset = document.querySelector('.preset-card.selected');
+  const providerKey = selectedPreset ? selectedPreset.dataset.provider : '';
+  // Fallback: use existing account's provider
+  const existingAccount = _selectedId ? _accounts[_selectedId] : null;
+  const finalProvider = providerKey || (existingAccount ? existingAccount._provider : '') || '';
+  if (!finalProvider || !presets[finalProvider]) {
+    showFeedback('请先选择一个邮箱提供商', 'error');
+    return;
+  }
+  data._provider = finalProvider;
+
+  // Inject server/port from preset defaults
+  const preset = presets[finalProvider];
+  const defs = preset.defaults || {};
+  if (!data.smtp_server && defs.smtp_server) data.smtp_server = defs.smtp_server;
+  if (!data.smtp_port && defs.smtp_port) data.smtp_port = defs.smtp_port;
+  if (!data.imap_server && defs.imap_server) data.imap_server = defs.imap_server;
+  if (!data.imap_port && defs.imap_port) data.imap_port = defs.imap_port;
+
+  // ── Provider conflict check ──
+  const conflictedId = _findAccountByProvider(finalProvider);
+  if (conflictedId && conflictedId !== _selectedId) {
+    // Another account already uses this provider — ask user
+    const label = _accounts[conflictedId]?.label || conflictedId;
+    showConflictPrompt(data, conflictedId, finalProvider, label);
+    return;
+  }
+
+  // Pass account_id when updating an existing account
+  if (_selectedId) {
+    data.account_id = _selectedId;
+  }
+
+  _executeSave(data);
+}
+
+function showConflictPrompt(data, conflictedId, providerKey, label) {
+  const presets = _currentSkill?.config?.provider_presets || {};
+  const providerLabel = presets[providerKey]?.label || providerKey;
+
+  const fb = document.getElementById('config-feedback');
+  fb.style.display = 'block';
+  fb.style.background = 'rgba(255,169,77,0.12)';
+  fb.style.color = 'var(--orange)';
+  fb.style.border = '1px solid var(--orange)';
+  fb.innerHTML = `
+    ⚠️ 提供商「${esc(providerLabel)}」已有账户「<strong>${esc(label)}</strong>」，您希望？
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="btn btn-sm btn-primary" id="btn-conflict-new">➕ 新增为独立账户</button>
+      <button class="btn btn-sm btn-secondary" id="btn-conflict-overwrite">📝 覆盖「${esc(label)}」</button>
+    </div>
+  `;
+
+  document.getElementById('btn-conflict-new').onclick = () => {
+    data.account_id = '';  // force new account
+    _executeSave(data);
+  };
+  document.getElementById('btn-conflict-overwrite').onclick = () => {
+    data.account_id = conflictedId;
+    _executeSave(data);
+  };
+}
+
+async function _executeSave(data) {
+  _savingConfig = true;
+  const btn = document.getElementById('btn-test-save');
+  btn.disabled = true;
+  btn.textContent = '⏳ 正在发送测试邮件...';
+  showFeedback('正在连接邮件服务器并发送测试邮件，请稍候...', '');
+
+  try {
+    const r = await api('/api/skills/' + _currentSkill.name + '/test-and-save', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+
+    if (r.ok) {
+      showFeedback('✅ ' + r.message, 'success');
+      btn.textContent = '✅ 已保存';
+      _savingConfig = false;
+      // Update local state from server response
+      if (r.accounts) {
+        _accounts = r.accounts.accounts || {};
+        _activeId = r.accounts.active || '';
+        // Find the just-saved account ID
+        const savedId = Object.keys(_accounts).find(id => {
+          const a = _accounts[id];
+          return a.email_address === data.email_address;
+        });
+        _selectedId = savedId || _activeId || null;
+      }
+      setTimeout(() => {
+        document.getElementById('config-modal').style.display = 'none';
+        _savingConfig = false;
+        loadSkills();
+      }, 2000);
+    } else {
+      showFeedback('❌ ' + (r.error || '测试失败'), 'error');
+      btn.textContent = '📨 重试测试连接';
+      btn.disabled = false;
+      _savingConfig = false;
+    }
+  } catch(e) {
+    showFeedback('❌ 请求失败: ' + e.message, 'error');
+    btn.textContent = '📨 重试测试连接';
+    btn.disabled = false;
+    _savingConfig = false;
+  }
+}
+
+function scrollToGuide() {
+  const guideSection = document.getElementById('setup-guide-section');
+  if (guideSection) {
+    guideSection.scrollIntoView({behavior: 'smooth'});
+  }
+}
+
+// Simple markdown → HTML renderer
+function renderMarkdown(md) {
+  let html = md;
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Blockquote
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Numbered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  // Wrap adjacent <li> in <ol>/<ul>
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Line breaks
+  html = html.replace(/\n\n/g, '<br><br>');
+  return html;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Close modal on overlay click
+document.addEventListener('click', function(e) {
+  if (e.target.id === 'config-modal') {
+    closeConfigModal();
+  }
+});
+
+loadSkills();
+
+// ── Mail skill highlight (from feedback link) ──
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const highlight = params.get('highlight');
+  if (highlight === 'mail_parser') {
+    // Wait for DOM render, then flash the card
+    setTimeout(() => {
+      const card = document.querySelector(`.skill-card[data-skill="mail_parser"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.transition = 'box-shadow 0.3s ease, background 0.3s ease';
+        card.style.boxShadow = '0 0 0 3px var(--accent)';
+        card.style.background = 'rgba(191,126,67,0.08)';
+        setTimeout(() => {
+          card.style.boxShadow = '';
+          card.style.background = '';
+        }, 3000);
+      }
+    }, 400);
+    // Clean URL
+    if (window.history.replaceState) {
+      const u = new URL(window.location);
+      u.searchParams.delete('highlight');
+      window.history.replaceState({}, '', u);
+    }
+  }
+})();
+</script>
+{% endblock %}

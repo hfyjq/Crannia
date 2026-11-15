@@ -1,0 +1,88 @@
+kind: skill
+name: media_gen
+version: "0.1.0"
+draft: false
+load_strategy: on_demand
+description: "生图 —— 厂商直连（OpenAI 兼容 /images/generations），产出直接进聊天区"
+# 技能页卡片上那句短简介，与 `description` 分开。
+summary: "图视频拓展"
+
+# 契约声明。
+#   · `api` 只在破坏性变更时 +1（加能力不算）；
+#   · `requires` 里的每个名字都是 `core/capabilities.py` 的 `CAPABILITIES` 里的一项，
+#     缺一项就不装载，并说清缺什么（不半残）。
+api: 1
+requires:
+  - artifacts
+  - artifacts.inline      # 产物记录带 `inline`：大图给下载行而不是硬塞 <img>
+  - workspace             # 落点走 primary_output_dir（本 skill 唯一的写路径口径）
+
+# 本技能的工具不需要自动模式再判一遍：
+#   · 它写的文件在工作区里、可逆、一次一个；
+#   · 花费是用户自己的事，弹窗拦不住任何真风险，只会让"画张图"每次都停一下。
+#   没有这一行的话，每调一次都过分类器（要花钱的 token），而且会被
+#   `test_auto_review` 当场点名（它要求每个走到第 ④ 层的工具做过决定）。
+review_input: none
+
+# 配置不在这里：凭据在 `data/media_gen_credentials.json`（不进 settings.json，
+#   也不进导出包）。这里只声明"有哪些条目、字段长什么样"给界面用。
+settings:
+  # 整份配置住在这个文件里，所以凭据天然不进 `settings.json`（导出也不带走）。
+  #   路径相对仓库根；`core/skill_settings.py` 是读写它的唯一入口（校验 + 打码 + 原子写）。
+  storage: data/media_gen_credentials.json
+  type: object
+  properties:
+    default:
+      type: string
+      title: 默认条目
+      description: 不指定 entry 时用哪一条。
+    entries:
+      type: object
+      title: 配置条目
+      description: 键是条目名；值见下面三个字段。
+      additionalProperties:
+        type: object
+        properties:
+          type:
+            type: string
+            title: 类型
+            enum: [vendor, local]
+            default: vendor
+            description: "vendor = 厂商直连（走 /images/generations）；local = 本机 SD WebUI（走 /sdapi/v1/txt2img，只允许回环地址）"
+          base_url:
+            type: string
+            title: 请求地址
+            description: 请填写至API根
+          model:
+            type: string
+            title: 模型名
+          api_key:
+            type: string
+            title: API Key
+            format: password
+            x-secret: true      # 声明为敏感：界面打码、不进 settings.json
+
+tools:
+  - name: generate_image
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      生成一张图片并保存到工作区（产出的图会直接显示在聊天里）。
+      需要先在生图配置里建一条（地址 + 模型名 + API Key）。
+      一次只生一张；要几张就调几次。提示词写清楚画面内容，
+      英文通常更稳。只用它来"从无到有画一张"——读图、改图、识别不走这里。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        prompt:
+          type: string
+          description: "画面描述（要画什么、风格、构图）"
+        size:
+          type: string
+          description: "尺寸，如 1024x1024 或 2K；不填用服务默认"
+        entry:
+          type: string
+          description: "用哪一条配置；不填用默认那条"
+      required: [prompt]

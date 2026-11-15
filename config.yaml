@@ -1,0 +1,164 @@
+# Crannia 的主配置。所有 ${...} 都是环境变量的占位符 —— 真实的密钥写在
+# 仓库根目录的 .env 里（见 .env.example），这个文件永远不放明文凭据。
+#
+# 改这个文件之后要重启框架才生效（它只在启动时读一次）。
+channel:
+  # 没指定通道时用哪一个。可选 feishu_channel / wechat_channel /
+  # telegram_channel / dingtalk_channel / cli_channel。
+  default: feishu_channel
+  dingtalk:
+    app_key: ${DINGTALK_APP_KEY}
+    app_secret: ${DINGTALK_APP_SECRET}
+  feishu:
+    app_id: ${FEISHU_APP_ID}
+    app_secret: ${FEISHU_APP_SECRET}
+  telegram:
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    polling_timeout: 30
+    # 需要代理才能连 Telegram 时在这里填（形如 http://127.0.0.1:7890），
+    # 留空 = 直连。也可以设环境变量 HTTPS_PROXY，两条路都走同一处。
+    proxy: ''
+  wechat:
+    aggregation_delay: 1.5
+    base_url: https://ilinkai.weixin.qq.com
+    credentials_path: ./data/wechat_credentials.json
+    polling_timeout: 35
+chunking:
+  max_chars: 1500
+memory:
+  # 上下文用到窗口的这个比例时开始压缩（0.85 = 85%）。
+  compression:
+    keep_recent_turns: 3
+    token_threshold: 0.85
+  enabled: true
+  session_memory:
+    sessions_dir: ./data/memory/sessions
+  short_term:
+    max_history: 100
+  storage_path: ./data/memory
+
+# 当前激活的模型。切换模型只改这三行，或者去桌面端的模型配置页。
+model:
+  api_key: ${DEEPSEEK_API_KEY}
+  base_url: https://api.deepseek.com/v1
+  # 上下文窗口。不写这一行也可以：框架会按「声明 > 实测 > 查表 > 兜底」四层解析。
+  context_window: 1048576
+  model_name: deepseek-v4-flash
+  provider: deepseek
+  # 关掉图片输入写：supports_vision: false
+  # 打开音频输入写：supports_audio: true
+  # 两个都是逐模型的，且必须是裸 true/false（带引号会被当成写错）。
+  #
+  # 客户端限流：**不能删掉这一格**。框架按「字典非空」判断要不要建限流器，
+  # 删掉它等于让限流器按默认值重新生效。写 0 = 关闭。
+  rate_limit:
+    rpm: 0
+    tpm: 0
+  request_timeout: 120
+  temperature: 0.3
+
+# 备用模型。界面上切换时读这里的条目；不填也能用，只是没得选。
+models:
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    context_window: 200000
+    model_name: claude-sonnet-4-20250514
+    provider: anthropic
+  deepseek:
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com/v1
+    context_window: 65536
+    model_name: deepseek-v4-flash
+    provider: deepseek
+  deepseek-pro:
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com/v1
+    context_window: 65536
+    model_name: deepseek-v4-pro
+    provider: deepseek
+  glm:
+    api_key: ${GLM_API_KEY}
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    context_window: 131072
+    model_name: glm-4-flash
+    provider: glm
+  kimi:
+    api_key: ${MOONSHOT_API_KEY}
+    base_url: https://api.moonshot.cn/v1
+    context_window: 131072
+    model_name: moonshot-v1-8k
+    provider: kimi
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1
+    context_window: 128000
+    model_name: gpt-4o
+    provider: openai
+  openai-mini:
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1
+    context_window: 1000000
+    model_name: gpt-4.1-mini
+    provider: openai
+  qwen:
+    api_key: ${DASHSCOPE_API_KEY}
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    context_window: 131072
+    model_name: qwen-plus
+    provider: qwen
+  qwen-max:
+    api_key: ${DASHSCOPE_API_KEY}
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    context_window: 32768
+    model_name: qwen-max
+    provider: qwen
+retrieval:
+  # 检索时回灌前几段（BM25 + 分词打分之后的 Top-K）。
+  top_k: 3
+security:
+  # 框架自己的文件读写只允许落在这里；工作区之外一律走一次审批。
+  allowed_directories:
+  - ./workspace
+  audit_log_path: ./logs/audit.log
+  command_blacklist:
+  - sudo
+  - rm -rf
+  - del /f
+  - format
+  # 跨区：工作区之外的文件默认只读，写要走一次审批。
+  cross_zone:
+    enabled: true
+    auto_approve: false
+    read_scope: auto
+    forbidden_directories:
+    - C:/Windows
+    - C:/Program Files
+    - C:/Program Files (x86)
+    - C:/ProgramData
+    - C:/$Recycle.Bin
+    - C:/System Volume Information
+    - C:/Recovery
+  work_groups:
+    enabled: false
+    default_workspace: ''
+  cascade_watcher:
+    enabled: false
+    auto_start: true
+summarization:
+  chunk_summary_max_chars: 200
+  merge_batch_size: 3
+
+# 单个工具结果最多回灌多少字符。真正生效的是投入档里的那一格；
+# 这里设成同一个值只是免得启动时打一行「这个键不再生效」。
+tool_result_max_chars: 50000
+
+# 自动更新。channel 是 "stable" | "beta"；两条 manifest 都是静态的 version.json，
+# 由 Release 流程写进 gh-pages 分支，与源码分支分开。
+update:
+  enabled: true
+  channel: stable
+  manifest_urls:
+    stable: "https://hfyjq.github.io/Crannia/stable/version.json"
+    beta: "https://hfyjq.github.io/Crannia/beta/version.json"
+  check_interval_hours: 24
+  auto_download: false

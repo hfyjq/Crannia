@@ -1,0 +1,16 @@
+kind: provider
+name: ollama
+version: 0.2.0
+description: Ollama — 本地大模型 (Llama/Qwen/DeepSeek)
+api_mode: openai_compat
+config:
+  base_url: http://localhost:11434/v1
+  default_model: llama3.1
+  context_window: 131072
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: ollama
+  website: https://ollama.com/
+env_keys:
+- OLLAMA_API_KEY

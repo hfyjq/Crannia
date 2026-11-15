@@ -1,0 +1,16 @@
+kind: provider
+name: zhipu
+version: 0.2.0
+description: 智谱 GLM — 全系列模型 (Flash/Air/Pro/V)
+api_mode: openai_compat
+config:
+  base_url: https://open.bigmodel.cn/api/paas/v4
+  default_model: glm-4.5-flash
+  context_window: 131072
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: zhipu
+  website: https://open.bigmodel.cn/
+env_keys:
+- GLM_API_KEY

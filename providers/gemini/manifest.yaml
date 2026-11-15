@@ -1,0 +1,16 @@
+kind: provider
+name: gemini
+version: 0.2.0
+description: Google Gemini — 2.5/3/3.1 全系列 (OpenAI兼容)
+api_mode: openai_compat
+config:
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai
+  default_model: gemini-2.5-flash
+  context_window: 1048576
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: gemini
+  website: https://gemini.google.com/
+env_keys:
+- GEMINI_API_KEY

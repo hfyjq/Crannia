@@ -1,0 +1,4 @@
+kind: channel
+name: qq_bot_channel
+description: QQ Bot adapter — official Bot API v2 (WebSocket gateway + REST)
+version: 0.1.0

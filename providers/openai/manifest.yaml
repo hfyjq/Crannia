@@ -1,0 +1,16 @@
+kind: provider
+name: openai
+version: 0.2.0
+description: OpenAI — GPT-5 全系列
+api_mode: openai_compat
+config:
+  base_url: https://api.openai.com/v1
+  default_model: gpt-5
+  context_window: 128000
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: openai
+  website: https://openai.com/
+env_keys:
+- OPENAI_API_KEY

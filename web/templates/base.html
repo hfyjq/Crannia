@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crannia — AI Agent 控制台</title>
+<link rel="stylesheet" href="/static/style.css?token={{ request.args.get('token','') }}">
+<style>
+@keyframes toastIn { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
+</style>
+<script>
+const TOKEN = "{{ request.args.get('token','') }}";
+async function api(url, opts={}) {
+  try {
+    const full = url + (url.includes('?') ? '&' : '?') + 'token=' + TOKEN;
+    const res = await fetch(full, {
+      headers: {'Content-Type':'application/json', 'X-Crannia-Token':TOKEN},
+      ...opts
+    });
+    if (!res.ok) {
+      try {
+        const body = await res.json();
+        const msg = body.error || body.message || (res.status + ' ' + res.statusText);
+        throw new Error(msg);
+      } catch(e) {
+        if (e.message && !e.message.startsWith(String(res.status))) throw e;
+        throw new Error(res.status + ' ' + res.statusText);
+      }
+    }
+    return res.json();
+  } catch(e) {
+    console.error('API error:', url, e);
+    throw e;
+  }
+}
+async function checkStatus() {
+  try {
+    const s = await api('/api/status');
+    const b = document.getElementById('status-badge');
+    if (b) { b.textContent = s.framework_running ? '● 运行中' : '● 离线'; b.className = 'badge ' + (s.framework_running?'online':'offline'); }
+  } catch(e) {}
+}
+</script>
+</head>
+<body>
+  <!-- ═══ Cascade notification toasts (all pages) ═══ -->
+  <div id="cascade-toast-container" style="position:fixed;top:70px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:360px;pointer-events:none"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo"><img src="/static/img/logo.svg" alt="" class="logo-icon"> Crannia</div>
+    <nav>
+      <a href="/chat?token={{ request.args.get('token','') }}" class="{{ 'active' if active == 'chat' else '' }}">
+        <span class="icon">💬</span> CLI 聊天
+      </a>
+      <a href="/?token={{ request.args.get('token','') }}" class="{{ 'active' if active == 'platform' else '' }}">
+        <span class="icon">⚙</span> 端配置
+      </a>
+      <a href="/skills?token={{ request.args.get('token','') }}" class="{{ 'active' if active == 'skills' else '' }}">
+        <span class="icon">🔧</span> 技能
+      </a>
+      <a href="/security?token={{ request.args.get('token','') }}" class="{{ 'active' if active == 'security' else '' }}">
+        <span class="icon">🛡</span> 安全与设置
+      </a>
+      <a href="/logs?token={{ request.args.get('token','') }}" class="{{ 'active' if active == 'logs' else '' }}">
+        <span class="icon">📋</span> 日志
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-version" onclick="showAboutModal()" title="关于 Crannia"><img src="/static/img/logo.svg" alt="" class="logo-icon-sm"> {{ app_version }}<span id="update-dot" style="display:none;color:var(--accent);margin-left:4px;font-size:11px;font-weight:700">🔔</span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="header">
+      <span>{% block header_title %}控制台{% endblock %}</span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="badge" id="status-badge">● 离线</span>
+        <button class="btn-icon" onclick="openSettings()" title="更多设置">⚙</button>
+      </div>
+    </div>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeSettings()">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <span>⚙ 更多设置</span>
+        <button class="btn-icon" onclick="closeSettings()">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body">加载中...</div>
+    </div>
+  </div>
+
+  <!-- About Modal -->
+  <div class="modal-overlay" id="about-overlay" onclick="if(event.target===this)closeAbout()" style="display:none">
+    <div class="modal-panel" style="width:420px;text-align:center">
+      <div class="modal-header">
+        <span>关于 Crannia</span>
+        <button class="btn-icon" onclick="closeAbout()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:28px 24px">
+        <div style="margin-bottom:12px"><img src="/static/img/logo.svg" alt="Crannia" style="width:64px;height:64px"></div>
+        <div style="font-size:18px;font-weight:700;color:var(--text-bright);margin-bottom:4px">Crannia {{ app_version }}</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:20px">模块化 AI Agent 框架</div>
+        <!-- Software Update -->
+        <div id="about-update-section" style="margin-bottom:16px;padding:12px;background:var(--bg-main);border-radius:8px;text-align:left;display:none">
+          <div style="font-size:12px;font-weight:700;color:var(--text-bright);margin-bottom:8px">🔍 软件更新</div>
+          <div id="about-update-status" style="font-size:12px;color:var(--text-dim)">检查中...</div>
+          <div id="about-update-detail" style="display:none;margin-top:8px">
+            <div id="about-update-notes" style="font-size:11px;color:var(--text);max-height:120px;overflow-y:auto;margin-bottom:8px;white-space:pre-line"></div>
+            <button class="btn-primary" style="width:100%;padding:6px;font-size:12px" onclick="downloadUpdateFromAbout()">📥 下载并安装</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.8">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span>项目地址</span>
+            <a href="https://github.com/hfyjq/Crannia" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">GitHub ↗</a>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span>检查更新</span>
+            <a href="#" onclick="checkUpdateFromAbout();return false;" style="color:var(--accent);text-decoration:none" id="about-check-update-link">立即检查</a>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0">
+            <span>报告问题或反馈建议</span>
+            <a href="https://github.com/hfyjq/Crannia/issues/new/choose" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;font-weight:600">【反馈】</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Onboarding Wizard ═══ -->
+  <div class="onboard-overlay" id="onboard-overlay">
+    <div class="onboard-panel" id="onboard-panel">
+      <!-- Step indicator -->
+      <div class="onboard-steps" id="onboard-steps"></div>
+      <!-- Content area -->
+      <div class="onboard-body" id="onboard-body"></div>
+    </div>
+  </div>
+
+  <script>
+  var _autoStartDone = false;
+  checkStatus();
+  setInterval(checkStatus, 5000);
+
+  // Auto-start framework if setting is enabled
+  (async function autoStart() {
+    if (_autoStartDone) return;
+    _autoStartDone = true;
+    try {
+      const s = await api('/api/status');
+      if (s.framework_running) return;  // already running, skip
+      const cfg = await api('/api/settings');
+      if (cfg.auto_start_framework) {
+        console.log('[auto-start] Starting framework...');
+        const r = await api('/api/start', {method:'POST'});
+        if (r.ok) {
+          console.log('[auto-start] Framework started');
+          checkStatus();
+          // Notify dashboard to refresh platform button states
+          window.dispatchEvent(new CustomEvent('crannia:framework-started'));
+        } else {
+          console.warn('[auto-start] Framework start failed:', r.error);
+        }
+      }
+    } catch(e) {
+      console.warn('[auto-start] Auto-start check failed:', e.message);
+    }
+  })();
+
+  let _settingsCache = {};
+  async function openSettings() {
+    document.getElementById('modal-overlay').style.display = 'flex';
+    try {
+      _settingsCache = await api('/api/settings');
+    } catch(e) { _settingsCache = {}; }
+    renderSettings();
+  }
+  function closeSettings() {
+    document.getElementById('modal-overlay').style.display = 'none';
+  }
+  function renderSettings() {
+    const s = _settingsCache;
+    const cp = loadColorPrefs();
+    document.getElementById('modal-body').innerHTML = `
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">开机自启</div>
+          <div class="setting-hint">电脑启动后自动运行 Crannia 托盘程序</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${s.boot_on_startup?'checked':''} onchange="saveSetting('boot_on_startup',this.checked)"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">自动启动框架</div>
+          <div class="setting-hint">Web UI 打开后自动初始化 Agent 框架（无需手动点击启动）</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${s.auto_start_framework?'checked':''} onchange="saveSetting('auto_start_framework',this.checked)"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">自动启动选中通道</div>
+          <div class="setting-hint">框架启动后自动运行端配置页中高亮选中的通道</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${s.auto_start_channel?'checked':''} onchange="saveSetting('auto_start_channel',this.checked)"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">启动时默认页面</div>
+          <div class="setting-hint">打开 Web UI 时自动定位到的页面</div>
+        </div>
+        <select onchange="saveDefaultPage(this.value)" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px">
+          ${['chat:CLI 聊天','platform:端配置','skills:技能','logs:日志'].map(o => {
+            const [v,label] = o.split(':');
+            const cur = localStorage.getItem('crannia-default-page') || 'chat';
+            return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+label+'</option>';
+          }).join('')}
+        </select>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">禁用动画效果</div>
+          <div class="setting-hint">关闭所有页面动画，CLI 欢迎页仅显示静态问候</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${localStorage.getItem('crannia-anim-disabled')==='1'?'checked':''} onchange="toggleAnim(this.checked)"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">启动后停止呼吸光效</div>
+          <div class="setting-hint">框架启动后，「启动框架」按钮不再显示脉冲光效</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${localStorage.getItem('crannia-glow-once')==='1'?'checked':''} onchange="localStorage.setItem('crannia-glow-once',this.checked?'1':'0')"><span class="toggle-slider"></span></label>
+      </div>
+      <hr style="border-color:var(--border);margin:16px 0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span class="setting-label" style="margin:0">🎨 自定义配色</span>
+        <span style="display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="exportColors()" style="font-size:10px;padding:3px 10px">📤 导出</button>
+          <button class="btn btn-sm" onclick="importColors()" style="font-size:10px;padding:3px 10px">📥 导入</button>
+        </span>
+      </div>
+      ${renderColorRow('左边栏', 'sidebarBg', cp.sidebarBg, '侧边导航栏背景色')}
+      ${renderColorRow('左边栏文字', 'sidebarText', cp.sidebarText, '侧边导航链接文字颜色')}
+      ${renderColorRow('大背景', 'mainBg', cp.mainBg, '页面主背景色')}
+      ${renderColorRow('框颜色', 'cardBg', cp.cardBg, '卡片/配置框/大框背景色')}
+      ${renderColorRow('框内文字', 'textColor', cp.textColor, '卡片和页面正文文字颜色')}
+      ${renderColorRow('选择高亮', 'accentColor', cp.accentColor, '鼠标悬停高亮 / 当前选中色')}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-sm" onclick="resetColors()" style="font-size:11px">↺ 恢复默认</button>
+        <span style="font-size:11px;color:var(--text-dim);align-self:center">修改即时生效，自动保存</span>
+      </div>
+      <hr style="border-color:var(--border);margin:16px 0">
+      <button class="btn btn-secondary" style="width:100%" onclick="restartFramework()">🔄 重启框架</button>
+      <div class="setting-hint" style="margin-top:6px;text-align:center">重新初始化 Agent 框架并恢复通道连接</div>
+    `;
+  }
+
+  function renderColorRow(label, key, value, hint) {
+    return '<div class="color-pick-row">'
+      + '<div class="color-pick-label"><span>' + label + '</span><span class="color-pick-hint">' + hint + '</span></div>'
+      + '<input type="color" value="' + value + '" onchange="setColor(\'' + key + '\', this.value)" class="color-pick-swatch">'
+      + '<input type="text" value="' + value + '" onchange="setColor(\'' + key + '\', this.value)" class="color-pick-hex" maxlength="7">'
+      + '</div>';
+  }
+
+  const COLOR_DEFAULTS = {
+    sidebarBg: '#537C58',
+    sidebarText: '#FFFFFF',
+    mainBg: '#B1CA99',
+    cardBg: '#E5E0B8',
+    textColor: '#000000',
+    accentColor: '#BF7E43',
+  };
+
+  const COLOR_VAR_MAP = {
+    sidebarBg: ['--bg-sidebar'],
+    sidebarText: ['--sidebar-text', '--sidebar-text-hover'],
+    mainBg: ['--bg'],
+    cardBg: ['--bg-card'],
+    textColor: ['--text', '--text-dim', '--text-bright'],
+    accentColor: ['--accent'],
+  };
+
+  function loadColorPrefs() {
+    try {
+      const raw = localStorage.getItem('crannia-colors-v2');
+      if (raw) return {...COLOR_DEFAULTS, ...JSON.parse(raw)};
+    } catch(e) {}
+    return {...COLOR_DEFAULTS};
+  }
+
+  function setColor(key, value) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(value)) return;
+    const prefs = loadColorPrefs();
+    prefs[key] = value;
+    localStorage.setItem('crannia-colors-v2', JSON.stringify(prefs));
+    applyColors(prefs);
+  }
+
+  function resetColors() {
+    localStorage.removeItem('crannia-colors-v2');
+    applyColors(COLOR_DEFAULTS);
+    // Refresh settings modal to update color inputs
+    renderSettings();
+  }
+  function exportColors() {
+    const prefs = loadColorPrefs();
+    const code = JSON.stringify(prefs);
+    navigator.clipboard.writeText(code).then(() => {
+      alert('✅ 配色代码已复制到剪贴板！\n发送给他人，在设置中点击「导入」粘贴即可。');
+    }).catch(() => {
+      alert('复制失败，请手动复制：\n' + code);
+    });
+  }
+  function importColors() {
+    const raw = prompt('请粘贴配色代码：');
+    if (!raw) return;
+    try {
+      const prefs = JSON.parse(raw.trim());
+      // Validate all 6 color keys exist and are valid hex
+      const required = ['sidebarBg','sidebarText','mainBg','cardBg','textColor','accentColor'];
+      for (const k of required) {
+        if (!prefs[k] || !/^#[0-9a-fA-F]{6}$/.test(prefs[k])) {
+          throw new Error('配色数据不完整或格式错误: ' + k);
+        }
+      }
+      localStorage.setItem('crannia-colors-v2', JSON.stringify(prefs));
+      applyColors(prefs);
+      renderSettings();
+      alert('✅ 配色已应用！');
+    } catch(e) {
+      alert('❌ 导入失败：' + e.message + '\n\n请确保粘贴的是完整的配色代码。');
+    }
+  }
+
+  function applyColors(prefs) {
+    const root = document.documentElement;
+    for (const [key, vars] of Object.entries(COLOR_VAR_MAP)) {
+      const val = prefs[key] || COLOR_DEFAULTS[key];
+      for (const v of vars) {
+        root.style.setProperty(v, val);
+      }
+    }
+    // Auto-derive accent-hover: darken by 8%
+    const accent = prefs.accentColor || COLOR_DEFAULTS.accentColor;
+    root.style.setProperty('--accent-hover', darkenHex(accent, 0.20));
+    // Auto-derive sidebar-text-hover: same as sidebarText (or slightly brighter)
+    const st = prefs.sidebarText || COLOR_DEFAULTS.sidebarText;
+    root.style.setProperty('--sidebar-text-hover', st);
+    // Sidebar version opacity handled by CSS
+  }
+
+  function darkenHex(hex, factor) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    const f = 1 - factor;
+    return '#' + [r,g,b].map(c => Math.round(c * f).toString(16).padStart(2,'0')).join('');
+  }
+
+  // Apply saved colors on page load
+  (function initColors() {
+    applyColors(loadColorPrefs());
+  })();
+  async function saveSetting(key, value) {
+    _settingsCache[key] = value;
+    await api('/api/settings', {method:'POST', body: JSON.stringify({[key]: value})});
+  }
+  function saveDefaultPage(value) {
+    localStorage.setItem('crannia-default-page', value);
+  }
+  function toggleAnim(disabled) {
+    localStorage.setItem('crannia-anim-disabled', disabled ? '1' : '0');
+    if (disabled) {
+      document.documentElement.classList.add('no-anim');
+    } else {
+      document.documentElement.classList.remove('no-anim');
+    }
+  }
+  // Apply animation setting on load
+  (function initAnim() {
+    if (localStorage.getItem('crannia-anim-disabled') === '1') {
+      document.documentElement.classList.add('no-anim');
+    }
+  })();
+  // Redirect to default page on first visit (once per session)
+  (function checkDefaultPage() {
+    if (window.location.pathname !== '/') return;
+    if (sessionStorage.getItem('crannia-redirected')) return;
+    sessionStorage.setItem('crannia-redirected', '1');
+    const dp = localStorage.getItem('crannia-default-page') || 'chat';
+    if (dp === 'chat') {
+      window.location.href = '/chat' + window.location.search;
+    } else if (dp === 'skills') {
+      window.location.href = '/skills' + window.location.search;
+    } else if (dp === 'logs') {
+      window.location.href = '/logs' + window.location.search;
+    }
+    // 'platform' = stay on /
+  })();
+  function showAboutModal() {
+    document.getElementById('about-overlay').style.display = 'flex';
+  }
+  function closeAbout() {
+    document.getElementById('about-overlay').style.display = 'none';
+  }
+
+  async function restartFramework() {
+    if (!confirm('确定要重启 Agent 框架吗？当前任务会中断。')) return;
+    closeSettings();
+    try {
+      const r = await api('/api/restart', {method:'POST'});
+      if (r.ok) {
+        alert('✅ 框架已重启' + (r.restarted_channels.length ? '，已恢复通道: '+r.restarted_channels.join(', ') : ''));
+        window.dispatchEvent(new CustomEvent('crannia:framework-started'));
+      } else {
+        alert('❌ 重启失败: ' + (r.error||'未知错误'));
+      }
+    } catch(e) {
+      alert('❌ 请求失败: ' + e.message);
+    }
+    checkStatus();
+  }
+
+  // Onboarding wizard
+  const ONBOARD_STEPS = ['welcome','workspace','api','platform','done'];
+  let _onboardStep = 0;
+  let _onboardPlatform = 'wechat_channel';
+  let _onboardProvider = '';
+  let _onboardApiKey = '';
+
+  (async function initOnboarding() {
+    try {
+      const r = await api('/api/onboarding/status');
+      if (r.done) return;
+    } catch(e) { return; }
+    // Hide normal UI, show wizard on solid background
+    document.body.classList.add('onboarding-active');
+    document.getElementById('onboard-overlay').classList.add('show');
+    renderOnboardSteps();
+    renderOnboardStep(0);
+  })();
+
+  function renderOnboardSteps() {
+    const el = document.getElementById('onboard-steps');
+    el.innerHTML = ONBOARD_STEPS.map((_, i) =>
+      '<div class="onboard-step-dot' + (i === 0 ? ' current' : '') + '" id="step-dot-'+i+'"></div>'
+    ).join('');
+  }
+
+  function markStep(i) {
+    for (let j = 0; j < ONBOARD_STEPS.length; j++) {
+      const d = document.getElementById('step-dot-'+j);
+      if (!d) continue;
+      d.className = 'onboard-step-dot' + (j < i ? ' done' : j === i ? ' current' : '');
+    }
+  }
+
+  function renderOnboardStep(i) {
+    _onboardStep = i;
+    markStep(i);
+    const body = document.getElementById('onboard-body');
+    switch(i) {
+      case 0: body.innerHTML = rWelcome(); break;
+      case 1: body.innerHTML = rWorkspace(); break;
+      case 2: body.innerHTML = rApiConfig(); break;
+      case 3: body.innerHTML = rPlatform(); break;
+      case 4: body.innerHTML = rDone(); runCompletion(); break;
+    }
+  }
+
+  function rWelcome() {
+    return '<img src="/static/img/logo.svg" class="onboard-logo" style="animation: onboardPopIn 0.6s ease">'
+      + '<div class="onboard-version">Crannia {{ app_version }}</div>'
+      + '<div class="onboard-title" style="animation: onboardPopIn 0.5s ease 0.2s both">欢迎使用 Crannia</div>'
+      + '<div class="onboard-sub" style="animation: onboardPopIn 0.5s ease 0.4s both">模块化 AI Agent 框架</div>'
+      + '<div style="animation: onboardPopIn 0.5s ease 0.7s both">'
+      + '<div class="onboard-sub" style="font-size:15px;margin-top:8px">让我们开始配置引导</div>'
+      + '<div class="onboard-btn-next" onclick="renderOnboardStep(1)" title="开始">👉</div>'
+      + '</div>';
+  }
+
+  function rWorkspace() {
+    // Default: user's Documents folder, or empty (prompts user to browse)
+    const defPath = '';
+    return '<div class="onboard-title">配置工作区</div>'
+      + '<div class="onboard-sub">Agent 将在这里开始工作</div>'
+      + '<div class="onboard-input-row">'
+      + '<input class="onboard-input" id="onboard-workspace" value="'+escAttr(defPath)+'" placeholder="点击右侧浏览按钮选择目录..." style="text-align:left" readonly>'
+      + '<button class="onboard-btn-browse" onclick="browseWorkspace()">📁 浏览</button>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">后续可在设置中修改</div>'
+      + '<div style="display:flex;justify-content:center;gap:16px;margin-top:16px">'
+      + '<div class="onboard-btn-next" onclick="renderOnboardStep(0)" title="返回">👈</div>'
+      + '<div class="onboard-btn-next" onclick="saveWorkspace()" title="下一步">👉</div>'
+      + '</div>';
+  }
+
+  async function browseWorkspace() {
+    try {
+      const r = await api('/api/browse-folder', {method:'POST'});
+      if (r.path) {
+        document.getElementById('onboard-workspace').value = r.path;
+      }
+    } catch(e) {
+      // Fallback: let user type manually
+      const input = document.getElementById('onboard-workspace');
+      input.readOnly = false;
+      input.placeholder = '请手动输入工作区路径...';
+      input.focus();
+    }
+  }
+
+  async function saveWorkspace() {
+    const path = document.getElementById('onboard-workspace').value.trim();
+    if (!path) { alert('请输入工作区路径'); return; }
+    try {
+      await api('/api/onboarding/workspace', {method:'POST', body: JSON.stringify({path})});
+    } catch(e) { /* non-fatal */ }
+    renderOnboardStep(2);
+  }
+
+  function rApiConfig() {
+    const providers = [
+      {key:'deepseek', label:'DeepSeek', url:'https://deepseek.com/'},
+      {key:'qwen', label:'Qwen 通义千问', url:'https://www.qianwen.com/'},
+      {key:'zhipu', label:'智谱 GLM', url:'https://open.bigmodel.cn/'},
+      {key:'openai', label:'OpenAI', url:'https://openai.com/'},
+      {key:'anthropic', label:'Anthropic', url:'https://www.anthropic.com/'},
+      {key:'moonshot', label:'Kimi 月之暗面', url:'https://www.moonshot.cn/'},
+      {key:'minimax', label:'MiniMax', url:'https://platform.minimaxi.com/'},
+      {key:'siliconflow', label:'硅基流动', url:'https://www.siliconflow.cn/'},
+      {key:'azure', label:'Azure AI', url:'https://azure.microsoft.com/'},
+      {key:'gemini', label:'Google Gemini', url:'https://gemini.google.com/'},
+      {key:'grok', label:'Grok xAI', url:'https://x.ai/'},
+      {key:'volcengine', label:'火山引擎', url:'https://console.volcengine.com/ark/'},
+      {key:'hunyuan', label:'腾讯混元', url:'https://cloud.tencent.com/product/hunyuan'},
+      {key:'openrouter', label:'OpenRouter', url:'https://openrouter.ai/'},
+      {key:'ollama', label:'Ollama 本地', url:'https://ollama.com/'},
+    ];
+    let html = '<div class="onboard-title">配置模型 API</div>'
+      + '<div class="onboard-sub">选择厂商并填入 API Key</div>'
+      + '<div class="onboard-provider-grid">'
+      + providers.map(p => '<div class="onboard-provider-chip'+(p.key===_onboardProvider?' selected':'')+'" onclick="selectOnboardProvider(\''+p.key+'\',this)">'+p.label+'<a href="'+p.url+'" target="_blank" class="onboard-provider-link" onclick="event.stopPropagation()" title="官网">↗</a></div>').join('')
+      + '</div>'
+      + '<input class="onboard-input" id="onboard-apikey" type="password" placeholder="粘贴 API Key..." style="margin-top:8px" value="'+escAttr(_onboardApiKey)+'">'
+      + '<div class="onboard-warn" id="onboard-api-warn-val">请输入您的 API Key</div>'
+      + '<div><a class="onboard-help-link" href="docs/api-guide.pdf" target="_blank">📘 查看 API 配置帮助</a></div>'
+      + '<div class="onboard-warn" id="onboard-api-warn">⚠️ 您将无法获得最好体验，后续配置 API 请前往端配置</div>'
+      + '<div style="display:flex;justify-content:center;gap:16px;margin-top:16px;align-items:center">'
+      + '<div class="onboard-btn-next" onclick="renderOnboardStep(1)" title="返回">👈</div>'
+      + '<button class="btn btn-sm" id="onboard-skip-api" onclick="skipApiConfig()" style="font-size:11px;padding:8px 16px">暂不配置</button>'
+      + '<div class="onboard-btn-next" onclick="saveApiConfig()" title="下一步">👉</div>'
+      + '</div>';
+    _skipApiCooldown = false;
+    return html;
+  }
+  let _skipApiCooldown = false;
+  let _onboardSkipApi = false;
+  async function skipApiConfig() {
+    if (_skipApiCooldown) {
+      // Second click: skip API entirely
+      _onboardSkipApi = true;
+      renderOnboardStep(4);  // simplified completion
+      return;
+    }
+    document.getElementById('onboard-api-warn').style.display = 'block';
+    const btn = document.getElementById('onboard-skip-api');
+    btn.disabled = true;
+    _skipApiCooldown = true;
+    let cd = 3;
+    btn.textContent = '跳过 (' + cd + 's)';
+    const timer = setInterval(() => {
+      cd--;
+      if (cd <= 0) { clearInterval(timer); btn.textContent = '确认跳过 →'; btn.disabled = false; }
+      else { btn.textContent = '跳过 (' + cd + 's)'; }
+    }, 1000);
+  }
+
+  function selectOnboardProvider(key, el) {
+    _onboardProvider = key;
+    document.querySelectorAll('.onboard-provider-chip').forEach(c => c.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+  }
+
+  async function saveApiConfig() {
+    _onboardApiKey = document.getElementById('onboard-apikey').value.trim();
+    // Validate: must have provider + key
+    if (!_onboardProvider || !_onboardApiKey) {
+      const warn = document.getElementById('onboard-api-warn-val');
+      if (warn) warn.style.display = 'block';
+      return;
+    }
+    try {
+      await api('/api/config', {method:'POST', body: JSON.stringify({
+        section:'model', key: _onboardProvider, api_key: _onboardApiKey
+      })});
+    } catch(e) { /* non-fatal */ }
+    _onboardSkipApi = false;
+    renderOnboardStep(3);
+  }
+
+  function rPlatform() {
+    const platforms = [
+      {id:'wechat_channel', name:'微信', img:'channel-wechat.svg'},
+      {id:'feishu_channel', name:'飞书', img:'channel-feishu.png'},
+      {id:'dingtalk_channel', name:'钉钉', img:'channel-dingtalk.png'},
+      {id:'telegram_channel', name:'Telegram', img:'channel-telegram.svg'},
+      {id:'cli_channel', name:'CLI 终端', img:''},
+    ];
+    let html = '<div class="onboard-title">选择交流平台</div>'
+      + '<div class="onboard-sub">选择您与 Agent 的交流平台</div>'
+      + '<div class="onboard-platform-grid">';
+    for (const p of platforms) {
+      const iconHtml = p.img ? '<img src="/static/img/'+p.img+'" alt="'+p.name+'">' : '<span style="font-size:32px;display:block;margin-bottom:6px">🖥</span>';
+      html += '<div class="onboard-platform-chip'+(p.id===_onboardPlatform?' selected':'')+'" onclick="selectOnboardPlatform(\''+p.id+'\',this)">'
+        + iconHtml + '<span class="chip-label">'+p.name+'</span></div>';
+    }
+    html += '</div><div id="onboard-platform-form"></div>';
+    setTimeout(() => renderPlatformForm(), 50);
+    return html;
+  }
+
+  function selectOnboardPlatform(pid, el) {
+    _onboardPlatform = pid;
+    document.querySelectorAll('.onboard-platform-chip').forEach(c => c.classList.remove('selected'));
+    if (el) el.classList.add('selected');
+    renderPlatformForm();
+  }
+
+  function renderPlatformForm() {
+    const container = document.getElementById('onboard-platform-form');
+    if (!container) return;
+    const pid = _onboardPlatform;
+    const fields = {
+      feishu_channel: [{k:'app_id',l:'App ID'},{k:'app_secret',l:'App Secret'}],
+      dingtalk_channel: [{k:'app_key',l:'App Key'},{k:'app_secret',l:'App Secret'}],
+      telegram_channel: [{k:'bot_token',l:'Bot Token'}],
+      wechat_channel: [],
+      cli_channel: [],
+    };
+    const ff = fields[pid] || [];
+    const helpLinks = {
+      feishu_channel: 'docs/feishu-guide.pdf',
+      dingtalk_channel: 'docs/dingtalk-guide.pdf',
+      telegram_channel: 'docs/telegram-guide.pdf',
+      wechat_channel: 'docs/wechat-guide.pdf',
+      cli_channel: '',
+    };
+    let html = '';
+    if (pid === 'cli_channel') {
+      html += '<div style="font-size:12px;color:var(--text-dim);margin-top:6px">CLI 为终端式对话，选择它可以让您快速开始使用</div>';
+      html += '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">后续如需配置平台请前往端配置界面进入引导</div>';
+    } else if (pid === 'wechat_channel') {
+      html += '<div style="font-size:13px;color:var(--text-dim);margin-top:8px">微信使用 iLink 扫码登录，启动框架后将自动生成二维码</div>';
+    } else if (ff.length > 0) {
+      html += '<div class="onboard-config-form">';
+      for (const f of ff) {
+        html += '<div class="form-group"><label>'+f.l+'</label><input type="'+(f.k.includes('secret')||f.k.includes('token')?'password':'text')+'" id="onboard-field-'+f.k+'" placeholder="输入 '+f.l+'..."></div>';
+      }
+      html += '</div>';
+    }
+    if (helpLinks[pid]) {
+      html += '<div style="margin-top:10px"><a class="onboard-help-link" href="'+helpLinks[pid]+'" target="_blank">📘 查看配置帮助</a></div>';
+    }
+    html += '<div style="display:flex;justify-content:center;gap:16px;margin-top:16px;align-items:center">';
+    html += '<div class="onboard-btn-next" onclick="renderOnboardStep(2)" title="返回">👈</div>';
+    if (pid === 'cli_channel') {
+      html += '<button class="onboard-btn-primary" onclick="finishOnboarding()">开始对话</button>';
+    } else {
+      html += '<button class="onboard-btn-primary" onclick="savePlatformOnboard()">从这里开始</button>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  async function savePlatformOnboard() {
+    const pid = _onboardPlatform;
+    // WeChat: show QR flow inline
+    if (pid === 'wechat_channel') {
+      const body = document.getElementById('onboard-body');
+      body.innerHTML = '<div id="onboard-wechat-flow">'
+        + '<div class="onboard-sub" style="margin-top:20px">正在唤起微信通道，请稍候…</div>'
+        + '<div style="margin-top:12px;font-size:13px;color:var(--text-dim)">二维码将在下方展示</div>'
+        + '</div>';
+      try {
+        const startR = await api('/api/wechat/start-login', {method:'POST'});
+        if (!startR.ok) throw new Error(startR.error || '启动失败');
+        if (startR.phase === 'already_configured') {
+          document.getElementById('onboard-wechat-flow').innerHTML =
+            '<div class="onboard-title" style="margin-top:20px">微信已连接</div>'
+            + '<div style="font-size:13px;color:var(--text-dim);margin-top:8px">Bot: ' + (startR.bot_id||'?') + '</div>'
+            + '<button class="onboard-btn-primary" style="margin-top:16px" onclick="finishWechatOnboard()">继续</button>';
+          return;
+        }
+        const qr = await _pollForQR();
+        if (!qr) throw new Error('QR 获取超时，请重试');
+        document.getElementById('onboard-wechat-flow').innerHTML =
+          '<div class="onboard-title" style="margin-top:20px">扫描二维码登录微信</div>'
+          + ((qr.qr_data_uri || qr.img_url)
+              ? '<div style="margin:16px 0"><img src="'+(qr.qr_data_uri||qr.img_url)+'" style="max-width:200px;border-radius:8px;border:2px solid var(--border)" alt="QR Code" id="onboard-qr-img"></div>'
+              : '<div style="margin:12px 0;font-size:13px;color:var(--text-dim)">二维码 Key: '+qr.qrcode_key+'</div>')
+          + '<div style="font-size:12px;color:var(--text-dim);max-width:360px;margin:0 auto;line-height:1.6">'
+          + '打开微信→扫一扫→扫描上方二维码→在手机上确认登录</div>'
+          + '<div id="onboard-qr-status" style="font-size:12px;color:var(--text-dim);margin-top:8px">等待扫码…</div>'
+          + '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center">'
+          + '<button class="onboard-btn-secondary" onclick="savePlatformOnboard()">重试</button>'
+          + '<button class="onboard-btn-primary" id="onboard-btn-confirm" disabled onclick="finishWechatOnboard()">确认连接</button>'
+          + '</div>'
+          + '<div style="margin-top:8px"><a class="onboard-help-link" href="docs/wechat-guide.pdf" target="_blank">查看微信扫码帮助</a></div>';
+        const confirmed = await _pollForConfirm();
+        if (confirmed) {
+          document.getElementById('onboard-qr-status').innerHTML = '<span style="color:var(--green);font-weight:bold">登录成功！</span>';
+          const btn = document.getElementById('onboard-btn-confirm');
+          if (btn) { btn.disabled = false; btn.textContent = '确认连接并完成'; }
+        }
+      } catch(e) {
+        document.getElementById('onboard-wechat-flow').innerHTML =
+          '<div style="color:var(--red);margin-top:16px">' + e.message + '</div>'
+          + '<div style="font-size:12px;color:var(--text-dim);margin-top:8px">请确认网络连接正常后重试</div>'
+          + '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center">'
+          + '<button class="onboard-btn-secondary" onclick="savePlatformOnboard()">重试</button>'
+          + '<button class="onboard-btn-primary" onclick="renderOnboardStep(4)">跳过，稍后配置</button>'
+          + '</div>';
+      }
+      return;
+    }
+    // Other platforms: validate and save
+    const fields = {
+      feishu_channel: ['app_id','app_secret'],
+      dingtalk_channel: ['app_key','app_secret'],
+      telegram_channel: ['bot_token'],
+    };
+    const ff = fields[pid] || [];
+    const data = {};
+    for (const k of ff) {
+      const el = document.getElementById('onboard-field-'+k);
+      if (el) data[k] = el.value;
+    }
+    if (ff.length > 0 && Object.values(data).some(v => !v)) {
+      alert('请填写所有配置项');
+      return;
+    }
+    if (ff.length > 0) {
+      try {
+        await api('/api/config', {method:'POST', body: JSON.stringify({section:'channel', channel_id:pid, fields:data})});
+      } catch(e) { /* non-fatal */ }
+    }
+    // Persist default channel choice
+    try { await api('/api/channel/set-default', {method:'POST', body:JSON.stringify({channel_id:pid})}); } catch(e) {}
+    renderOnboardStep(4);
+  }
+
+  async function finishWechatOnboard() {
+    try {
+      await api('/api/config', {method:'POST', body: JSON.stringify({
+        section:'channel', channel_id:'wechat_channel'
+      })});
+    } catch(e) {}
+    // Persist default channel choice
+    try { await api('/api/channel/set-default', {method:'POST', body:JSON.stringify({channel_id:'wechat_channel'})}); } catch(e) {}
+    renderOnboardStep(4);
+  }
+
+  // ── Helpers for WeChat web-mode QR polling ──
+
+  async function _pollForQR(timeoutMs=30000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const r = await api('/api/wechat/qrcode');
+        if (r.ok && r.phase === 'qr_ready' && (r.qr_data_uri || r.img_url)) return r;
+        if (r.phase === 'confirmed') return r;
+        if (r.phase === 'error') throw new Error(r.error_msg || '登录错误');
+      } catch(e) {
+        if (e.message && !e.message.includes('NetworkError')) throw e;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    return null;
+  }
+
+  async function _pollForConfirm(timeoutMs=120000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const r = await api('/api/wechat/qrcode');
+        if (r.ok && r.phase === 'confirmed') return true;
+        if (r.phase === 'error') return false;
+        if (r.phase === 'expired') return false;
+        if (r.phase === 'scanned') {
+          const el = document.getElementById('onboard-qr-status');
+          if (el) el.innerHTML = '<span style="color:var(--primary)">已扫描，请在手机上确认…</span>';
+        }
+      } catch(e) { /* ignore poll errors */ }
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    return false;
+  }
+
+  function rDone() {
+    return '<div id="onboard-done-content">'
+      + '<div class="onboard-success-icon">✅</div>'
+      + '<div class="onboard-sub" id="onboard-done-msg">请稍后，框架正在初始化...</div>'
+      + '</div>';
+  }
+
+  async function runCompletion() {
+    const msg = document.getElementById('onboard-done-msg');
+    // Try restarting framework
+    try {
+      await api('/api/restart', {method:'POST'});
+      await new Promise(r => setTimeout(r, 3000));
+    } catch(e) {}
+    msg.textContent = '初始化完成' + (_onboardSkipApi ? '' : '，请前往您的平台与 Agent 开始交流');
+    if (_onboardSkipApi) {
+      // Simplified: just finish
+      document.getElementById('onboard-done-content').innerHTML +=
+        '<button class="onboard-btn-primary" onclick="finishOnboarding()">进入 Crannia</button>';
+    } else {
+      const helpLinks = {
+        feishu_channel: 'docs/feishu-guide.pdf',
+        dingtalk_channel: 'docs/dingtalk-guide.pdf',
+        telegram_channel: 'docs/telegram-guide.pdf',
+        wechat_channel: 'docs/wechat-guide.pdf',
+        cli_channel: '',
+      };
+      const link = helpLinks[_onboardPlatform] || '';
+      if (link) {
+        document.getElementById('onboard-done-content').innerHTML +=
+          '<div><a class="onboard-help-link" href="'+link+'" target="_blank">📘 查看平台交流帮助</a></div>';
+      }
+      document.getElementById('onboard-done-content').innerHTML +=
+        '<button class="onboard-btn-primary" onclick="finishOnboarding()">确认链接建立</button>';
+    }
+  }
+
+  async function finishOnboarding() {
+    try {
+      await api('/api/onboarding/complete', {method:'POST'});
+    } catch(e) {}
+    // Reload to show normal UI with CLI welcome animation
+    window.location.reload();
+  }
+
+  function escAttr(s) {
+    return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Cascade notification polling (all pages) ──────────────────────
+  let _cEvents = [], _cToastTimer = null;
+  // ── Update notification state ─────────────────────────────────────
+  let _updateAvailable = false, _updateVersion = '', _updateChecking = false;
+  setInterval(async () => {
+    try {
+      const r = await api('/api/watchers/events');
+      const events = r.events || [];
+      if (!events.length) return;
+      // 开关由服务端随事件一起发回来（`notify`），原因是这个队列
+      //   是排空式的（拿到即删），页面不能在本地缓存一份设置来判
+      //   —— 缓存会过期，而这里的 `notify` 与事件同一次响应、永远新鲜。
+      //   兜底方向 = 弹（与全站 `!== false` 一致）。
+      if (r.notify === false) {
+        // 关掉的那一刻也要当场生效：已在屏上的横幅撤掉、明细清空。
+        _cEvents = [];
+        const _c0 = document.getElementById('cascade-toast-container');
+        if (_c0) _c0.innerHTML = '';
+        return;
+      }
+      _cEvents.push(...events);
+      if (_cEvents.length > 200) _cEvents = _cEvents.slice(-200);
+      const container = document.getElementById('cascade-toast-container');
+      if (!container) return;
+      const latest = _cEvents[_cEvents.length - 1];
+      const n = _cEvents.length;
+      container.innerHTML = n === 1
+        ? `<div class="c-toast" onclick="showCascadeDetail()" style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,0.15);cursor:pointer;pointer-events:auto;line-height:1.5;animation:toastIn 0.3s ease"><div style="font-weight:600;color:var(--accent)">📥 工作区有新文件</div><div style="color:var(--text);word-break:break-all">${esc(latest.filename)}</div><div style="color:var(--text-dim);font-size:11px;margin-top:4px">来自 ${esc(latest.watch_name||latest.watcher_id)}</div></div>`
+        : `<div class="c-toast" onclick="showCascadeDetail()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,0.15);cursor:pointer;pointer-events:auto;text-align:center;font-weight:600;animation:toastIn 0.3s ease">工作区新增 ${n} 个文件 — 来自 ${esc(latest.watch_name||latest.watcher_id)} +${n-1}</div>`;
+      clearTimeout(_cToastTimer);
+      _cToastTimer = setTimeout(() => { container.innerHTML = ''; _cEvents = []; }, 8000);
+    } catch(e) {}
+  }, 3000);
+
+  function showCascadeDetail() {
+    const items = [..._cEvents].reverse();
+    const html = items.length === 0
+      ? '<div style="color:var(--text-dim);text-align:center;padding:20px">暂无捕获记录</div>'
+      : items.map((e,i) => `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.6">${i+1}. <strong>${esc(e.filename)}</strong><div style="font-size:11px;color:var(--text-dim)">来自 ${esc(e.watch_name||e.watcher_id)} → ${esc(e.target)}</div></div>`).join('');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:10000;display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = `<div style="background:var(--bg-card);border-radius:10px;max-width:480px;width:90%;max-height:70vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.3)"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)"><span style="font-weight:600">📥 工作区新增文件</span><button style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-dim)">&times;</button></div><div style="padding:14px 18px">${html}</div></div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('button').addEventListener('click', () => overlay.remove());
+  }
+// ── Update notification polling ──────────────────────────────────
+  async function pollUpdateStatus() {
+    try {
+      const r = await api('/api/update/status');
+      if (r.update_available && r.latest) {
+        _updateAvailable = true;
+        _updateVersion = r.latest;
+        document.getElementById('update-dot').style.display = 'inline';
+      }
+    } catch(e) {}
+  }
+  // Poll every 30 minutes
+  setInterval(pollUpdateStatus, 30 * 60 * 1000);
+  // Initial check 10s after page load
+  setTimeout(pollUpdateStatus, 10000);
+
+  // ── About modal: check for updates ───────────────────────────────
+  async function checkUpdateFromAbout() {
+    if (_updateChecking) return;
+    _updateChecking = true;
+    const section = document.getElementById('about-update-section');
+    const status = document.getElementById('about-update-status');
+    const detail = document.getElementById('about-update-detail');
+    const link = document.getElementById('about-check-update-link');
+    section.style.display = 'block';
+    status.textContent = '检查中...';
+    detail.style.display = 'none';
+    link.textContent = '检查中...';
+    try {
+      const r = await api('/api/update/check', {method:'POST'});
+      if (r.update_available) {
+        status.innerHTML = '<span style="color:var(--accent);font-weight:700">🎉 有新版本 v' + esc(r.version) + '</span>';
+        const notes = (r.changelog && r.changelog.zh) ? r.changelog.zh.join('\n') : (r.release_notes_url || '');
+        document.getElementById('about-update-notes').textContent = notes;
+        detail.style.display = 'block';
+        _updateAvailable = true; _updateVersion = r.version;
+        document.getElementById('update-dot').style.display = 'inline';
+      } else {
+        status.textContent = '✅ 已是最新版本';
+        detail.style.display = 'none';
+      }
+    } catch(e) {
+      status.textContent = '❌ 检查失败: ' + e.message;
+    }
+    _updateChecking = false;
+    link.textContent = '立即检查';
+  }
+
+  // ── About modal: download and install ────────────────────────────
+  async function downloadUpdateFromAbout() {
+    const status = document.getElementById('about-update-status');
+    status.innerHTML = '<span style="color:var(--accent)">下载中... 0%</span>';
+    try {
+      // Start download
+      const r = await api('/api/update/download', {method:'POST'});
+      if (r.error) { status.textContent = '❌ ' + r.error; return; }
+      // Poll progress
+      const poll = setInterval(async () => {
+        const p = await api('/api/update/progress');
+        if (p.status === 'downloading') {
+          status.innerHTML = '<span style="color:var(--accent)">下载中... ' + Math.round(p.progress * 100) + '%</span>';
+        } else if (p.status === 'verifying') {
+          status.innerHTML = '<span style="color:var(--accent)">校验中...</span>';
+        } else if (p.status === 'ready') {
+          clearInterval(poll);
+          status.innerHTML = '<span style="color:var(--green);font-weight:700">✅ 下载完成 — 点击安装</span>';
+          if (confirm('更新已下载完成。\n\n是否立即安装并重启 Crannia？')) {
+            try { await api('/api/update/apply', {method:'POST'}); } catch(e) {}
+            alert('更新已触发，应用即将重启。');
+          }
+        } else if (p.status === 'error') {
+          clearInterval(poll);
+          status.textContent = '❌ ' + (p.error || '下载失败');
+        }
+      }, 500);
+    } catch(e) {
+      status.textContent = '❌ ' + e.message;
+    }
+  }
+  </script>
+

@@ -1,0 +1,2760 @@
+{% extends "base.html" %}
+{% block header_title %}安全与设置{% endblock %}
+{% block content %}
+
+<style>
+.card-anim { animation: cardFadeIn 0.4s ease forwards; opacity: 0; }
+.card-anim:nth-child(1) { animation-delay: 0s; }
+.card-anim:nth-child(2) { animation-delay: 0.05s; }
+.card-anim:nth-child(3) { animation-delay: 0.1s; }
+.card-anim:nth-child(4) { animation-delay: 0.15s; }
+.card-anim:nth-child(5) { animation-delay: 0.2s; }
+.card-anim:nth-child(6) { animation-delay: 0.25s; }
+.card-anim:nth-child(7) { animation-delay: 0.3s; }
+
+</style>
+
+<div class="card card-anim">
+  <h2>🛡 安全配置</h2>
+  <p>Crannia 安全核在代码层面拦截危险操作，保护你的系统和数据。</p>
+</div>
+
+<div class="card card-anim">
+  <h2> 工作区设置</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">配置跨区搜索、工作组、文件监听与改动留档。修改后即时生效。</p>
+
+  <!-- ═══ Cross-zone ═══ -->
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">是否启用跨区搜索（只读）</div>
+        <div class="setting-desc">允许 Agent 在工作区外搜索、读取和复制文件</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-cross-zone" onchange="saveCrossZone()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="cross-zone-detail" style="display:none;margin-top:12px;padding:12px;background:var(--bg);border-radius:8px">
+      <div class="setting-label" style="margin-bottom:8px">规避目录设置 <span style="font-size:11px;color:var(--text-dim)">（这些目录不会被搜索）</span></div>
+      <ul class="forbidden-list" id="forbidden-list"></ul>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-sm" style="font-size:11px" onclick="addForbiddenDir()">＋ 添加目录</button>
+        <button class="btn btn-sm" style="font-size:11px" onclick="restoreDefaultForbidden()" title="丢弃当前列表，恢复默认规避目录">↺ 还原默认</button>
+      </div>
+
+      <div class="setting-row" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <div>
+          <div class="setting-label">自动放行跨区搜索</div>
+          <div class="setting-desc">
+            启用后不再询问，直接在工作区外搜索。<br>
+            <span style="color:var(--text-dim)">关着时每次跨区搜索都要你批准一次。<b>只影响跨区搜索</b>，删除文件的审批不受它影响。</span>
+          </div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-auto-approve" onchange="saveAutoApprove()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+
+  <!-- ═══ Work Groups ═══ -->
+  <!-- 「是否启用工作组」那个开关已退场 ——
+       工作区列表恒生效，这一块直接展开。
+       不要再把它加回来：它 ON 那半的语义（"Agent 可跨工作区操作"）
+       今天归跨区那一条（上面的「跨区搜索」+ 审批），与"加载不加载列表"
+       是两件事 —— 把两者绑在同一个开关上，正是它说不清的原因。 -->
+  <div class="setting-section">
+    <div id="work-groups-detail" style="margin-top:12px">
+      <table class="workspace-table" id="workspace-table">
+        <thead><tr><th>名称</th><th>路径</th><th style="width:120px">操作</th></tr></thead>
+        <tbody id="workspace-tbody"></tbody>
+      </table>
+      <button class="btn btn-sm" style="margin-top:8px;font-size:11px" onclick="openWorkGroupEditor()">＋ 添加工作区</button>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+
+  <!-- ═══ Cascade Watcher ═══ -->
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">是否启用级联动态</div>
+        <div class="setting-desc">监控指定文件夹，新文件自动同步到工作区</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-cascade" onchange="saveCascadeEnabled()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="cascade-detail" style="display:none;margin-top:12px">
+      <!-- Folder selection -->
+      <div class="setting-label" style="margin-bottom:6px">选取监听文件夹</div>
+      <table class="workspace-table" id="watcher-folder-table">
+        <thead><tr><th>名称</th><th>路径</th><th style="width:60px"></th></tr></thead>
+        <tbody id="watcher-folder-tbody"></tbody>
+      </table>
+      <button class="btn btn-sm" style="margin-top:6px;font-size:11px" onclick="addWatcherFolder()">＋ 添加监听文件夹</button>
+
+      <!-- Watcher effects -->
+      <div class="setting-label" style="margin-top:16px;margin-bottom:6px">设置监听效果</div>
+      <table class="workspace-table" id="watcher-effect-table">
+        <thead><tr><th>名称</th><th>状态</th><th style="width:150px">操作</th></tr></thead>
+        <tbody id="watcher-effect-tbody"></tbody>
+      </table>
+
+      <!-- Notification -->
+      <div class="setting-row" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div>
+          <div class="setting-label">是否启用通知</div>
+          <div class="setting-desc">捕获文件时在页面右上角显示横幅通知</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-cascade-notify" onchange="saveCascadeNotify()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Auto-start -->
+      <div class="setting-row" style="margin-top:10px">
+        <div>
+          <div class="setting-label">是否随框架启动</div>
+          <div class="setting-desc">框架启动时自动开启所有已启用的监听器</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-cascade-autostart" checked onchange="saveCascadeAutoStart()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自动备份是工作设置里的一格（「自动备份」列在工作设置·diff 留存下），
+       与 ICE 无关；顺带把覆盖范围写进文案（只覆盖框架的文件工具）。
+       改前留档的保留期 + 立即清理。
+       它不是开关，是一个数 —— 所以这里没有 toggle-switch。
+       保留期单独一把旋钮（与框架自己的 `cleanupPeriodDays` 分开）：
+         这些是用户文件的一份副本，用户要单独控它。 -->
+  <div class="setting-section">
+    <div class="setting-row" id="file-history-row">
+      <div>
+        <div class="setting-label">自动备份（改动记录）</div>
+        <div class="setting-desc">
+          每轮改动某个文件<b>之前</b>，框架先把它当时的内容留一份 ——
+          「查看改动文件」里点开才看得到 diff，它也是文件恢复的底座。<br>
+          <span style="color:var(--text-dim)">
+            ★ 覆盖范围 = <b>框架自己的文件工具</b>（读 / 写 / 改那一族）。
+            <b>命令行工具</b>（<code>run_command</code>）跑的命令动的文件
+            <b>不在其中</b> —— 命令是整条交给系统执行的，框架在它跑之前
+            并不知道它会碰哪个文件。<br>
+          </span>
+          <span style="color:var(--text-dim)">
+            这些是<b>你文件的一份副本</b>（放在 <code>data/runtime/file_history/</code>），
+            所以保留期<b>单独一把旋钮</b>，与框架自己的留档分开。
+            单个文件超过 2 MiB <b>不留内容</b>（那时如实说「拿不到 diff」）。
+            <span id="file-history-effective"></span>
+          </span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex:none">
+        <input type="number" id="file-history-days" min="1" max="3650" step="1"
+               style="width:84px" onchange="saveFileHistoryDays()">
+        <span style="color:var(--text-dim)">天</span>
+        <button class="btn btn-secondary btn-sm" type="button"
+                onclick="pruneFileHistory()">立即清理</button>
+      </div>
+    </div>
+    <!-- 总空间上限 —— 「备份空间大小」。
+         它与上面那把「保留期」是两根独立的轴（活多久 / 占多大）：
+            保留期管不住一个每天都写的大文件，上限管不住一个躺了半年的小文件。
+         文案要说清「超了删最旧的」—— 不然用户以为超了会报错。 -->
+    <div class="setting-row" id="file-history-cap-row"
+         style="border-top:1px solid var(--border);padding-top:12px">
+      <div>
+        <div class="setting-label">备份空间大小</div>
+        <div class="setting-desc">
+          留档总共能占多大。<b>超过就从最旧的开始删</b>（不会报错、也不会拒绝新的
+          —— 新的那份永远最相关）。<br>
+          <span style="color:var(--text-dim)">
+            单个文件仍受 2 MiB 封顶；这一格管的是<b>整个目录</b>。
+            <span id="file-history-cap-effective"></span>
+          </span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex:none">
+        <input type="number" id="file-history-cap" min="1" max="10240" step="1"
+               style="width:84px" onchange="saveFileHistoryCap()">
+        <span style="color:var(--text-dim)">MiB</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Watcher effect editor modal ═══ -->
+<div class="modal-overlay" id="watcher-effect-modal" style="display:none">
+  <div class="modal-panel modal-panel-wide">
+    <div class="modal-header">
+      <span id="watcher-effect-title">设置监听效果</span>
+      <button class="modal-close" onclick="closeWatcherEffect()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <span class="category-toggle" onclick="toggleCategory('cat-docs',this)">▶ 同步常见文档</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px">txt / docx / doc / pptx / xlsx / csv / pdf / md</span>
+        <div class="category-list" id="cat-docs">
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".txt" checked> .txt</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".docx" checked> .docx</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".doc"> .doc</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".pptx"> .pptx</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".xlsx"> .xlsx</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".csv"> .csv</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".pdf"> .pdf</label>
+          <label class="ext-check"><input type="checkbox" class="wc-doc" value=".md"> .md</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="category-toggle" onclick="toggleCategory('cat-img',this)">▶ 同步图片</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px">jpg / png / gif / bmp / psd / webp / ico / svg</span>
+        <div class="category-list" id="cat-img">
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".jpg"> .jpg</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".png"> .png</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".jpeg"> .jpeg</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".gif"> .gif</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".bmp"> .bmp</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".psd"> .psd</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".webp"> .webp</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".ico"> .ico</label>
+          <label class="ext-check"><input type="checkbox" class="wc-img" value=".svg"> .svg</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="category-toggle" onclick="toggleCategory('cat-media',this)">▶ 同步音视频</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px">mp4 / mov / mp3 / wav</span>
+        <div class="category-list" id="cat-media">
+          <label class="ext-check"><input type="checkbox" class="wc-media" value=".mp4"> .mp4</label>
+          <label class="ext-check"><input type="checkbox" class="wc-media" value=".mov"> .mov</label>
+          <label class="ext-check"><input type="checkbox" class="wc-media" value=".mp3"> .mp3</label>
+          <label class="ext-check"><input type="checkbox" class="wc-media" value=".wav"> .wav</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="category-toggle" onclick="toggleCategory('cat-archive',this)">▶ 同步压缩包</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px">zip / 7z / rar</span>
+        <div class="category-list" id="cat-archive">
+          <label class="ext-check"><input type="checkbox" class="wc-archive" value=".zip"> .zip</label>
+          <label class="ext-check"><input type="checkbox" class="wc-archive" value=".7z"> .7z</label>
+          <label class="ext-check"><input type="checkbox" class="wc-archive" value=".rar"> .rar</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="category-toggle" onclick="toggleCategory('cat-custom',this)">▶ 添加其他</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:8px">自定义后缀名</span>
+        <div class="category-list" id="cat-custom">
+          <div class="warning-banner">⚠️ 请注意，自定义添加的监听文件可能不被支持，可能会导致其它严重后果</div>
+          <input type="text" id="wc-custom-ext" placeholder="输入后缀名，用逗号分隔，如 .ai,.eps,.mobi" style="width:100%;margin-top:6px">
+        </div>
+      </div>
+      <!-- Snapshot mode -->
+      <div class="form-group" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <label style="font-weight:600;font-size:13px">📸 快照模式</label>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">控制监听器如何判断"已有文件"，防止全量回传</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer">
+          <input type="radio" name="wc-snapshot-mode" class="wc-snapshot-mode" value="boot" checked>
+          <span>每次框架启动时更新快照</span>
+          <span style="font-size:11px;color:var(--text-dim)">（仅记录框架活动期间的文件活动）</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="wc-snapshot-mode" class="wc-snapshot-mode" value="deploy">
+          <span>以创建监听器时的快照为准</span>
+          <span style="font-size:11px;color:var(--text-dim)">（后续新增/修改的文件都会被捕获）</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeWatcherEffect()">取消</button>
+      <button class="btn btn-primary" onclick="saveWatcherEffect()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Work group editor modal ═══ -->
+<div class="modal-overlay" id="workgroup-modal" style="display:none">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <span id="workgroup-modal-title">添加工作区</span>
+      <button class="modal-close" onclick="closeWorkGroupEditor()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="wg-edit-id">
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" id="wg-name" placeholder="如：项目代码、文档库">
+      </div>
+      <div class="form-group">
+        <label>路径</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="wg-path" placeholder="选择或输入目录路径..." style="flex:1">
+          <button class="btn btn-sm btn-secondary" onclick="browseWgFolder()">📁 浏览</button>
+        </div>
+      </div>
+      <input type="file" id="wg-path-picker" webkitdirectory style="display:none" onchange="onWgFolderPicked(this)">
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="wg-primary"> 设为默认工作区
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeWorkGroupEditor()">取消</button>
+      <button class="btn btn-primary" onclick="saveWorkGroup()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Permissions editor modal ═══ -->
+<div class="modal-overlay" id="perms-modal" style="display:none">
+  <div class="modal-panel" style="width:380px">
+    <div class="modal-header">
+      <span>修改权限</span>
+      <button class="modal-close" onclick="closePermsEditor()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="perms-ws-id">
+      <div class="setting-label" style="margin-bottom:12px">允许 Agent 在此工作区进行的操作：</div>
+      <label class="perm-row"><input type="checkbox" class="perm-cb" value="copy"> 复制文件</label>
+      <label class="perm-row"><input type="checkbox" class="perm-cb" value="delete"> 删除文件</label>
+      <label class="perm-row"><input type="checkbox" class="perm-cb" value="move"> 移动文件</label>
+      <label class="perm-row"><input type="checkbox" class="perm-cb" value="rename"> 重命名文件</label>
+      <label class="perm-row"><input type="checkbox" class="perm-cb" value="write"> 写入文件</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closePermsEditor()">取消</button>
+      <button class="btn btn-primary" onclick="savePermissions()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Watcher folder picker modal ═══ -->
+<div class="modal-overlay" id="watcher-folder-modal" style="display:none">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <span>添加监听文件夹</span>
+      <button class="modal-close" onclick="closeWatcherFolder()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" id="wf-name" placeholder="如：微信下载、QQ下载">
+      </div>
+      <div class="form-group">
+        <label>路径</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="wf-path" placeholder="选择要监听的目录..." style="flex:1">
+          <button class="btn btn-sm btn-secondary" onclick="browseWfFolder()">📁 浏览</button>
+        </div>
+      </div>
+      <input type="file" id="wf-path-picker" webkitdirectory style="display:none" onchange="onWfFolderPicked(this)">
+      <div class="form-group">
+        <label>目标工作区</label>
+        <select id="wf-target-ws" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeWatcherFolder()">取消</button>
+      <button class="btn btn-primary" onclick="saveWatcherFolder()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="card card-anim">
+  <h2>🧊 ICE</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    <b>本地</b>安全模块 —— 全部在这台机器上跑，不外接任何外面的名单。<br>
+    <span style="color:var(--text-dim)">
+      开着的时候，agent <b>从文件 / 表格 / 邮件 / 网页里读进来</b>的身份证、银行卡
+      <b>不会原样送出去</b>：它拿到的是占位符，只有在你自己的机器上才换回真值。<br>
+      ★ 你在对话里<b>自己打的</b>那些<b>不换</b> —— 那是你已经决定交出去的，
+      而且不换才能让「帮我算算这个号」这类活儿照常能用。
+    </span>
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">ICE 增强防护（总开关）</div>
+        <div class="setting-desc">关掉它，下面所有防护一起停。</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-ice-enabled" onchange="onIceMasterToggle()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-row" id="ice-info-row">
+      <div>
+        <div class="setting-label">信息层（保护隐私）</div>
+        <div class="setting-desc">
+          文件 / 表格 / 邮件 / 网页里读进来的身份证、银行卡。<br>
+          <span style="color:var(--text-dim)">只有这条路 —— 认得出（校验位）才换，认不准的一律<b>只报不改</b>。</span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-ice-info"
+               onchange="saveIce('info_protection', this.checked, this)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-row" id="ice-net-row">
+      <div>
+        <div class="setting-label">网络层（金丝雀）</div>
+        <div class="setting-desc">
+          埋了一个诱饵值：只要它出现在<b>要发出去的东西</b>里
+          （网页抓取 / 链接解析 / 邮件收件人与正文），就<b>阻断并报警</b>。<br>
+          <span style="color:var(--text-dim)">
+            诱饵串：<code id="ice-canary-value">…</code><br>
+            把它抄进一份你<b>不想它外流</b>的文件里 —— 那份内容一试图出站，这条闸就会响。
+            <b>是检测，不是预防</b>；也只护这一个值。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-ice-net"
+               onchange="saveIce('net_protection', this.checked, this)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+</div>
+
+<!-- ICE 总闸关闭警告。
+     倒计时不是拖延，是给"正被电话催着关掉"的人一个停顿。 -->
+<div id="ice-warn-modal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:520px">
+    <h3 style="font-size:21px;margin:0 0 10px">有人在要求您吗？</h3>
+    <p style="margin:0 0 14px;font-size:15px">有人暗示或要求您关闭 ICE 吗，这很有可能是诈骗行为！</p>
+    <div style="background:rgba(230,60,60,0.14);border:1px solid #e63c3c;border-radius:8px;
+                padding:12px;font-size:14px;line-height:1.9;margin-bottom:14px">
+      ⚠ 如果您正在通话，请立即挂断！ 来电者可能在冒充他人！<br>
+      ⚠ 请勿付款或分享您的信息
+    </div>
+    <p style="margin:0 0 6px;font-size:13px;color:var(--text-dim)">⚠ 请注意信息安全</p>
+    <p style="margin:0 0 16px;font-size:13px;color:var(--text-dim)">
+      诈骗者通常会提供未知插件或未经验证的功能，借此窃取您的个人信息或其它数据。<br>
+      <b>来自可靠机构的工作人员绝不会要求您关闭此设置！</b>
+    </p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeIceWarn()">保持开启</button>
+      <button class="btn" id="ice-warn-confirm" disabled
+              style="background:#e63c3c;color:#fff;opacity:.45"
+              onclick="confirmIceOff()">确认关闭（<span id="ice-warn-count">5</span>）</button>
+    </div>
+  </div>
+</div>
+
+<div class="card card-anim">
+  <h2>🌐 网络策略</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    控制框架<b>联网访问</b>哪些目标。名单之外的域名，第一次访问时会问你一次。<br>
+    <span style="color:var(--text-dim)">三处来源共用同一份名单：<b>对话里批准</b>、<b>「全部放行」</b>、以及<b>你自己在这里加的</b>。</span>
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">全部放行（不再询问新的域名）</div>
+        <div class="setting-desc">
+          打开后，任何公网域名都不再询问，直接访问。<br>
+          <span style="color:var(--text-dim)">它只是名单里的一行「全部」—— 关掉它就等于把那一行删掉，不会另外记一个开关。</span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-all-egress" onchange="saveAllowAll('egress')">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="egress-list-wrap" style="margin-top:12px">
+      <div class="setting-label" style="margin-bottom:8px">访问白名单</div>
+      <ul class="forbidden-list" id="egress-list"></ul>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="text" id="egress-add-input" placeholder="例如 example.com"
+               style="flex:1" onkeydown="if(event.key==='Enter')addAllowEntry('egress')">
+        <button class="btn btn-sm" onclick="addAllowEntry('egress')">＋ 添加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-anim">
+  <h2>⚙ 操作设置</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    控制框架<b>执行命令</b>（bash）时要问哪些、记住哪些。
+  </p>
+
+  <!-- ═══ 执行白名单 ═══ -->
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">全部放行（不再询问新的命令）</div>
+        <div class="setting-desc">
+          打开后，任何命令都不再询问，直接执行。<br>
+          <span style="color:var(--text-dim)">⚠️ 这一条<b>不影响</b>下面那个危险档开关，也<b>不影响</b>出网类命令（curl/wget/ssh 一族是硬拒，不问）。</span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-all-command" onchange="saveAllowAll('command')">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="command-list-wrap" style="margin-top:12px">
+      <div class="setting-label" style="margin-bottom:8px">执行白名单</div>
+      <ul class="forbidden-list" id="command-list"></ul>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="text" id="command-add-input" placeholder="整条命令，例如 ls -la"
+               style="flex:1" onkeydown="if(event.key==='Enter')addAllowEntry('command')">
+        <button class="btn btn-sm" onclick="addAllowEntry('command')">＋ 添加</button>
+      </div>
+      <div class="setting-desc" style="margin-top:6px;font-size:11px">
+        要<b>逐字</b>写整条命令（判定用的是原文，<b>不是前缀</b>）。
+      </div>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+
+  <!-- ═══ 危险档降级 ═══ -->
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">关闭安全询问（危险命令降级）</div>
+        <div class="setting-desc">
+          默认情况下，<b>碰到框架自己的源码/数据、密钥、仓库配置</b>（<code>core/</code>
+          <code>data/</code> <code>.env</code> <code>.git</code> <code>CLAUDE.md</code> 一族）
+          以及 <code>git</code> 命令，<b>每次都问、且不允许「本次对话内不再询问」</b>。<br>
+          打开这个开关后，它们<b>降级成普通命令</b> —— <b>仍然会问第一次</b>，
+          只是批准之后可以记住。<br>
+          <span style="color:var(--text-dim)">
+            它<b>不会</b>变成「不问」：一次点击不该等于永久放行一整类危险操作。
+            「出网类命令」（curl/wget/ssh/scp）是<b>硬拒</b>，这个开关也管不着。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-relax-command" onchange="saveRelaxCommand()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">只读命令免问（<code>WB3</code>）</div>
+        <div class="setting-desc">
+          打开之后，<b>看一眼的那类命令</b>（<code>ls</code> <code>cat</code>
+          <code>head</code> <code>grep</code> <code>pwd</code> <code>wc</code>
+          <code>stat</code> 等 <b>20 个</b>）<b>不再弹窗，直接执行</b>。<br>
+          <span style="color:var(--text-dim)">
+            <b>它只放宽"看"，不放宽"改"</b>：命令里一旦出现重定向（<code>&gt;</code>）、
+            管道（<code>|</code>）、串起来（<code>&amp;&amp;</code> <code>;</code>）
+            或取变量（<code>$</code>），<b>整条照旧问</b> ——
+            所以 <code>cat a b &gt; c</code> 会问，而 <code>cat a b</code> 不问。<br>
+            <b>危险档一个字不受影响</b>：<code>git</code>、提到框架源码/密钥的命令、
+            大批删除，<b>每次照旧问</b>；出网类仍然<b>硬拒</b>。<br>
+            默认关。打开之后每命中一次，运行日志里会留一行。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-no-ask-readonly" onchange="saveNoAskReadonly()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+
+  <!-- ═══ 批量删除的强制确认 ═══ -->
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">批量删除的强制确认（一次超过 N 个必问）</div>
+        <div class="setting-desc">
+          一次删除<b>超过这个个数</b>时，<b>两个模式都会被拦下来问你</b> ——
+          <b>自动模式也一样</b>（自动审查器<b>越不过</b>它）。<br>
+          那一次浮窗<b>只给「同意 / 不同意」</b>，<b>不给「本次会话内不再询问」</b>
+          —— 给了的话，你点一次这个闸<b>就把自己关了</b>。<br>
+          <span style="color:var(--text-dim)">
+            填 <b>0 = 关闭</b>这个闸（回到"交给分类器 / 会话授权"）。出厂 <b>30</b>。<br>
+            ⚠️ 自动模式下超限会<b>挂起等你</b> —— 你不在，这一轮就停在这儿，
+            回来才继续。这就是这个闸的代价，也是它可以关掉的原因。
+          </span>
+        </div>
+      </div>
+      <input type="number" id="input-delete-batch-limit" min="0" step="1"
+             value="30" style="width:92px"
+             onchange="saveDeleteBatchLimit()">
+    </div>
+  </div>
+</div>
+
+<div class="card card-anim">
+  <h2>🎚 投入档</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    一次任务值多少投入。档位管的是<b>能力与代价</b>，<b>不管</b>界面偏好 ——
+    今天随档变的只有两根：<b>子 agent 个数</b>与<b>思考模式</b>。<br>
+    <span style="color:var(--text-dim)">
+      档名与档数只在 <code>core/tiers.py</code> 定义一处，这一页只是把它画出来
+      （改档表这里会自动跟着变）。
+    </span>
+  </p>
+
+  <div class="setting-section">
+    <div id="effort-choices" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div class="setting-desc" style="margin-top:10px">
+      <b id="effort-current">当前：—</b>
+    </div>
+    <div class="setting-desc" style="margin-top:10px">
+      ⚠️ <b>改档是一次冷启动</b> —— 它进提示缓存键，所以<b>正在进行的那段对话不受影响</b>，
+      下一段（或 <code>/clear</code> 之后）才用新档。<br>
+      想在<b>这一段</b>里立刻生效，在对话里打 <code>/effort &lt;档名&gt;</code>：
+      它会当场重算一次缓存前缀，并把这件事说给你听。
+    </div>
+  </div>
+  <div id="effort-feedback"
+       style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2>🧭 交互模式</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    这一段<b>怎么干活</b>。模式管的是<b>行为</b>，与上面的投入档<b>正交</b>
+    （那是能力与代价，这是"写的东西要不要先问"）。<br>
+    <span style="color:var(--text-dim)">
+      模式表只在 <code>core/modes.py</code> 定义一处，这一页只是把它画出来。
+    </span>
+  </p>
+
+  <div class="setting-section">
+    <div id="mode-choices" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div class="setting-desc" style="margin-top:10px">
+      <b id="mode-current">当前：—</b>
+    </div>
+    <div class="setting-desc" style="margin-top:10px">
+      ⚠️ <b>改模式是一次冷启动</b> —— 它进提示缓存键，所以<b>正在进行的那段对话不受影响</b>。<br>
+      想在<b>这一段</b>里立刻生效，在对话里打 <code>/mode &lt;名字&gt;</code>。<br>
+      ★ <b><code>/clear</code> 不会动它</b> —— 「我要重新想一遍」和「我退出计划模式」
+      是两件事，别把它们挤成一个动作。
+    </div>
+  </div>
+  <div class="setting-section" style="margin-top:18px">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">审批超时（秒）—— <b>只对「自动」档</b></div>
+        <div class="setting-desc">
+          自动档下弹出审批窗时，等这么久就按
+          <b>「没有可问的通道」</b>结算（<b>不是</b>判你拒绝 ——
+          模型会换一条不需要批准的路，或者写进回复告诉你）。<br>
+          <span style="color:var(--text-dim)">
+            ★ 治的是「<b>用户离开了你却老是断掉</b>」。<b>0 = 关</b>（一直等）。<br>
+            ⚠️ <b>只挂自动档</b>：手动档下你本来就在，自动拒会把你<b>正要批的</b>那件也毙掉。<br>
+            ⚠️ 改设置是一次冷启动；已经挂着的那一个倒计时按<b>改之前</b>的数走。
+          </span>
+        </div>
+      </div>
+      <input type="number" id="input-approval-timeout" min="0" max="3600" step="10"
+             onchange="saveApprovalTimeout()"
+             style="width:110px;padding:8px;border-radius:6px;
+                    border:1px solid var(--border);background:var(--bg);color:var(--text)">
+    </div>
+  </div>
+  <div id="mode-feedback"
+       style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2>💬 对话显示</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    控制回复<b>怎么出现</b>。这一条只影响观感 —— 不改变模型说什么、也不影响工具调用。
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">逐字输出（流式）</div>
+        <div class="setting-desc">
+          打开后，回复<b>边生成边显示</b>（虚线框是<b>预览</b>，定稿后会被正式气泡替换）。<br>
+          <span style="color:var(--text-dim)">
+            默认关：逐字输出的口碑<b>五五开</b> —— 有人要"看得见在干活"，
+            也有人嫌闪烁分心。⇒ 做成开关，不替你决定。<br>
+            ⚠️ 关掉它回复一样完整，只是<b>等齐了才出现</b>。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-stream-output" onchange="saveStreamOutput()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<div class="card card-anim">
+  <h2>🎛 框架模式预设</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    一次把<b>三处</b>调成一套搭配：<b>投入档</b> + <b>记忆接续</b> + <b>后台抽取频率</b>。<br>
+    ⚠️ 它<b>不是第四个设置</b> —— 覆盖的就是下面那三处本身；
+    <b>改任一项就回到「自定义」</b>，而且<b>调回同值也算改过</b>。
+  </p>
+  <div class="continuity-selector" id="preset-selector"></div>
+  <div class="setting-desc" style="margin-top:12px">
+    当前：<b id="preset-current">—</b>
+  </div>
+  <div id="preset-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2> 记忆接续</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    控制每次重启 Agent 时注入多少历史对话上下文。<br>
+    重启后新对话开始前，系统会从 SQLite 加载最近的对话记录注入给模型。
+  </p>
+
+  <div class="continuity-selector" id="continuity-selector">
+    <div class="continuity-option" data-value="fresh" onclick="selectContinuity('fresh')">
+      <span class="continuity-icon">🔄</span>
+      <span class="continuity-label">更新</span>
+      <span class="continuity-desc">极少量历史（0-4轮）</span>
+    </div>
+    <div class="continuity-option selected" data-value="balanced" onclick="selectContinuity('balanced')">
+      <span class="continuity-icon">⚖️</span>
+      <span class="continuity-label">平衡</span>
+      <span class="continuity-desc">适度注入历史（默认）</span>
+    </div>
+    <div class="continuity-option" data-value="memory" onclick="selectContinuity('memory')">
+      <span class="continuity-icon">🧠</span>
+      <span class="continuity-label">记忆</span>
+      <span class="continuity-desc">最大化历史注入</span>
+    </div>
+  </div>
+
+  <div id="continuity-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2>🧠 长期记忆</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    Agent 把值得跨会话记住的事实写进记忆库（`data/memory/facts/`），新会话自动带上索引。<br>
+    写记忆有两条路：主 Agent 在对话里自己写；以及每 N 个合格轮，后台补跑一次「记忆抽取」查漏。
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">启用「写记忆」</div>
+        <div class="setting-desc">
+          默认开。<b>它同时是两条写路的总闸</b>：主 Agent 在对话里自己 <code>memory_write</code>，
+          以及后台每 N 个合格轮的「记忆抽取」。<br>
+          <span style="color:var(--text-dim)">
+            ⚠️ 关掉后<b>读记忆不受影响</b>（索引照挂、<code>memory_read/search</code> 照用）；
+            工具表也照发 —— 只是执行侧会拒（<code>K5</code>：摘表会断缓存前缀）。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-memory-write" onchange="saveMemoryWrite()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row" style="margin-top:14px">
+      <div>
+        <div class="setting-label">启用「记忆巩固」</div>
+        <div class="setting-desc">
+          默认开。后台的<b>通读 + 合并 + 精简</b>：把日报/会话笔记里的新信号沉淀进已有条目，
+          相对日期转绝对、改写被推翻的事实。<br>
+          <span style="color:var(--text-dim)">
+            ⚠️ 门控很严 —— 距上次整理 <b>≥24 小时</b> 且期间碰过 <b>≥5 个会话</b> 才跑一次
+            （两个都开才生效；写记忆关了它也没意义）。运行时会占一个并发名额。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-memory-organize" onchange="saveMemoryOrganize()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row" style="margin-top:14px">
+      <div>
+        <div class="setting-label">后台抽取频率（每 N 个合格轮）</div>
+        <div class="setting-desc">
+          默认 <b>3</b>。设 1 = 每轮都抽取（更频繁、更贵）；调大 = 更省、记得更晚。<br>
+          <span style="color:var(--text-dim)">
+            ⚠️ 主 Agent 当轮已自己写过记忆时，那一轮会跳过（不重复抽取）。
+          </span>
+        </div>
+      </div>
+      <input type="number" id="input-extract-every" min="1" max="50" step="1"
+             style="width:76px;background:var(--bg-inset);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:14px"
+             onchange="saveExtractEveryN()">
+    </div>
+  </div>
+  <div id="memory-extract-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2>🧠 记忆库</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    Agent 记住的跨会话事实（存在 <code>data/memory/facts/</code>）。
+    <b>开关是全有或全无，而记忆真正的问题是「这一条记错了」</b> —— 所以这一页让你
+    自己看、自己改、自己删。
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">全部条目 <span id="memory-count" style="color:var(--text-dim);font-weight:400"></span></div>
+        <div class="setting-desc">
+          点「编辑」改这一条；点「删除」把它移出记忆库。
+          <span style="color:var(--text-dim)">
+            ⚠️ 删除会把这条记进<b>封条账本</b>（tombstone）—— 之后 Agent 抽取/整理时
+            <b>不许把它重新生成</b>（删除是<b>你</b>的动作，不是它的）。
+          </span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex:none">
+        <button class="btn btn-sm btn-secondary" id="memory-btn-new" onclick="memoryNew()">＋ 新建</button>
+        <!-- 清空。它是不可逆的那一类，与 ICE 总闸
+             同一套 5 秒倒计时（复用那套变量名与写法，不另发明一个）。 -->
+        <button class="btn btn-sm btn-secondary" id="memory-btn-clear"
+                onclick="memoryClearAsk()">清空记忆库</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="memory-list" style="margin-top:12px"></div>
+
+  <div id="memory-editor" style="display:none;margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-inset)">
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px" id="memory-editor-title">编辑条目</div>
+    <input id="memory-f-name" type="text" placeholder="标题（≤40 字符，单行）"
+           style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:14px;margin-bottom:8px">
+    <input id="memory-f-desc" type="text" placeholder="一句话钩子（≤120 字符，会进索引那一行）"
+           style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:14px;margin-bottom:8px">
+    <textarea id="memory-f-body" rows="8" placeholder="正文（≤4000 字符）"
+              style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:14px;font-family:inherit"></textarea>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="memorySave()">保存</button>
+      <button class="btn btn-sm btn-secondary" onclick="memoryCloseEditor()">取消</button>
+      <span id="memory-editor-hint" style="font-size:12px;color:var(--text-dim);align-self:center"></span>
+    </div>
+  </div>
+
+  <div id="memory-deleted-wrap" style="display:none;margin-top:16px">
+    <div class="setting-label">已删除（封条账本）</div>
+    <div class="setting-desc" style="margin-bottom:8px">
+      这些名字<b>不许再被生成</b>。误删了就点「解除封条」—— 但<b>内容不会回来</b>
+      （内容在删除那一刻就没了），恢复内容要重新写一条。
+    </div>
+    <div id="memory-deleted"></div>
+  </div>
+
+  <div id="memory-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<!-- 清空记忆库的确认弹窗 —— 与 ICE 总闸同一套 5 秒倒计时。
+     倒计时不是拖延，是给"等一下"一个位置：这一下之后内容就没了
+       （封条只保证它不会自己回来，不保证内容回得来）。 -->
+<div id="memory-clear-modal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:520px">
+    <h3 style="font-size:19px;margin:0 0 10px">清空记忆库？</h3>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.7">
+      会把 <b id="memory-clear-count">全部</b> 条记忆删掉，并给它们<b>全部落上封条</b>
+      —— 之后 Agent 抽取 / 整理时<b>不许把它们重新生成</b>。
+    </p>
+    <div style="background:rgba(230,60,60,0.14);border:1px solid #e63c3c;border-radius:8px;
+                padding:12px;font-size:13px;line-height:1.9;margin-bottom:14px">
+      ⚠ <b>内容不会保留</b> —— 删掉就没了，封条只保证"它不会自己回来"。<br>
+      ⚠ 想留后路：先<b>逐条</b>看一眼，或者事后在下面的封条账本里点「解除封条」
+      （那只是允许重新写，<b>内容仍要重新写</b>）。
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeMemoryClear()">算了</button>
+      <button class="btn" id="memory-clear-confirm" disabled
+              style="background:#e63c3c;color:#fff;opacity:.45"
+              onclick="confirmMemoryClear()">确认清空（<span id="memory-clear-secs">5</span>）</button>
+    </div>
+  </div>
+</div>
+
+<div class="card card-anim">
+  <h2>🪟 上下文滑窗</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    长会话的压力兜底：消息数超过上限（`max_history`）时，把<b>最早的消息</b>移出上下文，
+    保留摘要头与最近的轮。被移走的消息<b>仍在历史库里</b>，Agent 可用 <code>history_search</code> 找回。
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">启用上下文滑窗</div>
+        <div class="setting-desc">
+          默认开。<b>只在"对话冷下来"时才剪</b> —— 上次活动距今 ≥ 闸值（见下）才会触发；
+          正在连续对话时<b>不剪</b>（保护提示缓存，省 token）。<br>
+          <span style="color:var(--text-dim)">
+            ⚠️ 关闭后长会话不再丢弃消息 —— 上下文压力全交给自动压缩处理。
+          </span>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-sliding-window" onchange="saveSlidingWindow()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row" style="margin-top:14px">
+      <div>
+        <div class="setting-label">冷闸时长（分钟）</div>
+        <div class="setting-desc">
+          距上次对话活动超过这个时长的"回归"才允许裁剪。默认 <b>90</b>。
+        </div>
+      </div>
+      <input type="number" id="input-window-gap" min="1" max="1440" step="1"
+             style="width:86px;background:var(--bg-inset);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:14px"
+             onchange="saveWindowGap()">
+    </div>
+  </div>
+  <div id="sliding-window-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2>⏪ 回退（<code>/rewind</code>）</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    <code>/rewind &lt;轮号&gt;</code> 回到某一轮<b>之前</b>（旧的不会删，<code>/resume</code> 能回来）。
+  </p>
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">回退时把工作区文件也退回去</div>
+        <div class="setting-desc">
+          默认开。<b>对话和文件一起退</b>——办公场景里「改错了一个文档，回到上一步」
+          本来就该是两件事一起。<br>
+          <span style="color:var(--text-dim)">
+            ⚠️ 关掉的话只退对话，文件保持现在的样子（回退回执里会写明）。<br>
+            ⚠️ 如果你<b>自己</b>在编辑器里改过某个文件，它<b>不会</b>被覆盖 ——
+            那一批<b>一个文件都不写</b>，回执里会逐条说明。
+          </span>
+        </div>
+      </div>
+      <label class="switch"><input type="checkbox" id="toggle-rewind-restore" onchange="saveRewindRestore()"><span class="slider"></span></label>
+    </div>
+  </div>
+  <div id="rewind-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<div class="card card-anim">
+  <h2>对话回顾</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    离开一段时间后回来时，先说一句「我们到哪了」。<b>零模型调用</b> ——
+    它读的是会话笔记（<code>Current Status</code> / <code>Next Steps</code> /
+    <code>Open Questions</code>），不额外花钱。
+  </p>
+
+  <div class="setting-row">
+    <div>
+      <div class="setting-label">启用对话回顾</div>
+      <div class="setting-desc">关闭后回来不再出现那一段（<b>默认关</b>）</div>
+    </div>
+    <label class="toggle-switch">
+      <input type="checkbox" id="toggle-recap" onchange="saveRecap()">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="setting-row" style="margin-top:14px">
+    <div>
+      <div class="setting-label">回顾触发时间（分钟）</div>
+      <div class="setting-desc">
+        距上次活动超过这个时长才算「离开」。默认 <b>30</b>。
+      </div>
+    </div>
+    <input type="number" id="input-recap-gap" min="1" max="1440" step="1"
+           style="width:86px;background:var(--bg-inset);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:14px"
+           onchange="saveRecapGap()">
+  </div>
+  <div id="recap-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6"></div>
+</div>
+
+
+<!-- ═══ Software Update ═══ -->
+<div class="card card-anim">
+  <h2>🔄 软件更新</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+    管理 Crannia 的自动更新行为。更新源 URL 可在 config.yaml 中配置。
+  </p>
+
+  <div class="setting-section">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">启动时自动检查更新</div>
+        <div class="setting-desc">启动后自动在后台检查新版本（24小时内不重复检查）</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-update-auto-check" onchange="saveUpdateAutoCheck()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="setting-row" style="margin-top:12px">
+      <div>
+        <div class="setting-label">手动检查</div>
+        <div class="setting-desc" id="update-check-status">尚未检查</div>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="manualUpdateCheck()" style="padding:6px 16px">立即检查</button>
+    </div>
+    <div id="update-result-detail" style="display:none;margin-top:12px;padding:12px;background:var(--bg-main);border-radius:8px">
+      <div id="update-result-text" style="font-size:13px;color:var(--text);line-height:1.6"></div>
+      <div id="update-download-area" style="display:none;margin-top:10px">
+        <button class="btn btn-sm btn-primary" onclick="startUpdateDownload()">📥 下载并安装</button>
+        <button class="btn btn-sm btn-secondary" onclick="dismissUpdate()" style="margin-left:8px">跳过此版本</button>
+      </div>
+      <div id="update-progress-bar" style="display:none;margin-top:8px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+        <div id="update-progress-fill" style="height:100%;background:var(--accent);width:0%;transition:width 0.3s"></div>
+      </div>
+      <div id="update-progress-text" style="font-size:11px;color:var(--text-dim);margin-top:4px"></div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ── Memory continuity ────────────────────────────────────────────────
+let _currentContinuity = 'balanced';
+
+async function loadContinuity() {
+  try {
+    const s = await api('/api/settings');
+    _currentContinuity = s.memory_continuity || 'balanced';
+    updateContinuityUI();
+  } catch(e) {
+    console.error('loadContinuity:', e);
+  }
+}
+
+function updateContinuityUI() {
+  document.querySelectorAll('.continuity-option').forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.value === _currentContinuity);
+  });
+}
+
+async function selectContinuity(value) {
+  // ── "fresh" tier: warning dialog ──
+  if (value === 'fresh' && _currentContinuity !== 'fresh') {
+    if (!confirm(
+      '⚠️ 更新档位更倾向于全新对话。\n\n' +
+      '在此档位下，重启 Agent 时仅注入最近 2-3 轮对话的上下文。' +
+      '如果最近几轮对话内容较多（例如贴了大量代码或文档），' +
+      '系统将完全不注入任何历史上下文，等同于全新对话。\n\n' +
+      '是否确认切换到「更新」档位？'
+    )) return;
+  }
+
+  _currentContinuity = value;
+  updateContinuityUI();
+
+  // Save
+  try {
+    await api('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ memory_continuity: value })
+    });
+    showContinuityFeedback('✅ 记忆接续已切换为「' + getContinuityLabel(value) + '」档位', 'success');
+  } catch(e) {
+    showContinuityFeedback('❌ 保存失败: ' + e.message, 'error');
+  }
+}
+
+function getContinuityLabel(value) {
+  const labels = { fresh: '更新', balanced: '平衡', memory: '记忆' };
+  return labels[value] || value;
+}
+
+function showContinuityFeedback(msg, type) {
+  const el = document.getElementById('continuity-feedback');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'success'
+    ? 'rgba(81,207,102,0.12)'
+    : 'rgba(255,107,107,0.12)';
+  el.style.color = type === 'success' ? 'var(--green)' : 'var(--red)';
+  el.style.border = '1px solid ' + (type === 'success' ? 'var(--green)' : 'var(--red)');
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+loadContinuity();
+
+// ── 框架模式预设 ────────────────────────────────────────────────
+// 名单从后端来（`s.framework_presets`）—— 界面一个字都不抄。
+// 「当前是哪个」也由后端判：界面不许拿那三项值去比 ——
+//    那正是"会撒谎的派生显示"（手改成正好等于 `Fern`，界面写 `Fern`，
+//    而那不是用户选的）。判据在 `core/framework_preset.py`。
+let _presets = [];
+let _presetCurrent = 'custom';
+let _presetCustom = 'custom';
+
+function renderPresets() {
+  const box = document.getElementById('preset-selector');
+  if (!box) return;
+  while (box.firstChild) box.removeChild(box.firstChild);   // 零 innerHTML
+  _presets.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'continuity-option' + (p.name === _presetCurrent ? ' selected' : '');
+    d.onclick = () => selectPreset(p.name);
+    const i = document.createElement('span');
+    i.className = 'continuity-icon';
+    // 一个图标，不按名字查表 —— 名字→图标那张表会变成第二份名单
+    //    （后端加一个预设、界面忘了加图标，它没有图标而没有任何东西会红）。
+    i.textContent = '🎛';
+    const l = document.createElement('span');
+    l.className = 'continuity-label';
+    l.textContent = p.name;
+    const s = document.createElement('span');
+    s.className = 'continuity-desc';
+    s.textContent = p.summary || '';
+    d.append(i, l, s);
+    box.appendChild(d);
+  });
+  const cur = document.getElementById('preset-current');
+  if (cur) {
+    cur.textContent = (_presetCurrent === _presetCustom)
+      ? '自定义（改过其中一项）' : _presetCurrent;
+  }
+}
+
+async function selectPreset(name) {
+  try {
+    await api('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ framework_preset: name })
+    });
+    _presetCurrent = name;
+    renderPresets();
+    showPresetFeedback('✅ 已切到「' + name + '」—— 三处设置已一起改掉', 'success');
+    // 那三处跟着变了，它们各自的界面要刷新（不然界面停在旧值 = 标签在说谎）
+    loadContinuity(); loadExtractEveryN(); loadEffort();
+  } catch (e) {
+    showPresetFeedback('❌ 保存失败: ' + e.message, 'error');
+  }
+}
+
+function showPresetFeedback(msg, type) {
+  const el = document.getElementById('preset-feedback');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'success'
+    ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+  el.style.color = type === 'success' ? 'var(--green)' : 'var(--red)';
+  el.style.border = '1px solid ' + (type === 'success' ? 'var(--green)' : 'var(--red)');
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+async function loadPresets() {
+  try {
+    const s = await api('/api/settings');
+    _presets = s.framework_presets || [];
+    _presetCurrent = s.framework_preset || 'custom';
+    _presetCustom = s.framework_preset_custom || 'custom';
+    renderPresets();
+  } catch (e) { console.error('loadPresets:', e); }
+}
+
+loadPresets();
+loadDeleteBatchLimit();      // 批量删除的阈值（生效值，不是文件值）
+
+// ── 逐字输出（流式）───────────────────────────────────────────────
+// 默认关：逐字输出的偏好因人而异，用户自己决定（不是我们替他决定）。
+// 它落 `settings.json`，而 `AgentLoopStage` 每次请求现读，改完当场生效，
+// 不需要重启（与「关闭安全询问」那个开关同一条规矩）。
+async function loadStreamOutput() {
+  try {
+    const s = await api('/api/settings');
+    document.getElementById('toggle-stream-output').checked = !!s.stream_output;
+  } catch(e) { console.error('loadStreamOutput:', e); }
+}
+
+async function saveStreamOutput() {
+  const box = document.getElementById('toggle-stream-output');
+  const on = box.checked;
+  try {
+    await api('/api/settings', {method: 'POST', body: JSON.stringify({stream_output: on})});
+  } catch(e) {
+    box.checked = !on;                 // 失败就回滚 —— 开关不许"看起来改了"
+    alert('保存失败: ' + e.message);
+  }
+}
+
+loadStreamOutput();
+
+// ── 后台记忆抽取频率 ───────────────────────────────────────────────
+// 落 `settings.json` 的 `memory_extract_every_n_turns`；抽取器每次轮末现读
+// 所以改完当场生效，不需要重启（与上面两个开关同一条规矩）。
+// 服务端对非法值是拒（400）不是夹取 —— 失败就把输入框回滚，不许"看起来改了"。
+async function loadExtractEveryN() {
+  try {
+    const s = await api('/api/settings');
+    const v = s.memory_extract_every_n_turns;
+    document.getElementById('input-extract-every').value =
+      (typeof v === 'number' && v >= 1) ? v : 3;   // 缺省/坏值显示默认 3
+  } catch(e) { console.error('loadExtractEveryN:', e); }
+}
+
+async function saveExtractEveryN() {
+  const box = document.getElementById('input-extract-every');
+  const v = parseInt(box.value, 10);
+  const fb = document.getElementById('memory-extract-feedback');
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({memory_extract_every_n_turns: v})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    fb.style.display = 'block';
+    fb.textContent = '✅ 后台抽取频率已设为每 ' + v + ' 个合格轮一次';
+    fb.style.background = 'rgba(81,207,102,0.12)';
+    fb.style.color = 'var(--green)';
+    fb.style.border = '1px solid var(--green)';
+  } catch(e) {
+    await loadExtractEveryN();       // 失败回滚到服务端真值
+    fb.style.display = 'block';
+    fb.textContent = '❌ ' + e.message;
+    fb.style.background = 'rgba(255,107,107,0.12)';
+    fb.style.color = 'var(--red)';
+    fb.style.border = '1px solid var(--red)';
+  }
+  setTimeout(() => { fb.style.display = 'none'; }, 4000);
+}
+
+loadExtractEveryN();
+
+// ── 记忆的两把开关 ──────────────────────────────────────────────────
+// 两个键都落 settings.json，两个读取端（抽取器轮末 / 巩固器轮末）每次现读
+// 所以改完当场生效，不需要重启。服务端对坏类型是拒（400）—— 失败就回滚显示，
+// 不许"看起来改了"。
+//
+// 这两个键必须同时有读取端、设置页控件与 `/api/settings` 入口 ——
+// 工具的拒绝话术已经指着设置页说"去那儿打开"，少任一处就会让那句话落空。
+function _memFb(msg, ok) {
+  const fb = document.getElementById('memory-extract-feedback');
+  fb.style.display = 'block';
+  fb.textContent = msg;
+  fb.style.background = ok ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+  fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+  fb.style.border = '1px solid ' + (ok ? 'var(--green)' : 'var(--red)');
+  setTimeout(() => { fb.style.display = 'none'; }, 4000);
+}
+
+async function loadMemorySwitches() {
+  try {
+    const s = await api('/api/settings');
+    document.getElementById('toggle-memory-write').checked = s.memory_write !== false;
+    document.getElementById('toggle-memory-organize').checked = s.memory_organize !== false;
+  } catch(e) { console.error('loadMemorySwitches:', e); }
+}
+
+async function _saveMemSwitch(id, key, onMsg, offMsg) {
+  const box = document.getElementById(id);
+  const on = box.checked;
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({[key]: on})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    _memFb(on ? onMsg : offMsg, true);
+  } catch(e) {
+    box.checked = !on;                 // 失败回滚显示
+    _memFb('❌ ' + e.message, false);
+  }
+}
+
+function saveMemoryWrite() {
+  return _saveMemSwitch('toggle-memory-write', 'memory_write',
+    '✅ 已启用写记忆（主 Agent 与后台抽取都能写）',
+    '✅ 已关闭写记忆（两条写路都停；读记忆不受影响）');
+}
+
+function saveMemoryOrganize() {
+  return _saveMemSwitch('toggle-memory-organize', 'memory_organize',
+    '✅ 已启用记忆巩固（距上次 ≥24 小时且期间 ≥5 个会话时才跑）',
+    '✅ 已关闭记忆巩固（只抽取、不巩固）');
+}
+
+loadMemorySwitches();
+
+// ── `/rewind` 要不要连工作区文件一起退 ───────────────────────────────
+// 读取端的默认是 true（`file_history.restore_enabled`：读不到，默认开）——
+//   所以这里也用 `!== false`，别写成 `=== true`：那样读不到时界面显示"关"、
+//   而实际按"开"跑，设置页显示的和实际生效的对不上。
+async function loadRewindRestore() {
+  try {
+    const s = await api('/api/settings');
+    document.getElementById('toggle-rewind-restore').checked =
+      s.rewind_restore_files !== false;
+  } catch(e) { console.error('loadRewindRestore:', e); }
+}
+
+async function saveRewindRestore() {
+  const box = document.getElementById('toggle-rewind-restore');
+  const on = box.checked;
+  const fb = document.getElementById('rewind-feedback');
+  const say = (msg, ok) => {
+    fb.style.display = 'block';
+    fb.textContent = msg;
+    fb.style.background = ok ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+    fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+    fb.style.border = '1px solid ' + (ok ? 'var(--green)' : 'var(--red)');
+    setTimeout(() => { fb.style.display = 'none'; }, 4000);
+  };
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({rewind_restore_files: on})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    say(on ? '✅ 回退会同时退回工作区文件' : '✅ 回退只退对话，文件不动', true);
+  } catch(e) {
+    box.checked = !on;                 // 失败回滚显示
+    say('❌ ' + e.message, false);
+  }
+}
+
+loadRewindRestore();
+
+// ── 投入档 ─────────────────────────────────────────────────────────
+// 档名不许在 HTML 里抄第二份 —— 整张档表由 `/api/settings` 的
+//   `effort_levels` 现取，源头是 `core/tiers.py::TIERS`（`LEVEL_NAMES` 从它推）。
+//   抄一份的代价不是多打几个字，是将来加一档时这页不跟着长，而两个答案
+//   看着都对。`ultra`（档 6）会作为 `implemented: false`
+//   出现并被禁用 —— 那是设计（保留但设不了）。
+// 零 `innerHTML`（同记忆库那页的纪律）：档名是我们自己写的，破例"这一次"
+//   本身无害，但它会让下一处觉得也可以。
+function _effortFb(msg, ok) {
+  const fb = document.getElementById('effort-feedback');
+  if (!fb) return;
+  fb.style.display = 'block';
+  fb.textContent = msg;
+  fb.style.background = ok ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
+  fb.style.color = ok ? '#22c55e' : '#ef4444';
+}
+
+function _renderEffortCurrent(s) {
+  const cur = document.getElementById('effort-current');
+  const box = document.getElementById('effort-choices');
+  const levels = Array.isArray(s.effort_levels) ? s.effort_levels : [];
+  if (cur) {
+    const hit = levels.find(function(t) { return t.level === s.effort_level; });
+    // `effort_error` 非空 = 设置里的档号读到了但做不到（"拒，不静默"）
+    // 所以界面必须说出来，不许显示成一个看起来正常的档。
+    cur.textContent = s.effort_error
+      ? '⚠️ 设置里的档号有问题：' + s.effort_error
+      : '当前：' + (hit ? hit.name + '（' + hit.level + '）' : '—');
+  }
+  if (!box) return;
+  Array.prototype.forEach.call(box.children, function(b) {
+    const on = String(b.dataset.level) === String(s.effort_level);
+    b.style.outline = on ? '2px solid var(--accent)' : 'none';
+    b.style.fontWeight = on ? '700' : '400';
+  });
+}
+
+async function loadEffort() {
+  const box = document.getElementById('effort-choices');
+  if (!box) return;
+  try {
+    const s = await api('/api/settings');
+    const levels = Array.isArray(s.effort_levels) ? s.effort_levels : [];
+    box.textContent = '';
+    levels.forEach(function(t) {
+      const b = document.createElement('button');
+      b.className = 'btn btn-sm';
+      b.textContent = t.name + '（' + t.level + '）';
+      b.dataset.level = t.level;
+      if (!t.implemented) {
+        b.disabled = true;
+        b.title = '这一档还没实现 —— 设不了（它会被拒，不会静默降级成上一档）';
+      } else {
+        b.onclick = function() { saveEffort(t.level, t.name); };
+      }
+      box.appendChild(b);
+    });
+    _renderEffortCurrent(s);
+  } catch (e) { console.error('loadEffort:', e); }
+}
+
+async function saveEffort(level, name) {
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({effort_level: level})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    _renderEffortCurrent(await api('/api/settings'));
+    _effortFb('✅ 已设为 ' + name + '。⚠️ 这是冷启动 —— 正在进行的那段对话不受影响，'
+      + '下一段（或 /clear 之后）才用新档。想立刻生效：在对话里打 /effort ' + name,
+      true);
+  } catch (e) {
+    _effortFb('❌ ' + e.message, false);
+  }
+}
+
+loadEffort();
+
+// ── 交互模式 ───────────────────────────────────────────────────────
+// 与投入档逐条同款，包括两条纪律：
+//   ① 模式名不许在这页抄第二份 —— 整张表由 `/api/settings` 的 `modes` 现取，
+//      源头是 `core/modes.py`（加一档这里自动跟着长）；
+//   ② 零 `innerHTML`。
+// `auto` / `plan` 现在会作为 `implemented: false` 出现并被禁用 ——
+//   那是设计（照投入档 6 `ultra`：列得出、设不了，绝不让它落进"选了没反应"）。
+function _modeFb(msg, ok) {
+  const fb = document.getElementById('mode-feedback');
+  if (!fb) return;
+  fb.style.display = 'block';
+  fb.textContent = msg;
+  fb.style.background = ok ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
+  fb.style.color = ok ? '#22c55e' : '#ef4444';
+}
+
+function _renderModeCurrent(s) {
+  const cur = document.getElementById('mode-current');
+  const box = document.getElementById('mode-choices');
+  const list = Array.isArray(s.modes) ? s.modes : [];
+  if (cur) {
+    const hit = list.find(function(m) { return m.key === s.mode; });
+    cur.textContent = s.mode_error
+      ? '⚠️ 设置里的模式有问题：' + s.mode_error
+      : '当前：' + (hit ? hit.name : '—');
+  }
+  if (!box) return;
+  Array.prototype.forEach.call(box.children, function(b) {
+    const on = String(b.dataset.key) === String(s.mode);
+    b.style.outline = on ? '2px solid var(--accent)' : 'none';
+    b.style.fontWeight = on ? '700' : '400';
+  });
+}
+
+async function loadMode() {
+  const box = document.getElementById('mode-choices');
+  if (!box) return;
+  try {
+    const s = await api('/api/settings');
+    const list = Array.isArray(s.modes) ? s.modes : [];
+    box.textContent = '';
+    list.forEach(function(m) {
+      const b = document.createElement('button');
+      b.className = 'btn btn-sm';
+      b.textContent = m.name;
+      b.dataset.key = m.key;
+      b.title = m.desc || '';
+      if (!m.implemented) {
+        b.disabled = true;
+        b.title = '「' + m.name + '」还没做 —— 设不了（它会当场被拒，不会静默降级）';
+      } else {
+        b.onclick = function() { saveMode(m.key, m.name); };
+      }
+      box.appendChild(b);
+    });
+    _renderModeCurrent(s);
+  } catch (e) { console.error('loadMode:', e); }
+}
+
+async function saveMode(key, name) {
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({default_mode: key})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    _renderModeCurrent(await api('/api/settings'));
+    _modeFb('✅ 已设为「' + name + '」。⚠️ 这是冷启动 —— 正在进行的那段对话不受影响。'
+      + '想立刻生效：在对话里打 /mode ' + key, true);
+  } catch (e) {
+    _modeFb('❌ ' + e.message, false);
+  }
+}
+
+loadMode();
+
+// ── 审批超时 —— auto 档下"没人答"的那条出路 ────────────────────
+//
+// 判据见 `core/approval_timeout.py` 的 docstring。
+// 它与上面那张模式卡同源：只挂自动档。
+async function saveApprovalTimeout() {
+  const el = document.getElementById('input-approval-timeout');
+  if (!el) return;
+  const v = parseInt(el.value, 10);
+  if (!isFinite(v) || v < 0 || v > 3600) {
+    _modeFb('❌ 超时秒数要是 0~3600 的整数（0 = 关）', false);
+    return;
+  }
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({approval_timeout_seconds: v})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    _modeFb(v === 0
+      ? '✅ 已关掉超时 —— 回到"一直等"（超时断点会回来）'
+      : '✅ 已设为 ' + v + ' 秒。只对自动档生效。', true);
+  } catch (e) {
+    _modeFb('❌ ' + e.message, false);
+  }
+}
+
+async function loadApprovalTimeout() {
+  try {
+    const s = await api('/api/settings');
+    const el = document.getElementById('input-approval-timeout');
+    if (el && s && typeof s.approval_timeout_seconds === 'number') {
+      el.value = String(s.approval_timeout_seconds);
+    }
+  } catch (e) { /* 读不到就留空 —— 别把这一页弄挂 */ }
+}
+
+loadApprovalTimeout();
+
+// ── 记忆库查看 / 编辑 ───────────────────────────────────────────────
+// 判据："让用户自己看/改"比"给开关"强。
+// 零 `innerHTML`（本仓库新页面的纪律：它挡持久化 XSS —— 记忆正文是
+//    模型写进去的文本，拼进 innerHTML 就是把模型的输出变成真的节点）。
+//    机器读者按函数体钉它（剥注释之后）。
+function _memFb2(msg, ok) {
+  const fb = document.getElementById('memory-feedback');
+  fb.style.display = 'block';
+  fb.textContent = msg;
+  fb.style.background = ok ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+  fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+  fb.style.border = '1px solid ' + (ok ? 'var(--green)' : 'var(--red)');
+  setTimeout(() => { fb.style.display = 'none'; }, 5000);
+}
+
+async function memoryLoad() {
+  let d;
+  try {
+    d = await api('/api/memory');
+  } catch(e) {
+    _memFb2('❌ 读不到记忆库：' + e.message, false);
+    return;
+  }
+  const list = document.getElementById('memory-list');
+  while (list.firstChild) list.removeChild(list.firstChild);
+  const entries = d.entries || [];
+  document.getElementById('memory-count').textContent = '（' + entries.length + ' 条）';
+  if (!entries.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'font-size:13px;color:var(--text-dim);padding:8px 0';
+    empty.textContent = '还没有任何条目。';
+    list.appendChild(empty);
+  }
+  entries.forEach(function (e) {
+    list.appendChild(memoryRow(e));
+  });
+
+  // 已删（封条账本）
+  const del = d.tombstones || [];
+  const wrap = document.getElementById('memory-deleted-wrap');
+  wrap.style.display = del.length ? 'block' : 'none';
+  const box = document.getElementById('memory-deleted');
+  while (box.firstChild) box.removeChild(box.firstChild);
+  del.forEach(function (t) { box.appendChild(memoryTombRow(t)); });
+  // 提示输入的字符上限（服务端也会拒，这里只是提前告诉人）
+  if (d.limits) {
+    document.getElementById('memory-f-name').maxLength = d.limits.name;
+    document.getElementById('memory-f-desc').maxLength = d.limits.description;
+  }
+}
+
+function _memBtn(label, cls, fn) {
+  const b = document.createElement('button');
+  b.className = 'btn btn-sm' + (cls ? ' ' + cls : '');
+  b.textContent = label;
+  b.onclick = fn;
+  return b;
+}
+
+function memoryRow(e) {
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)';
+  const left = document.createElement('div');
+  left.style.cssText = 'flex:1;min-width:0';
+  const t = document.createElement('div');
+  t.style.cssText = 'font-size:14px';
+  t.textContent = e.name;                       // ← textContent：模型写的文本
+  const s = document.createElement('div');
+  s.style.cssText = 'font-size:12px;color:var(--text-dim);margin-top:2px;word-break:break-word';
+  s.textContent = (e.description || '') + '（' + (e.chars || 0) + ' 字符）';
+  left.appendChild(t);
+  left.appendChild(s);
+  const right = document.createElement('div');
+  right.style.cssText = 'display:flex;gap:6px;flex:0 0 auto';
+  right.appendChild(_memBtn('编辑', 'btn-secondary', function () { memoryEdit(e.name); }));
+  right.appendChild(_memBtn('删除', 'btn-secondary', function () { memoryDelete(e.name); }));
+  row.appendChild(left);
+  row.appendChild(right);
+  return row;
+}
+
+function memoryTombRow(t) {
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px';
+  const left = document.createElement('div');
+  left.style.cssText = 'flex:1;color:var(--text-dim)';
+  left.textContent = (t.name || t.slug) + (t.at ? '（' + t.at + '）' : '');
+  row.appendChild(left);
+  row.appendChild(_memBtn('解除封条', 'btn-secondary', function () { memoryRestore(t.name || t.slug); }));
+  return row;
+}
+
+function _memShowEditor(title) {
+  document.getElementById('memory-editor-title').textContent = title;
+  document.getElementById('memory-editor').style.display = 'block';
+  document.getElementById('memory-editor-hint').textContent = '';
+}
+
+function memoryNew() {
+  document.getElementById('memory-f-name').value = '';
+  document.getElementById('memory-f-desc').value = '';
+  document.getElementById('memory-f-body').value = '';
+  document.getElementById('memory-f-name').disabled = false;
+  _memShowEditor('新建一条');
+}
+
+async function memoryEdit(name) {
+  try {
+    const d = await api('/api/memory/entry?name=' + encodeURIComponent(name));
+    document.getElementById('memory-f-name').value = d.name || '';
+    document.getElementById('memory-f-desc').value = d.description || '';
+    document.getElementById('memory-f-body').value = d.content || '';
+    // 名字是身份（slug 由它推），编辑时锁住（改名 = 另铸一条，
+    //    那会让旧的那条留着、两条并存 —— 想改名就先删再建）。
+    document.getElementById('memory-f-name').disabled = true;
+    _memShowEditor('编辑：' + (d.name || name));
+  } catch(e) {
+    _memFb2('❌ ' + e.message, false);
+  }
+}
+
+function memoryCloseEditor() {
+  document.getElementById('memory-editor').style.display = 'none';
+}
+
+async function memorySave() {
+  const name = document.getElementById('memory-f-name').value.trim();
+  const desc = document.getElementById('memory-f-desc').value.trim();
+  const body = document.getElementById('memory-f-body').value;
+  const hint = document.getElementById('memory-editor-hint');
+  try {
+    const r = await api('/api/memory/entry', {method: 'POST',
+      body: JSON.stringify({name: name, description: desc, content: body})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+    hint.textContent = r && r.created ? '已新建' : '已更新';
+    memoryCloseEditor();
+    _memFb2('✅ 已保存「' + name + '」（下一条请求起索引里就是新的）', true);
+    await memoryLoad();
+  } catch(e) {
+    hint.textContent = '';
+    _memFb2('❌ ' + e.message, false);
+  }
+}
+
+async function memoryDelete(name) {
+  if (!confirm('删除「' + name + '」？\n\n内容不会保留，而且这个名字会被记进封条账本' +
+               '（之后 Agent 不许再把它生成回来）。')) return;
+  try {
+    const r = await api('/api/memory/delete', {method: 'POST',
+      body: JSON.stringify({name: name})});
+    if (r && r.ok === false) throw new Error(r.error || '删除失败');
+    _memFb2('✅ 已删除「' + name + '」并记入封条账本', true);
+    await memoryLoad();
+  } catch(e) {
+    _memFb2('❌ ' + e.message, false);
+  }
+}
+
+async function memoryRestore(name) {
+  try {
+    const r = await api('/api/memory/restore', {method: 'POST',
+      body: JSON.stringify({name: name})});
+    if (r && r.ok === false) throw new Error(r.error || '解除失败');
+    _memFb2('✅ 已解除「' + name + '」的封条 —— 内容没有回来，需要重新写一条', true);
+    await memoryLoad();
+  } catch(e) {
+    _memFb2('❌ ' + e.message, false);
+  }
+}
+
+memoryLoad();
+
+// ── 清空记忆库 ───────────────────────────────────────────────────────
+// 倒计时那套是照 ICE 总闸那份写的（同一个 5 秒、同一个"按钮先禁用"的形状），
+//   不是新发明一个：本仓库对"不可逆动作要停一下"只有一种做法，两份会漂。
+// 倒计时期间按钮禁用，且点了「算了」要能把计时器停掉 ——
+//   否则关掉弹窗之后计时器还在跑，下一次打开会从半路开始数。
+let _memClearTimer = null;
+
+function _memClearReset() {
+  clearInterval(_memClearTimer);
+  _memClearTimer = null;
+  const btn = document.getElementById('memory-clear-confirm');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.style.opacity = '.45';
+  btn.innerHTML = '确认清空（<span id="memory-clear-secs">5</span>）';
+}
+
+function memoryClearAsk() {
+  // `memory-count` 写的是「（3 条）」—— 这里只要那个数，因为弹窗文案
+  // 自己带了「条记忆删掉」那几个字（带上就会读成「3 条条记忆」）。
+  const n = (document.getElementById('memory-count').textContent || '').replace(/\D/g, '');
+  document.getElementById('memory-clear-count').textContent = n || '全部';
+  const btn = document.getElementById('memory-clear-confirm');
+  _memClearReset();
+  let left = 5;
+  document.getElementById('memory-clear-modal').style.display = 'flex';
+  _memClearTimer = setInterval(() => {
+    left -= 1;
+    const el = document.getElementById('memory-clear-secs');
+    if (el) el.textContent = Math.max(left, 0);
+    if (left <= 0) {
+      clearInterval(_memClearTimer);
+      _memClearTimer = null;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = '确认清空';
+    }
+  }, 1000);
+}
+
+function closeMemoryClear() {
+  document.getElementById('memory-clear-modal').style.display = 'none';
+  _memClearReset();
+}
+
+async function confirmMemoryClear() {
+  closeMemoryClear();
+  try {
+    const r = await api('/api/memory/clear', {method: 'POST'});
+    if (r && r.ok === false) throw new Error(r.error || '清空失败');
+    const n = (r && r.count) || 0;
+    const bad = (r && r.failed && r.failed.length) || 0;
+    // 「删了」与「有删不掉的」分开说。
+    _memFb2(bad
+      ? '⚠️ 已清空 ' + n + ' 条，但有 ' + bad + ' 条没删掉（它们已落封条，不会重生）'
+      : '✅ 已清空 ' + n + ' 条，并全部落上封条 —— 不会被重新生成',
+      bad === 0);
+    await memoryLoad();
+  } catch(e) {
+    _memFb2('❌ ' + e.message, false);
+  }
+}
+
+// ── 上下文滑窗冷闸 ─────────────────────────────────────────────────
+// 两个键都进 settings.json；读取端每轮现读（改完当场生效）。
+// 服务端对坏类型是拒（400）—— 失败就回滚显示，不许"看起来改了"。
+function _swFb(msg, ok) {
+  const fb = document.getElementById('sliding-window-feedback');
+  fb.style.display = 'block';
+  fb.textContent = msg;
+  fb.style.background = ok ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+  fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+  fb.style.border = '1px solid ' + (ok ? 'var(--green)' : 'var(--red)');
+  setTimeout(() => { fb.style.display = 'none'; }, 4000);
+}
+
+async function loadSlidingWindow() {
+  try {
+    const s = await api('/api/settings');
+    document.getElementById('toggle-sliding-window').checked =
+      s.context_sliding_window !== false;              // 缺省 = 开
+    const g = s.sliding_window_gap_minutes;
+    document.getElementById('input-window-gap').value =
+      (typeof g === 'number' && g >= 1) ? g : 90;
+  } catch(e) { console.error('loadSlidingWindow:', e); }
+}
+
+async function saveSlidingWindow() {
+  const box = document.getElementById('toggle-sliding-window');
+  const on = box.checked;
+  try {
+    await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({context_sliding_window: on})});
+    _swFb(on ? '✅ 已启用上下文滑窗（冷时裁剪）' : '✅ 已关闭上下文滑窗（不再裁剪）', true);
+  } catch(e) {
+    box.checked = !on;
+    _swFb('❌ ' + e.message, false);
+  }
+}
+
+async function saveWindowGap() {
+  const box = document.getElementById('input-window-gap');
+  const v = parseInt(box.value, 10);
+  try {
+    await api('/api/settings', {method:'POST',
+      body: JSON.stringify({sliding_window_gap_minutes: v})});
+    _swFb('✅ 冷闸时长已设为 ' + v + ' 分钟', true);
+  } catch(e) {
+    await loadSlidingWindow();
+    _swFb('❌ ' + e.message, false);
+  }
+}
+
+// ═══ 对话回顾（回来时的「我们到哪了」）═══════════════════════════════
+// 与上面那条滑窗同一条规矩：缺省值写在读取端（`core/session_recap.py`），
+//   这里只负责显示与提交；送坏类型由 `/api/settings` 当场拒（400）。
+// 默认是关 —— 与设置说明的措辞一致（「开启后，如果在活跃对话里
+//   离开一段时间……会触发」）。所以这里判 `=== true`，不是 `!== false`。
+function _rcFb(msg, ok) {
+  const fb = document.getElementById('recap-feedback');
+  fb.textContent = msg;
+  fb.style.display = 'block';
+  fb.style.background = ok ? 'rgba(81,207,102,0.12)' : 'rgba(255,107,107,0.12)';
+  fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+  fb.style.border = '1px solid ' + (ok ? 'var(--green)' : 'var(--red)');
+  setTimeout(() => { fb.style.display = 'none'; }, 4000);
+}
+
+async function loadRecap() {
+  try {
+    const s = await api('/api/settings');
+    document.getElementById('toggle-recap').checked = s.recap_enabled === true;
+    const g = s.recap_after_minutes;
+    document.getElementById('input-recap-gap').value =
+      (typeof g === 'number' && g >= 1) ? g : 30;
+  } catch(e) { console.error('loadRecap:', e); }
+}
+
+async function saveRecap() {
+  const box = document.getElementById('toggle-recap');
+  const on = box.checked;
+  try {
+    await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({recap_enabled: on})});
+    _rcFb(on ? '✅ 已启用对话回顾' : '✅ 已关闭对话回顾', true);
+  } catch(e) {
+    box.checked = !on;
+    _rcFb('❌ ' + e.message, false);
+  }
+}
+
+async function saveRecapGap() {
+  const box = document.getElementById('input-recap-gap');
+  const v = parseInt(box.value, 10);
+  try {
+    await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({recap_after_minutes: v})});
+    _rcFb('✅ 回顾触发时间已设为 ' + v + ' 分钟', true);
+  } catch(e) {
+    await loadRecap();
+    _rcFb('❌ ' + e.message, false);
+  }
+}
+
+loadRecap();
+
+// Workspace v2 JS — cross-zone, work groups, cascade watchers
+
+let _wsSettings = {};
+let _wsDeleteCooldown = {};
+
+async function loadWorkspaceSettings() {
+  try {
+    _wsSettings = await api('/api/settings');
+    applyWorkspaceUI();
+  } catch(e) {
+    console.error('loadWorkspaceSettings:', e);
+  }
+}
+
+function applyWorkspaceUI() {
+  const s = _wsSettings;
+  // Cross-zone
+  document.getElementById('toggle-cross-zone').checked = !!s.cross_zone_enabled;
+  document.getElementById('toggle-auto-approve').checked = !!s.auto_approve;
+  document.getElementById('cross-zone-detail').style.display = s.cross_zone_enabled ? 'block' : 'none';
+  renderForbiddenList(s.forbidden_directories || []);
+
+  // Work groups
+  // 这一块恒展开（那个开关没了，没有"关掉"这个状态）。
+  renderWorkspaceTable(s.work_groups || []);
+
+  // Cascade
+  document.getElementById('toggle-cascade').checked = !!s.cascade_enabled;
+  document.getElementById('toggle-cascade-notify').checked = s.cascade_notify !== false;
+  document.getElementById('toggle-cascade-autostart').checked = s.cascade_auto_start !== false;
+  document.getElementById('cascade-detail').style.display = s.cascade_enabled ? 'block' : 'none';
+  renderWatcherTables(s.watchers || []);
+}
+
+// ── Cross-zone ──────────────────────────────────────────────────────
+
+async function saveCrossZone() {
+  const v = document.getElementById('toggle-cross-zone').checked;
+  document.getElementById('cross-zone-detail').style.display = v ? 'block' : 'none';
+  _wsSettings.cross_zone_enabled = v;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({cross_zone_enabled: v})});
+}
+
+async function saveAutoApprove() {
+  _wsSettings.auto_approve = document.getElementById('toggle-auto-approve').checked;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({auto_approve: _wsSettings.auto_approve})});
+}
+
+function renderForbiddenList(dirs) {
+  const ul = document.getElementById('forbidden-list');
+  if (!ul) return;
+  ul.innerHTML = (dirs||[]).map(d =>
+    `<li><span style="flex:1;font-size:12px">${esc(d)}</span>
+     <button class="btn btn-sm" style="font-size:10px;color:var(--red)" onclick="removeForbiddenDir('${escAttr(d)}')">✕</button></li>`
+  ).join('');
+}
+
+// ICE
+//
+// 总闸与子开关都落 `data/settings.json` 的 `ice` 那一格；服务端改完会调
+//   `core.ice.reload_enabled()` 把新值推进进程级单例，当场生效、不用重启
+//   （与上面 `stream_output` 同一条规矩）。
+//
+// 关总闸要先过一段 5 秒倒计时 + 反社会工程警告（固定警示文案）。
+//   倒计时不是拖延 —— 它给"正被电话里的人催着关掉"的那个用户一个停顿。
+//   开总闸不走它（多一道阻碍只会让正常用户烦）。
+//
+// 网络层的开关这里没有 —— 那一半还没实现。放一个「拨了没反应」的开关，
+//   就是最忌的「标签在说谎」。它等金丝雀落地那天再加进来。
+
+let _iceWarnTimer = null;
+
+async function loadIce() {
+  try {
+    const s = await api('/api/settings');
+    const tree = s.ice || {};
+    document.getElementById('toggle-ice-enabled').checked = !!tree.enabled;
+    document.getElementById('toggle-ice-info').checked = !!tree.info_protection;
+    document.getElementById('toggle-ice-net').checked = !!tree.net_protection;
+    // 诱饵串从后端来（`ice_canary`）—— 界面不抄字面量：那是第二套真相源，
+    //   改了常量界面就会撒谎（与 `ICE_DEFAULT_ON` 逐字同一条规矩）。
+    var cv = document.getElementById('ice-canary-value');
+    if (cv) {
+      var vals = s.ice_canary || [];
+      cv.textContent = vals.length ? vals.join(' ') : '（后端没给出）';
+    }
+    _iceSyncSub();
+  } catch (e) { console.error('loadIce:', e); }
+}
+
+//: 总闸关着的时候，子开关置灰（状态留在原地，不清零 —— 再打开时原样回来）。
+function _iceSyncSub() {
+  const on = document.getElementById('toggle-ice-enabled').checked;
+  const row = document.getElementById('ice-info-row');
+  row.style.opacity = on ? '1' : '0.45';
+  row.querySelector('input').disabled = !on;
+  // ICE 网络侧：网络层那一行与信息层同一条规矩 ——
+  //   总闸关着就置灰（状态留在原地，再打开时原样回来）。
+  const netRow = document.getElementById('ice-net-row');
+  if (netRow) {
+    netRow.style.opacity = on ? '1' : '0.45';
+    netRow.querySelector('input').disabled = !on;
+  }
+}
+
+async function saveIce(key, value, box) {
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({ice: {[key]: value}})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+  } catch (e) {
+    if (box) box.checked = !value;      // 失败就回滚 —— 开关不许"看起来改了"
+    alert('保存失败: ' + e.message);
+  }
+}
+
+function onIceMasterToggle() {
+  const box = document.getElementById('toggle-ice-enabled');
+  if (!box.checked) { _iceWarnStart(); return; }   // 往关的方向，先过警告
+  saveIce('enabled', true, box);
+  _iceSyncSub();
+}
+
+function _iceWarnStart() {
+  const btn = document.getElementById('ice-warn-confirm');
+  const num = document.getElementById('ice-warn-count');
+  btn.disabled = true;
+  btn.style.opacity = '.45';
+  btn.innerHTML = '确认关闭（<span id="ice-warn-count">5</span>）';
+  let left = 5;
+  document.getElementById('ice-warn-modal').style.display = 'flex';
+  clearInterval(_iceWarnTimer);
+  _iceWarnTimer = setInterval(() => {
+    left -= 1;
+    const el = document.getElementById('ice-warn-count');
+    if (el) el.textContent = Math.max(left, 0);
+    if (left <= 0) {
+      clearInterval(_iceWarnTimer);
+      _iceWarnTimer = null;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = '确认关闭';
+    }
+  }, 1000);
+}
+
+function closeIceWarn() {                 // "保持开启"：开关留在原位，什么都不写
+  clearInterval(_iceWarnTimer);
+  _iceWarnTimer = null;
+  document.getElementById('ice-warn-modal').style.display = 'none';
+  document.getElementById('toggle-ice-enabled').checked = true;
+  _iceSyncSub();
+}
+
+async function confirmIceOff() {
+  clearInterval(_iceWarnTimer);
+  _iceWarnTimer = null;
+  document.getElementById('ice-warn-modal').style.display = 'none';
+  await saveIce('enabled', false, document.getElementById('toggle-ice-enabled'));
+  _iceSyncSub();
+}
+
+loadIce();
+
+// ═══ 改前留档的保留期 + 立即清理 ═══════════════════════════════════════
+//
+// 这里不重算任何东西：生效值由后端给（`file_history_effective_days`，
+//   它是 `core/file_history.configured_days()` 的原样），界面只负责显示 ——
+//   判两份就会漂（同 `ICE_DEFAULT_ON` / `ice_effective` 那条规矩）。
+async function loadFileHistory() {
+  try {
+    const s = await api('/api/settings');
+    const box = document.getElementById('file-history-days');
+    if (box) {
+      box.value = (typeof s.file_history_days === 'number') ? s.file_history_days : 30;
+    }
+    const eff = document.getElementById('file-history-effective');
+    if (eff) {
+      const d = s.file_history_effective_days;
+      // 读不出来是一个结论（"不会清理"），不是一个空白。
+      eff.textContent = (typeof d === 'number')
+        ? ('当前生效：' + d + ' 天')
+        : '（现在这个值读不出来 ⇒ **不会清理**，一个都不删）';
+    }
+    // 同一套规矩 —— 生效值由后端给，界面不自己判
+    const cap = document.getElementById('file-history-cap');
+    if (cap) {
+      cap.value = (typeof s.file_history_max_mb === 'number')
+        ? s.file_history_max_mb : 256;
+    }
+    const capEff = document.getElementById('file-history-cap-effective');
+    if (capEff) {
+      const m = s.file_history_effective_max_mb;
+      capEff.textContent = (typeof m === 'number')
+        ? ('当前生效：' + m + ' MiB')
+        : '（这个值读不出来 ⇒ 不按空间清理，只按上面的天数）';
+    }
+  } catch (e) { console.error('loadFileHistory:', e); }
+}
+
+// 总空间上限。与 `saveFileHistoryDays` 逐字同形 ——
+// 保存失败也重读（界面上不许留一个「看起来改了」的值）。
+async function saveFileHistoryCap() {
+  const box = document.getElementById('file-history-cap');
+  const v = parseInt(box.value, 10);
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({file_history_max_mb: v})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+  } catch (e) {
+    alert('保存失败: ' + e.message);
+  }
+  loadFileHistory();
+}
+
+async function saveFileHistoryDays() {
+  const box = document.getElementById('file-history-days');
+  const v = parseInt(box.value, 10);
+  try {
+    const r = await api('/api/settings', {method: 'POST',
+      body: JSON.stringify({file_history_days: v})});
+    if (r && r.ok === false) throw new Error(r.error || '保存失败');
+  } catch (e) {
+    alert('保存失败: ' + e.message);
+  }
+  loadFileHistory();                    // 失败也重读 —— 界面上不许留一个"看起来改了"的值
+}
+
+async function pruneFileHistory() {
+  try {
+    const r = await api('/api/file-history/prune', {method: 'POST'});
+    if (r.note) { alert(r.note); return; }
+    // 两半都说出来（过期 / 超上限）—— 只说一个数会让用户以为
+    //   另一个没生效（别让一句话同时承担两件事）。
+    alert('已清理 ' + (r.removed || 0) + ' 份留档'
+          + '（按 ' + r.days + ' 天保留期'
+          + (typeof r.max_mb === 'number' ? '，并削到 ' + r.max_mb + ' MiB 以内' : '')
+          + '）');
+  } catch (e) {
+    alert('清理失败: ' + e.message);
+  }
+}
+
+loadFileHistory();
+
+// 持久白名单
+//
+// 这里一律用 DOM API 建节点，不用 innerHTML。
+// 理由不是洁癖：这个列表里的内容全部是用户可控的自由文本
+// （域名、以及整条命令原文）。一条 `echo "<img onerror=...>"` 被批准之后
+// 会原样进白名单，而它下一轮就会出现在这个页面上 —— innerHTML 那条路
+// 会把它变成真的节点。`textContent` 在构造上就不可能，不必逐处记得转义。
+//
+// 开关的状态是从列表算出来的（`all_egress` / `all_command` 由服务端
+// 从 `"*" in list` 算出）。不另存一个布尔 —— 否则"全部放行"这件事有两个
+// 表示，而它们会漂移。
+
+let _allowlist = null;
+
+async function loadAllowlist() {
+  try {
+    _allowlist = await api('/api/allowlist');
+    applyAllowlistUI();
+  } catch (e) {
+    console.error('loadAllowlist:', e);
+  }
+}
+
+function _allowListItem(text, kind, subject, isWildcard) {
+  const li = document.createElement('li');
+  const span = document.createElement('span');
+  span.style.flex = '1';
+  span.style.fontSize = '12px';
+  span.textContent = text;
+  if (isWildcard) {
+    span.style.fontWeight = '600';
+    span.style.color = 'var(--accent)';
+  }
+  li.appendChild(span);
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-sm';
+  btn.style.fontSize = '10px';
+  btn.style.color = 'var(--red)';
+  btn.textContent = '✕';
+  btn.title = isWildcard ? '删掉它就等于关掉上面那个开关' : '从名单里删掉';
+  btn.onclick = () => removeAllowEntry(kind, subject);
+  li.appendChild(btn);
+  return li;
+}
+
+function renderAllowList(kind) {
+  const ul = document.getElementById(kind + '-list');
+  if (!ul || !_allowlist) return;
+  ul.textContent = '';                       // 清空（不是 innerHTML=''）
+  const raw = _allowlist[kind] || [];
+  if (!raw.length) {
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.style.fontSize = '12px';
+    span.style.color = 'var(--text-dim)';
+    span.textContent = '（名单是空的 —— 每一次都会问你）';
+    li.appendChild(span);
+    ul.appendChild(li);
+    return;
+  }
+  // 「全部」排在最前，其余按存储顺序（服务端已排序）
+  const all = raw.filter(x => x === '*');
+  const rest = raw.filter(x => x !== '*');
+  all.forEach(x => ul.appendChild(
+    _allowListItem('全部（任何目标都放行）', kind, x, true)));
+  rest.forEach(x => {
+    // 命令可能很长：显示上截断，但删的是原串（title 里给全文）
+    const shown = x.length > 80 ? x.slice(0, 80) + '…' : x;
+    const li = _allowListItem(shown, kind, x, false);
+    if (x.length > 80) li.firstChild.title = x;
+    ul.appendChild(li);
+  });
+}
+
+function applyAllowlistUI() {
+  if (!_allowlist) return;
+  document.getElementById('toggle-all-egress').checked =
+    !!_allowlist.all_egress;
+  document.getElementById('toggle-all-command').checked =
+    !!_allowlist.all_command;
+  document.getElementById('toggle-relax-command').checked =
+    !!_allowlist.relax_command_tier;
+  document.getElementById('toggle-no-ask-readonly').checked =
+    !!_allowlist.no_ask_readonly;
+  renderAllowList('egress');
+  renderAllowList('command');
+}
+
+async function _allowlistPost(body) {
+  _allowlist = await api('/api/allowlist',
+    {method: 'POST', body: JSON.stringify(body)});
+  applyAllowlistUI();
+}
+
+async function addAllowEntry(kind) {
+  const input = document.getElementById(kind + '-add-input');
+  const v = (input.value || '').trim();
+  if (!v) return;
+  try {
+    await _allowlistPost({kind: kind, action: 'add', subject: v});
+    input.value = '';
+  } catch (e) { alert('添加失败：' + e.message); }
+}
+
+async function removeAllowEntry(kind, subject) {
+  const what = subject === '*' ? '「全部放行」这一行' : subject;
+  if (!confirm('从白名单里删掉：\n\n' + what + '\n\n删掉之后它会重新开始询问。')) return;
+  try {
+    await _allowlistPost({kind: kind, action: 'remove', subject: subject});
+  } catch (e) { alert('删除失败：' + e.message); }
+}
+
+// 「全部放行」开关 = 加/删名单里那一行 `*`。没有第二个存储。
+async function saveAllowAll(kind) {
+  const on = document.getElementById('toggle-all-' + kind).checked;
+  try {
+    await _allowlistPost(
+      {kind: kind, action: on ? 'add' : 'remove', subject: '*'});
+  } catch (e) {
+    alert('保存失败：' + e.message);
+    await loadAllowlist();       // 失败就把 UI 拨回服务端的真实状态
+  }
+}
+
+// 危险档降级开关 —— 走 `/api/settings`（它是设置，不是名单），
+// 服务端在 POST 结尾会同步到 SecurityGuard 上，当场生效。
+async function saveRelaxCommand() {
+  const on = document.getElementById('toggle-relax-command').checked;
+  try {
+    await api('/api/settings',
+      {method: 'POST', body: JSON.stringify({relax_command_tier: on})});
+    if (_allowlist) _allowlist.relax_command_tier = on;
+  } catch (e) {
+    alert('保存失败：' + e.message);
+    await loadAllowlist();
+  }
+}
+
+// 只读命令免问。
+// 与上面那条同一个形状（走 `/api/settings`，服务端 POST 结尾同步到
+// SecurityGuard 当场生效），只是它只对 `allow` 档生效。
+async function saveNoAskReadonly() {
+  const on = document.getElementById('toggle-no-ask-readonly').checked;
+  try {
+    await api('/api/settings',
+      {method: 'POST', body: JSON.stringify({no_ask_readonly: on})});
+    if (_allowlist) _allowlist.no_ask_readonly = on;
+  } catch (e) {
+    alert('保存失败：' + e.message);
+    await loadAllowlist();
+  }
+}
+
+// 批量删除的强制确认阈值。
+// 读走 `/api/allowlist` 那一份状态（`relax_command_tier` 也在那儿 ——
+// 同一张卡里的两个开关，同一条取数路）；写走 `/api/settings`
+// （它是设置不是名单）。
+// 服务端把"坏值"拒掉并回一句人话，所以这里也要把失败说出来，
+// 而不是把输入框拨回去就当没事了（标签不许说谎）。
+async function saveDeleteBatchLimit() {
+  const el = document.getElementById('input-delete-batch-limit');
+  const v = parseInt(el.value, 10);
+  if (isNaN(v) || v < 0) {
+    alert('要填一个 >= 0 的整数（0 = 关闭这个闸）');
+    await loadDeleteBatchLimit();
+    return;
+  }
+  try {
+    await api('/api/settings',
+      {method: 'POST', body: JSON.stringify({delete_batch_limit: v})});
+    if (_allowlist) _allowlist.delete_batch_limit = v;
+  } catch (e) {
+    alert('保存失败：' + e.message);
+    await loadDeleteBatchLimit();
+  }
+}
+
+async function loadDeleteBatchLimit() {
+  try {
+    // 读的是生效值（`_batch_delete_limit()` 算出来的那个，走
+    //   `/api/allowlist`），不是 `settings.json` 里有没有这个键 ——
+    //   新装环境那个键还不存在，而生效值是出厂 30。读文件会把"没写过"
+    //   显示成空白，看着像"关掉了"。
+    const s = _allowlist || (await api('/api/allowlist'));
+    const el = document.getElementById('input-delete-batch-limit');
+    // 真读不到就不假装是 0（读不到 ≠ 0）——
+    //   这一页里 0 的意思是"关掉了闸"，拿 0 冒充"没读到"会骗人。
+    el.value = (s.delete_batch_limit === null ||
+                s.delete_batch_limit === undefined) ? '' : s.delete_batch_limit;
+  } catch (e) { console.error('loadDeleteBatchLimit:', e); }
+}
+
+function addForbiddenDir() {
+  const path = prompt('请输入要规避的目录路径：');
+  if (!path) return;
+  const dirs = _wsSettings.forbidden_directories || [];
+  if (!dirs.includes(path)) {
+    dirs.push(path);
+    _wsSettings.forbidden_directories = dirs;
+    renderForbiddenList(dirs);
+    api('/api/settings', {method:'POST', body: JSON.stringify({forbidden_directories: dirs})});
+  }
+}
+
+async function removeForbiddenDir(path) {
+  const dirs = (_wsSettings.forbidden_directories||[]).filter(d => d !== path);
+  _wsSettings.forbidden_directories = dirs;
+  renderForbiddenList(dirs);
+  await api('/api/settings', {method:'POST', body: JSON.stringify({forbidden_directories: dirs})});
+}
+
+async function restoreDefaultForbidden() {
+  if (!confirm('将丢弃当前规避目录列表，恢复为系统默认。\n\n包含：Windows 系统目录、AppData、开发缓存目录等。\n\n确定要还原吗？')) return;
+  // Send empty list — the server will repopulate with defaults on next GET
+  _wsSettings.forbidden_directories = [];
+  await api('/api/settings', {method:'POST', body: JSON.stringify({forbidden_directories: []})});
+  // Reload settings to get the fresh defaults from the server
+  await loadWorkspaceSettings();
+}
+
+// ── Work groups ─────────────────────────────────────────────────────
+
+function renderWorkspaceTable(wgs) {
+  const tbody = document.getElementById('workspace-tbody');
+  if (!tbody) return;
+
+  // ── Default workspace — always shown as the first row ──
+  // This is the fallback path used when no custom work groups match.
+  const defaultPath = _wsSettings.workspace || 'workspace';
+  const defaultRow =
+    `<tr style="background:var(--bg)">
+      <td>默认工作区 <span style="font-size:10px;color:var(--accent)">● 默认</span></td>
+      <td style="font-size:12px;font-family:monospace;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(defaultPath)}">${esc(defaultPath)}</td>
+      <td><span style="font-size:11px;color:var(--text-dim)">不可删除</span></td></tr>`;
+
+  if (!wgs.length) {
+    tbody.innerHTML = defaultRow;
+    return;
+  }
+
+  // Custom work groups after the default row
+  const customRows = wgs.map(w => {
+    const perms = (w.permissions||[]).join(', ');
+    return `
+    <tr>
+      <td>${esc(w.name)}${w.primary?' <span style="font-size:10px;color:var(--accent)">● 默认</span>':''}</td>
+      <td style="font-size:12px;font-family:monospace;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(w.path)}">${esc(w.path)}</td>
+      <td>
+        <button class="btn btn-sm" style="font-size:10px" onclick="openPermissionEditor('${escAttr(w.id)}')">权限</button>
+        ${!w.primary ? `<button class="btn btn-sm" style="font-size:10px" onclick="setPrimaryWs('${escAttr(w.id)}')">设默认</button>` : ''}
+        <button class="btn btn-sm" style="font-size:10px;color:var(--red)" id="del-ws-${escAttr(w.id)}" onclick="deleteWorkspace('${escAttr(w.id)}')">🗑</button>
+      </td></tr>`;
+  }).join('');
+
+  tbody.innerHTML = defaultRow + customRows;
+}
+
+function openWorkGroupEditor(editId) {
+  const wgs = _wsSettings.work_groups || [];
+  const wg = editId ? wgs.find(w => w.id === editId) : null;
+  document.getElementById('wg-edit-id').value = editId || '';
+  document.getElementById('wg-name').value = wg ? wg.name : '';
+  document.getElementById('wg-path').value = wg ? wg.path : '';
+  document.getElementById('wg-primary').checked = wg ? wg.primary : false;
+  document.getElementById('workgroup-modal-title').textContent = wg ? '编辑工作区' : '添加工作区';
+  document.getElementById('workgroup-modal').style.display = 'flex';
+}
+
+function closeWorkGroupEditor() {
+  document.getElementById('workgroup-modal').style.display = 'none';
+}
+
+async function saveWorkGroup() {
+  const editId = document.getElementById('wg-edit-id').value;
+  const name = document.getElementById('wg-name').value.trim();
+  const path = document.getElementById('wg-path').value.trim();
+  const primary = document.getElementById('wg-primary').checked;
+  if (!path) { alert('请输入路径'); return; }
+
+  let wgs = _wsSettings.work_groups || [];
+  if (editId) {
+    wgs = wgs.map(w => w.id === editId ? {...w, name, path, primary} : w);
+  } else {
+    wgs.push({id: (Date.now().toString(36)+Math.random().toString(36).slice(2,8)), name: name||path.split(/[\\/]/).pop(), path, permissions:['copy','delete','move','rename','write'], primary});
+  }
+  if (primary) wgs.forEach(w => { if (w.id !== (editId||wgs[wgs.length-1].id)) w.primary = false; });
+
+  _wsSettings.work_groups = wgs;
+  // 不再带 `work_groups_enabled` —— 列表恒生效（见上面那段注释）。
+  await api('/api/settings', {method:'POST', body: JSON.stringify({work_groups: wgs})});
+  renderWorkspaceTable(wgs);
+  closeWorkGroupEditor();
+}
+
+async function deleteWorkspace(id) {
+  const cdKey = 'ws-'+id;
+  if (!_wsDeleteCooldown[cdKey]) {
+    const btn = document.getElementById('del-ws-'+id);
+    if (btn) { btn.textContent = '⚠️ 确认'; btn.style.fontWeight='600'; }
+    _wsDeleteCooldown[cdKey] = 3;
+    const timer = setInterval(() => {
+      _wsDeleteCooldown[cdKey]--;
+      if (_wsDeleteCooldown[cdKey] <= 0) { clearInterval(timer); delete _wsDeleteCooldown[cdKey]; if (btn&&document.body.contains(btn)) { btn.textContent='🗑'; btn.style.fontWeight='normal'; } }
+      else { if (btn&&document.body.contains(btn)) btn.textContent = '⚠️ '+_wsDeleteCooldown[cdKey]+'s'; }
+    }, 1000);
+    return;
+  }
+  let wgs = (_wsSettings.work_groups||[]).filter(w => w.id !== id);
+  _wsSettings.work_groups = wgs;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({work_groups: wgs})});
+  renderWorkspaceTable(wgs);
+  delete _wsDeleteCooldown[cdKey];
+}
+
+async function setPrimaryWs(id) {
+  let wgs = (_wsSettings.work_groups||[]).map(w => ({...w, primary: w.id===id}));
+  _wsSettings.work_groups = wgs;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({work_groups: wgs})});
+  renderWorkspaceTable(wgs);
+}
+
+function browseWgFolder() {
+  // Use the server-side native folder dialog (localhost only).
+  // Falls back to prompting the user if the API is unavailable.
+  api('/api/browse-folder', {method:'POST'}).then(r => {
+    if (r.ok && r.path) {
+      document.getElementById('wg-path').value = r.path;
+    } else if (r.error) {
+      // Fallback: ask user to type the path manually
+      const manual = prompt(r.error + '\n\n请手动输入完整目录路径（例如 D:/Projects）：');
+      if (manual) document.getElementById('wg-path').value = manual;
+    }
+  }).catch(() => {
+    const manual = prompt('无法打开文件夹选择器。\n请手动输入完整目录路径（例如 D:/Projects）：');
+    if (manual) document.getElementById('wg-path').value = manual;
+  });
+}
+function onWgFolderPicked(input) { /* no-op — using server-side dialog */ }
+
+// ── Permissions editor ──────────────────────────────────────────────
+
+function openPermissionEditor(id) {
+  document.getElementById('perms-ws-id').value = id;
+  const wgs = _wsSettings.work_groups||[];
+  const wg = wgs.find(w => w.id === id);
+  if (!wg) return;
+  document.querySelectorAll('.perm-cb').forEach(cb => {
+    cb.checked = (wg.permissions||[]).includes(cb.value);
+  });
+  document.getElementById('perms-modal').style.display = 'flex';
+}
+
+function closePermsEditor() { document.getElementById('perms-modal').style.display = 'none'; }
+
+async function savePermissions() {
+  const id = document.getElementById('perms-ws-id').value;
+  const perms = [];
+  document.querySelectorAll('.perm-cb:checked').forEach(cb => perms.push(cb.value));
+  let wgs = (_wsSettings.work_groups||[]).map(w => w.id===id ? {...w, permissions: perms} : w);
+  _wsSettings.work_groups = wgs;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({work_groups: wgs})});
+  renderWorkspaceTable(wgs);
+  closePermsEditor();
+}
+
+// ── Cascade watchers ────────────────────────────────────────────────
+
+async function saveCascadeEnabled() {
+  const v = document.getElementById('toggle-cascade').checked;
+  document.getElementById('cascade-detail').style.display = v ? 'block' : 'none';
+  _wsSettings.cascade_enabled = v;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({cascade_enabled: v})});
+}
+
+async function saveCascadeNotify() {
+  _wsSettings.cascade_notify = document.getElementById('toggle-cascade-notify').checked;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({cascade_notify: _wsSettings.cascade_notify})});
+}
+
+async function saveCascadeAutoStart() {
+  _wsSettings.cascade_auto_start = document.getElementById('toggle-cascade-autostart').checked;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({cascade_auto_start: _wsSettings.cascade_auto_start})});
+}
+
+function renderWatcherTables(watchers) {
+  // Folder table
+  const ftbody = document.getElementById('watcher-folder-tbody');
+  if (ftbody) {
+    if (!watchers.length) {
+      ftbody.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim);text-align:center;padding:12px">暂无监听文件夹</td></tr>';
+    } else {
+      ftbody.innerHTML = watchers.map(w => `
+        <tr>
+          <td>${esc(w.watch_path.split(/[\\/]/).pop()||w.watch_path)}</td>
+          <td style="font-size:12px;font-family:monospace;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.watch_path)}</td>
+          <td><button class="btn btn-sm" style="font-size:10px;color:var(--red)" onclick="deleteWatcher('${escAttr(w.id)}')">🗑</button></td>
+        </tr>`).join('');
+    }
+  }
+  // Effect table
+  const etbody = document.getElementById('watcher-effect-tbody');
+  if (etbody) {
+    if (!watchers.length) {
+      etbody.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim);text-align:center;padding:12px">暂无监听器</td></tr>';
+    } else {
+      etbody.innerHTML = watchers.map(w => `
+        <tr>
+          <td>${esc(w.watch_path.split(/[\\/]/).pop()||w.watch_path)}</td>
+          <td><span class="watcher-dot ${w.enabled?'running':'stopped'}"></span>${w.enabled?'运行中':'已停止'}</td>
+          <td>
+            <button class="btn btn-sm" style="font-size:10px" onclick="openWatcherEffect('${escAttr(w.id)}')">⚙ 设置</button>
+            ${w.enabled
+              ? `<button class="btn btn-sm" style="font-size:10px" onclick="toggleWatcher('${escAttr(w.id)}',false)">⏸ 停用</button>`
+              : `<button class="btn btn-sm" style="font-size:10px;color:var(--green)" onclick="toggleWatcher('${escAttr(w.id)}',true)">▶ 启用</button>`}
+          </td></tr>`).join('');
+    }
+  }
+}
+
+function addWatcherFolder() {
+  const wgs = _wsSettings.work_groups||[];
+  const sel = document.getElementById('wf-target-ws');
+  if (sel) sel.innerHTML = wgs.map(w => `<option value="${escAttr(w.id)}">${esc(w.name||w.path)}</option>`).join('');
+  document.getElementById('wf-name').value = '';
+  document.getElementById('wf-path').value = '';
+  document.getElementById('watcher-folder-modal').style.display = 'flex';
+}
+
+function closeWatcherFolder() { document.getElementById('watcher-folder-modal').style.display = 'none'; }
+
+function browseWfFolder() {
+  // Use the server-side native folder dialog (localhost only).
+  api('/api/browse-folder', {method:'POST'}).then(r => {
+    if (r.ok && r.path) {
+      document.getElementById('wf-path').value = r.path;
+    } else if (r.error) {
+      const manual = prompt(r.error + '\n\n请手动输入完整目录路径（例如 C:/Users/你的用户名/Downloads）：');
+      if (manual) document.getElementById('wf-path').value = manual;
+    }
+  }).catch(() => {
+    const manual = prompt('无法打开文件夹选择器。\n请手动输入完整目录路径（例如 C:/Users/你的用户名/Downloads）：');
+    if (manual) document.getElementById('wf-path').value = manual;
+  });
+}
+function onWfFolderPicked(input) { /* no-op — using server-side dialog */ }
+
+async function saveWatcherFolder() {
+  const name = document.getElementById('wf-name').value.trim();
+  const path = document.getElementById('wf-path').value.trim();
+  const targetWs = document.getElementById('wf-target-ws').value;
+  if (!path) { alert('请选择路径'); return; }
+  const watchers = _wsSettings.watchers||[];
+  watchers.push({
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,8),
+    watch_path: path,
+    target_workspace_id: targetWs,
+    sync_documents: true, sync_images: false, sync_media: false,
+    custom_extensions: [], notify_on_sync: true, auto_start: true, enabled: false
+  });
+  _wsSettings.watchers = watchers;
+  _wsSettings.cascade_enabled = true;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({watchers, cascade_enabled: true})});
+  renderWatcherTables(watchers);
+  closeWatcherFolder();
+}
+
+async function deleteWatcher(id) {
+  let watchers = (_wsSettings.watchers||[]).filter(w => w.id !== id);
+  _wsSettings.watchers = watchers;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({watchers})});
+  renderWatcherTables(watchers);
+}
+
+// ── Watcher effect editor ────────────────────────────────────────────
+
+let _effectWatcherId = '';
+
+function openWatcherEffect(id) {
+  _effectWatcherId = id;
+  const watchers = _wsSettings.watchers||[];
+  const w = watchers.find(x => x.id === id);
+  if (!w) return;
+  // Set checkboxes from watcher config
+  document.querySelectorAll('.wc-doc').forEach(cb => { cb.checked = w.sync_documents !== false; });
+  document.querySelectorAll('.wc-img').forEach(cb => { cb.checked = !!w.sync_images; });
+  document.querySelectorAll('.wc-media').forEach(cb => { cb.checked = !!w.sync_media; });
+  document.querySelectorAll('.wc-archive').forEach(cb => { cb.checked = !!w.sync_archives; });
+  document.getElementById('wc-custom-ext').value = (w.custom_extensions||[]).join(',');
+  // Snapshot mode radio
+  const mode = w.snapshot_mode || 'boot';
+  document.querySelectorAll('.wc-snapshot-mode').forEach(r => { r.checked = r.value === mode; });
+  document.getElementById('watcher-effect-title').textContent = '设置监听效果 — '+(
+    w.watch_path.split(/[\\/]/).pop()||w.watch_path);
+  document.getElementById('watcher-effect-modal').style.display = 'flex';
+}
+
+function closeWatcherEffect() { document.getElementById('watcher-effect-modal').style.display = 'none'; }
+
+async function saveWatcherEffect() {
+  const docs = []; document.querySelectorAll('.wc-doc:checked').forEach(c => docs.push(c.value));
+  const imgs = []; document.querySelectorAll('.wc-img:checked').forEach(c => imgs.push(c.value));
+  const medias = []; document.querySelectorAll('.wc-media:checked').forEach(c => medias.push(c.value));
+  const archives = []; document.querySelectorAll('.wc-archive:checked').forEach(c => archives.push(c.value));
+  const customRaw = document.getElementById('wc-custom-ext').value.trim();
+  const custom = customRaw ? customRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const snapshotMode = document.querySelector('.wc-snapshot-mode:checked')?.value || 'boot';
+
+  let watchers = (_wsSettings.watchers||[]).map(w => {
+    if (w.id !== _effectWatcherId) return w;
+    return {...w,
+      sync_documents: docs.length > 0,
+      sync_images: imgs.length > 0,
+      sync_media: medias.length > 0,
+      sync_archives: archives.length > 0,
+      custom_extensions: custom,
+      snapshot_mode: snapshotMode,
+    };
+  });
+  _wsSettings.watchers = watchers;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({watchers})});
+  renderWatcherTables(watchers);
+  closeWatcherEffect();
+}
+
+async function toggleWatcher(id, enabled) {
+  let watchers = (_wsSettings.watchers||[]).map(w => w.id===id ? {...w, enabled} : w);
+  _wsSettings.watchers = watchers;
+  // Persist to settings file
+  await api('/api/settings', {method:'POST', body: JSON.stringify({watchers})});
+  // Also start/stop the live watcher thread if framework is running
+  try {
+    await api('/api/watchers/' + id + '/toggle', {method:'PUT', body: JSON.stringify({enabled})});
+  } catch(e) { /* framework might not be running — starts on next boot */ }
+  renderWatcherTables(watchers);
+}
+
+// ── Category expand/collapse ─────────────────────────────────────────
+
+function toggleCategory(id, el) {
+  const div = document.getElementById(id);
+  if (!div) return;
+  const show = !div.classList.contains('show');
+  div.classList.toggle('show', show);
+  if (el) el.textContent = (show ? '▼' : '▶') + el.textContent.slice(1);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+
+loadWorkspaceSettings();
+
+// 本页不自己养级联通知轮询 —— 母版（base.html）那份已经在所有页面上跑。
+//   两边同时跑会出两个问题：`/api/watchers/events` 是排空式的，每 3 秒
+//   两组请求各抢到一半事件（明细框只看得见一半）；两边还都往同一个
+//   `#cascade-toast-container` 里写（那个 id 在本页出现两次，`getElementById`
+//   拿到的是母版那个）。
+//   所以只保留一份，即母版那份。
+//   本页保留的只有那个开关本身（`#toggle-cascade-notify` → `/api/settings`）。
+
+// Close modals on overlay click
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal-overlay')) {
+    if (e.target.id === 'workgroup-modal') closeWorkGroupEditor();
+    if (e.target.id === 'perms-modal') closePermsEditor();
+    if (e.target.id === 'watcher-folder-modal') closeWatcherFolder();
+    if (e.target.id === 'watcher-effect-modal') closeWatcherEffect();
+  }
+});
+
+// ── Software Update ──────────────────────────────────────────────────
+async function loadUpdateSettings() {
+  try {
+    const s = await api('/api/settings');
+    document.getElementById('toggle-update-auto-check').checked = s.update_auto_check !== false;
+    if (s.update_last_check) {
+      const d = new Date(s.update_last_check * 1000);
+      document.getElementById('update-check-status').textContent = '上次检查: ' + d.toLocaleString();
+    }
+  } catch(e) { console.error('loadUpdateSettings:', e); }
+}
+
+async function saveUpdateAutoCheck() {
+  const v = document.getElementById('toggle-update-auto-check').checked;
+  await api('/api/settings', {method:'POST', body: JSON.stringify({update_auto_check: v})});
+}
+
+async function manualUpdateCheck() {
+  const status = document.getElementById('update-check-status');
+  const detail = document.getElementById('update-result-detail');
+  const text = document.getElementById('update-result-text');
+  const dlArea = document.getElementById('update-download-area');
+  status.textContent = '检查中...';
+  detail.style.display = 'block';
+  dlArea.style.display = 'none';
+  try {
+    const r = await api('/api/update/check', {method:'POST'});
+    if (r.update_available) {
+      text.innerHTML = '<span style="color:var(--accent);font-weight:700">🎉 发现新版本 v' + esc(r.version) + '</span>';
+      const notes = (r.changelog && r.changelog.zh) ? r.changelog.zh.map(l => '• ' + l).join('<br>') : '';
+      if (notes) text.innerHTML += '<div style="margin-top:6px;font-size:12px;color:var(--text-dim)">' + notes + '</div>';
+      if (r.size_bytes) text.innerHTML += '<div style="font-size:11px;color:var(--text-dim);margin-top:4px">大小: ' + (r.size_bytes/1024/1024).toFixed(1) + ' MB</div>';
+      dlArea.style.display = 'block';
+      status.textContent = '发现新版本 v' + r.version;
+    } else {
+      text.innerHTML = '✅ 已是最新版本';
+      status.textContent = '已是最新版本 (' + new Date().toLocaleString() + ')';
+    }
+  } catch(e) {
+    text.innerHTML = '❌ 检查失败: ' + e.message;
+    status.textContent = '检查失败';
+  }
+}
+
+let _updatePollTimer = null;
+async function startUpdateDownload() {
+  const text = document.getElementById('update-result-text');
+  const progressBar = document.getElementById('update-progress-bar');
+  const progressFill = document.getElementById('update-progress-fill');
+  const progressText = document.getElementById('update-progress-text');
+  document.getElementById('update-download-area').style.display = 'none';
+  progressBar.style.display = 'block';
+  progressText.style.display = 'block';
+  try {
+    const r = await api('/api/update/download', {method:'POST'});
+    if (r.error) { text.innerHTML = '❌ ' + r.error; return; }
+    _updatePollTimer = setInterval(async () => {
+      const p = await api('/api/update/progress');
+      if (p.status === 'downloading') {
+        const pct = Math.round(p.progress * 100);
+        progressFill.style.width = pct + '%';
+        progressText.textContent = '下载中... ' + pct + '%';
+      } else if (p.status === 'verifying') {
+        progressText.textContent = '校验中...';
+      } else if (p.status === 'ready') {
+        clearInterval(_updatePollTimer);
+        progressFill.style.width = '100%';
+        progressText.textContent = '✅ 下载完成';
+        if (confirm('更新已下载完成。\n\n是否立即安装并重启 Crannia？')) {
+          try { await api('/api/update/apply', {method:'POST'}); } catch(e) {}
+          alert('更新已触发，应用即将重启。');
+        }
+      } else if (p.status === 'error') {
+        clearInterval(_updatePollTimer);
+        progressText.textContent = '❌ ' + (p.error || '下载失败');
+      }
+    }, 500);
+  } catch(e) {
+    text.innerHTML = '❌ ' + e.message;
+  }
+}
+
+async function dismissUpdate() {
+  await api('/api/update/dismiss', {method:'POST'});
+  document.getElementById('update-result-detail').style.display = 'none';
+  document.getElementById('update-check-status').textContent = '已跳过 (' + new Date().toLocaleString() + ')';
+}
+
+// Load update settings on page init
+setTimeout(loadUpdateSettings, 500);
+// Load the persistent allowlist on page init
+setTimeout(loadAllowlist, 500);
+</script>
+{% endblock %}

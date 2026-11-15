@@ -1,0 +1,16 @@
+kind: provider
+name: grok
+version: 0.2.0
+description: Grok (xAI) — Grok 3/4 全系列
+api_mode: openai_compat
+config:
+  base_url: https://api.x.ai/v1
+  default_model: grok-4.3
+  context_window: 131072
+  supports_function_calling: true
+  supports_streaming: true
+  tokenizer_encoding: cl100k_base
+  creator: grok
+  website: https://x.ai/
+env_keys:
+- GROK_API_KEY
