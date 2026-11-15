@@ -1,0 +1,30 @@
+{
+  "latest": {
+    "version": "1.0.0",
+    "channel": "beta",
+    "published_at": "2026-11-15T07:15:37Z",
+    "release_notes_url": "",
+    "minimum_client_version": null,
+    "mandatory": false,
+    "changelog": {},
+    "artifacts": {
+      "windows-exe": {
+        "url": "https://github.com/hfyjq/Crannia/releases/download/v1.0.0/crannia-1.0.0-win-x64.exe",
+        "sha256": "2c2c96653c7ef946dcbf1d609d4e8b9dabddc12041704c6735a8e84e072d0aed",
+        "size_bytes": 267055615
+      },
+      "codepack": {
+        "url": "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.0.0.tgz",
+        "app_version": "1.0.0",
+        "runtime": "61ad22fad6d84b7ac5c957e466859b736f3f391611e5d2996fdaa13cbed64a75",
+        "shell_sha256": "89fad4ca94e696621194ee67e0dd6503c4ce811ffd7def3271df5a8c88decc7e",
+        "urls": [
+          "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.0.0.tgz",
+          "https://registry.npmjs.org/@hfyjq/crannia/-/crannia-1.0.0.tgz"
+        ],
+        "integrity": "sha512-8MS299dM67smJXlGu4H8lY5NIQGOpcrWF9QUN1qN9sK7A77djhG/HCVF8YTqVjV3rin/VYJuSz9Cy7mbOueVKA==",
+        "size_bytes": 4770867
+      }
+    }
+  }
+}
