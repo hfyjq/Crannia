@@ -1,29 +1,34 @@
 {
   "latest": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "channel": "stable",
-    "published_at": "2026-11-15T07:15:37Z",
+    "published_at": "2026-11-21T17:32:51Z",
     "release_notes_url": "",
     "minimum_client_version": null,
     "mandatory": false,
     "changelog": {},
     "artifacts": {
       "windows-exe": {
-        "url": "https://github.com/hfyjq/Crannia/releases/download/v1.0.0/crannia-1.0.0-win-x64.exe",
-        "sha256": "2c2c96653c7ef946dcbf1d609d4e8b9dabddc12041704c6735a8e84e072d0aed",
-        "size_bytes": 267055615
+        "url": "https://github.com/hfyjq/Crannia/releases/download/v1.1.0/crannia-1.1.0-win-x64.exe",
+        "sha256": "27cf3134bbc0a15de5c174fb38851a6ffc001fbe79c40c7d12dfd2dfa57a0e7d",
+        "size_bytes": 268380182
       },
       "codepack": {
-        "url": "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.0.0.tgz",
-        "app_version": "1.0.0",
-        "runtime": "61ad22fad6d84b7ac5c957e466859b736f3f391611e5d2996fdaa13cbed64a75",
-        "shell_sha256": "89fad4ca94e696621194ee67e0dd6503c4ce811ffd7def3271df5a8c88decc7e",
+        "url": "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.1.0.tgz",
+        "app_version": "1.1.0",
+        "runtime": "81c9471a1aed5e0ec6716c5447082df39b68aa3c06332dc32d44d0682dd716f6",
+        "shell_sha256": "295138dd2c721457812e73a18d372c91722c7f7c3dafecd9b32054812976d58e",
         "urls": [
-          "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.0.0.tgz",
-          "https://registry.npmjs.org/@hfyjq/crannia/-/crannia-1.0.0.tgz"
+          "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.1.0.tgz",
+          "https://registry.npmjs.org/@hfyjq/crannia/-/crannia-1.1.0.tgz"
         ],
-        "integrity": "sha512-8MS299dM67smJXlGu4H8lY5NIQGOpcrWF9QUN1qN9sK7A77djhG/HCVF8YTqVjV3rin/VYJuSz9Cy7mbOueVKA==",
-        "size_bytes": 4770867
+        "integrity": "sha512-STJF91cl1hpgV9R37O0Ix8CY1MLxbdi1ksv84BlxS5u0P0qx1k1bcXyVccGr55o3i9eiMFMsRdmt8GubPHoGjQ==",
+        "size_bytes": 4911429
+      },
+      "tui": {
+        "url": "https://github.com/hfyjq/Crannia/releases/download/v1.1.0/crannia-tui-1.1.0-code.zip",
+        "sha256": "e5c8d40c2652ad036147ba2318f95dee76514abeae0b810898145076e71bb9e9",
+        "size_bytes": 5059723
       }
     }
   }
