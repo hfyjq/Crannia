@@ -54,7 +54,17 @@ REPO = "git+https://github.com/hfyjq/Crannia.git"
 MANIFEST_DEFAULT = _ROOT / "dist-release" / "version-stable.json"
 
 #: 这几个名字出现在复制源里就停下 —— 它们是凭据或用户数据，不是代码。
-FORBIDDEN = (".env", "data", "PDwww", "node_modules", ".venv", "tests")
+FORBIDDEN = (".env", "PDwww", "node_modules", ".venv", "tests")
+
+#: `data/` 不能整目录拒：`data/settings.example.json` 是随包的出厂基准，
+#: `core/settings_baseline.py` 按代码根去读它，缺了首次播种就失败。
+#: 只拒下面这些"里面真会装用户数据"的名字（整个 `data/` 里其余文件照发）。
+FORBIDDEN_DATA = (
+    ".env", "settings.json", "allowlist.json", "api_keys.json",
+    "wechat_credentials.json", "media_gen_key.txt", "media_gen_credentials.json",
+    "runtime", "memory", "events", "incidents", "attachments",
+    "last_good", "updates", "plans", "workdata", "logs",
+)
 
 #: 镜像同步的轮询上限（秒）。npmjs 发布成功到 npmmirror 可见通常几分钟。
 MIRROR_TIMEOUT = 900
@@ -162,6 +172,7 @@ def main(argv=None) -> int:
         return 1
 
     bad = [n for n in FORBIDDEN if (SRC / n).exists()]
+    bad += ["data/" + n for n in FORBIDDEN_DATA if (SRC / "data" / n).exists()]
     if bad:
         print("[npm] 复制源里有不该发的东西：%r —— 拒绝" % bad)
         return 1
