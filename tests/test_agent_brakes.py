@@ -120,7 +120,7 @@ def test_cancel_before_the_loop_stops_immediately():
     )
 
     assert p.calls == 0, f"标志已置上却还是调了 {p.calls} 次模型"
-    assert "中断" in out, out
+    assert "已打断" in out, out
     assert msgs[-1]["content"] == out, "中断的话应当作为 assistant 消息落进历史"
     assert is_cancelled(SESS) is False, "读到就该清掉（否则会误杀后面的轮次）"
     print("  [ok] 迭代开头那道闸：一次模型调用都没发生")

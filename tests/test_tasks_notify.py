@@ -51,12 +51,13 @@ class FakeScheduler:
 
 
 def _job(task_id="c-probe", *, kind=jobs.KIND_COMMAND, status="done",
-         notified=False, session="workspace:private", result=""):
+         notified=False, session="workspace:private", result="",
+         cron_kind=""):
     j = jobs.Job(
         id=task_id, command="echo probe", pid=1, started=time.monotonic(),
         out=jobs._Sink(), err=jobs._Sink(), kind=kind,
         session_key=session, storage_id="probe", description="probe command",
-        status=status, exit_code=0, notified=notified,
+        status=status, exit_code=0, notified=notified, cron_kind=cron_kind,
         output_path="data/runtime/tasks/probe/%s.log" % task_id, result=result,
     )
     jobs._register(j)
@@ -233,6 +234,56 @@ def test_dispatch_builds_background_event_and_delivers():
     assert delivered == ["reply-from-background"], delivered
     assert TN.pending_count() == 0
     print("  [ok] 起轮：origin / routed_session_key / 回复投递")
+
+
+def test_cron_note_says_it_is_a_preset_task():
+    """两类定时任务的回报文案：第一行点明来源，各自带 kind 与处置。"""
+    alarm = TN.cron_note_text(title="开会", kind="alarm", status="到点了",
+                              body="三点开会")
+    assert alarm.startswith(TN.CRON_NOTIFICATION_PREFIX), alarm
+    assert "预设定时任务" in alarm.splitlines()[0], alarm
+    assert "kind: alarm" in alarm and "三点开会" in alarm, alarm
+    assert "提醒用户一句" in alarm, alarm
+
+    report = TN.cron_note_text(title="日报", kind="report", body="报表正文")
+    assert "kind: report" in report, report
+    assert "报表正文" in report, report
+    assert "不要自己再查一遍" in report, report
+    print("  [ok] 定时任务回报：独立前缀 + kind + 两支处置")
+
+
+def test_cron_finish_uses_the_cron_prefix_and_origin():
+    jobs.clear()
+    TN.reset()
+    _job(task_id="c-cron", kind=jobs.KIND_CRON, cron_kind="report",
+         result="取回来的内容")
+    TN._on_finish(jobs.get("c-cron"))
+    sched = FakeScheduler()
+    delivered = []
+    n = TN.dispatch_once(scheduler=sched,
+                         deliver=lambda session, text: delivered.append(text),
+                         inline=True)
+    assert n == 1, n
+    ev = sched.events[0]
+    assert ev.extras.get("origin") == "cron", ev.extras
+    text = ev.message.content
+    assert text.startswith(TN.CRON_NOTIFICATION_PREFIX), text[:60]
+    assert "取回来的内容" in text, text
+    print("  [ok] 跑完的定时任务：origin=cron、前缀与正文都对")
+
+
+def test_enqueue_note_needs_no_job():
+    jobs.clear()
+    TN.reset()
+    assert TN.enqueue_note("workspace:private", "这是提醒",
+                           origin="cron", task_id="alarm-1") is True
+    assert TN.pending_count() == 1
+    sched = FakeScheduler()
+    TN.dispatch_once(scheduler=sched, deliver=lambda s, t: None, inline=True)
+    ev = sched.events[0]
+    assert ev.extras.get("origin") == "cron", ev.extras
+    assert ev.message.content == "这是提醒", ev.message.content
+    print("  [ok] 闹钟不需要执行体：直接排队，来源仍是 cron")
 
 
 def test_group_session_key_maps_to_a_group_session():

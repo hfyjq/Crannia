@@ -64,6 +64,8 @@ _JOB_KEEP_SECONDS = 60 * 60
 #: 任务类别：命令、子 agent、技能后台任务。
 KIND_COMMAND = "command"
 KIND_SUBAGENT = "subagent"
+#: 定时任务的执行体。它跑在后台、完成后回报给主 agent —— 与子 agent 同一张表。
+KIND_CRON = "cron"
 #: 技能的后台任务，由 core/extension.py 提交。任务是一次性的，会话清理时终止。
 KIND_SKILL = "skill"
 
@@ -259,6 +261,15 @@ class Job:
     cancel_event: object = None    # threading.Event（子 agent 的协作式取消）
     done_event: object = None      # threading.Event（`task(action="wait")` 阻塞它）
     result: str = ""               # 子 agent 的最终结论
+    #: 子 agent 的累计计费 token（输入 + 输出，每轮重发历史都算进去）。
+    #: 每轮由循环回调更新；命令类任务不用这一格。
+    tokens: int = 0
+    #: 子 agent 的累计输出 token（只有 completion）—— 与主线状态条同一个口径，
+    #: 任务面板显示的是它。`tokens` 那一格留给成本与排障。
+    output_tokens: int = 0
+    #: 定时任务的类别：`alarm`（只提醒）或 `report`（到点取回内容）。
+    #: 只有 `KIND_CRON` 会填；回报文案按它分两支，别去猜。
+    cron_kind: str = ""
 
     def elapsed_ms(self) -> int:
         end = self.finished or time.monotonic()
@@ -277,6 +288,11 @@ class Job:
             "session_key": self.session_key,
             "output_file": self.output_path,
             "notified": self.notified,
+            #: 命令类任务恒为 0（它们没有 token 账）。
+            #: `tokens` 是累计计费量（含每步重发的输入），
+            #: `output_tokens` 是累计输出 —— 面板显示后者。
+            "tokens": int(self.tokens or 0),
+            "output_tokens": int(self.output_tokens or 0),
         }
         if self.status != "running":
             d["exit_code"] = self.exit_code
@@ -434,7 +450,7 @@ def start(proc: subprocess.Popen, command: str, work_dir: str,
 def start_thread(run: Callable[["Job"], str], *, kind: str = KIND_SUBAGENT,
                  command: str = "", session_key: str = "",
                  storage_id: str = "", description: str = "",
-                 notify: bool = True) -> Job:
+                 notify: bool = True, cron_kind: str = "") -> Job:
     """把一个线程执行体（子 agent）接管成任务表的一行。
 
     *run(job)* 在新线程里跑，返回结论文本；它可以读 `job.cancel_event`
@@ -458,7 +474,7 @@ def start_thread(run: Callable[["Job"], str], *, kind: str = KIND_SUBAGENT,
               description=description,
               output_path=output_path_for(task_id, storage_id),
               cancel_event=threading.Event(), done_event=threading.Event(),
-              notify_on_finish=bool(notify))
+              notify_on_finish=bool(notify), cron_kind=str(cron_kind or ""))
     _register(job)
 
     def _watch() -> None:
@@ -555,7 +571,7 @@ def foreground_count(session_key: str) -> int:
 def backgroundable_tool(name: str, args: dict | None = None) -> bool:
     """这一次工具调用现在有没有一个"前台执行体"可以转后台。
 
-    判据（设计 §8）：
+    判据：
 
     - `run_command`：带 `job_id`，这是瞬时查询，没有执行体；
       `background=true`，它本来就后台，没有前台可转。

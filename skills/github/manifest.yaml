@@ -169,6 +169,11 @@ tools:
         limit: {type: integer, default: 20}
       required: [owner, repo]
 
+# 需要哪一份配置才能用：缺了 `crannia doctor` 报 WARN，工具失败时回执带
+# `/config github` 路线（判据在 `core/config_requirements.py`）。
+requires_config:
+  - github
+
 config:
   # 条目要有名字（一个用户可能同时有工作号 / 个人号两个令牌）。
   #   同名的不静默覆盖：要么点「修改」，要么保存时被拦下问一句。

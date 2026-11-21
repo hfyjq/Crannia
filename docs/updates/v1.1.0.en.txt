@@ -1,0 +1,23 @@
+Update notes - regular update (2026/11/22) v1.1.0
+
+Experience:
+1. Moved the "Work mode" setting to a more prominent place
+2. New tasks now appear in the left list immediately, without waiting for the task to finish
+3. Scheduled tasks now appear in the background task list, and their results are brought back by the background task
+
+Fixes:
+1. Fixed incorrect display of some steps in the step stream
+2. Fixed the wrong model name display
+3. Fixed the approval issues when deleting files in bulk
+4. Removed some unused code and copy
+5. Recap is now displayed properly
+
+UI:
+1. The subagent panel now shows token usage
+
+Performance and features:
+1. The TUI is now available: after installation, open a command prompt in your working directory and run crannia. Feedback welcome!
+2. Reworked subagents and background tasks so that subagents can use their capabilities properly
+3. Fixed a defect in how web fetch handles binary content
+4. Improved PDF features
+5. Added caching for web downloads

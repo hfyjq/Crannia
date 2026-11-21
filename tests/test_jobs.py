@@ -25,6 +25,7 @@
   6. `/clear` 清表（`purge` 是不变量，不是一串地方）
   7. 但清表 ≠ 停活，有活着的就出声（清了记账、活还在，
      而它的输出再没有人会来收 —— 不许静默）
+  8. 快照里的两个 token 量纲分得开（累计计费量 vs 累计输出量）
 
 用法：
     cd <仓库根>
@@ -366,6 +367,28 @@ def test_sink_decodes_non_utf8_and_keeps_split_chars():
     t.finish()
     assert t.text() == "abc", repr(t.text())
     print("  [ok] 编码判定 + 增量解码 + 收尾（UTF-8 分块 / GBK / UTF-16LE BOM）")
+
+
+# ------------------------------------------------------------------
+# 快照里的两个 token 量纲
+# ------------------------------------------------------------------
+
+def test_snapshot_carries_both_token_measures():
+    """面板显示输出量，计费量另存 —— 两个量纲不许塌成一个。
+
+    计费量含每步重发的输入，输出量只有 completion。把它们显示成同一个
+    名字，用户看到的就是一个比主线状态条大三十倍的数（真机问过一次）。
+    """
+    from core import jobs
+
+    job = jobs.Job(id="probe-tokens", command="probe", pid=0,
+                   started=time.monotonic(), out=jobs._Sink(), err=jobs._Sink())
+    job.tokens = 646000
+    job.output_tokens = 8200
+    snap = job.snapshot()
+    assert snap["tokens"] == 646000, snap
+    assert snap["output_tokens"] == 8200, snap
+    print("  [ok] 快照同时带计费量与输出量")
 
 
 # ------------------------------------------------------------------

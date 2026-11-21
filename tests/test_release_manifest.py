@@ -341,6 +341,46 @@ def test_manifest_round_trips_through_the_client_parser():
           "path" not in man2["latest"]["artifacts"]["codepack"])
 
 
+def test_tui_artifact_round_trips_into_the_tui_checker():
+    """`artifacts.tui` 写出来要能被 TUI 那一侧的解析器读回去。
+
+    它消失的方式与代码包同族：发布成功、TUI 的 `crannia update` 永远说
+    「清单里没有 artifacts.tui」，而没有任何东西会红。
+    """
+    import make_release as MR
+    from core import update_tui as UT
+    from core.updater import UpdateManifest
+
+    tui = {"url": "https://cdn.example/tui-code.zip", "sha256": "12" * 32,
+           "size_bytes": 1234, "path": "local-only.zip"}
+    man = MR.build_manifest(version="1.1.0", channel="stable",
+                            url="https://cdn.example/crannia.exe",
+                            sha256="ab" * 32, size_bytes=123456, tui=tui)
+    art = UT._artifacts_tui(man)
+    check("★★ TUI 产物回环（版本 / 地址 / 哈希 / 体积）",
+          art is not None and art["version"] == "1.1.0"
+          and art["urls"] == ["https://cdn.example/tui-code.zip"]
+          and art["sha256"] == "12" * 32 and art["size_bytes"] == 1234,
+          repr(art))
+    check("★ 本地 `path` 不写进清单",
+          "path" not in man["latest"]["artifacts"]["tui"])
+
+    man2 = MR.build_manifest(version="1.1.0", channel="stable",
+                             url="https://cdn.example/crannia.exe",
+                             sha256="ab" * 32, size_bytes=123456, tui=tui,
+                             tui_urls=["https://mirror.example/tui.zip"])
+    art2 = UT._artifacts_tui(man2)
+    check("★ 备源按顺序带出来（主 → 备）",
+          art2 is not None
+          and art2["urls"] == ["https://cdn.example/tui-code.zip",
+                               "https://mirror.example/tui.zip"],
+          repr(art2))
+
+    got = UpdateManifest.from_json(man)
+    check("★ GUI 解析器照常工作，不把 tui 当安装包",
+          got is not None and got.download_url == "https://cdn.example/crannia.exe")
+
+
 def test_published_at_is_really_utc():
     """`Z` 是 UTC 的声明，值也必须真是 UTC —— 本地时间加 `Z` 会差一个时区。"""
     import re
@@ -547,6 +587,7 @@ def main() -> int:
                test_release_scripts_refuse_stable_for_a_prerelease,
                test_artifact_checks_catch_the_four_real_failures,
                test_manifest_round_trips_through_the_client_parser,
+               test_tui_artifact_round_trips_into_the_tui_checker,
                test_published_at_is_really_utc,
                test_published_at_can_be_given_explicitly,
                test_installer_runs_nsis_silently,

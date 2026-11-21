@@ -165,17 +165,35 @@ def poll_qrcode_status(
     return resp.json()
 
 
-def display_qrcode_terminal(qrcode_url: str) -> None:
-    """Render a QR code URL as ASCII art in the terminal."""
+def render_qrcode_ascii(qrcode_url: str) -> str:
+    """QR code URL -> ASCII art（一行文字，不是图片）。
+
+    与 `display_qrcode_terminal` 同一套渲染：扫码登录不只在终端里发生，
+    命令行前端要能拿到这段字自己印（接口多回一份）。
+    """
     try:
+        import contextlib
+        import io
         import qrcode as qr_module
         qr = qr_module.QRCode(border=1)
         qr.add_data(qrcode_url)
         qr.make(fit=True)
-        qr.print_ascii(invert=True)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            qr.print_ascii(invert=True)
+        return buf.getvalue()
     except ImportError:
-        print(f"[wechat] QR code URL: {qrcode_url}")
-        print("[wechat] (install 'qrcode' package for terminal QR display)")
+        return ""
+
+
+def display_qrcode_terminal(qrcode_url: str) -> None:
+    """Render a QR code URL as ASCII art in the terminal."""
+    text = render_qrcode_ascii(qrcode_url)
+    if text:
+        print(text, end="" if text.endswith("\n") else "\n")
+        return
+    print(f"[wechat] QR code URL: {qrcode_url}")
+    print("[wechat] (install 'qrcode' package for terminal QR display)")
 
 
 def do_login(

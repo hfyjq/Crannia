@@ -121,7 +121,7 @@ def task_tool(task_id: str = "", action: str = "status",
         if snap.get("status") == "running":
             out["retrieval_status"] = "timeout"
             out["note"] = ("等了 %d 毫秒还没结束 —— 它还在跑。可以再等，"
-                           "或者先做别的，完成时会收到后台任务回报。" % ms)
+                           "或者先做别的：回报要等你这一轮结束才送得到。" % ms)
         else:
             out["retrieval_status"] = "success"
             out["note"] = "已经结束。要细节就看 output_file（或 action=output）。"

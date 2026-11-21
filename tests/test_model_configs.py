@@ -774,6 +774,41 @@ def test_the_scheduler_picks_up_the_default_entry():
     _fresh()
 
 
+def test_status_reads_the_provider_the_scheduler_swapped_in():
+    """`/api/status` 的模型名读调度器那一个 —— 不是启动时按 config.yaml 造的老实例。
+
+    现场：默认配置条目是 `deepseek-flash`，而抬头/状态一直显示
+    `deepseek-v4-flash`（config.yaml 迁移过来的旧值）—— 请求早就走到条目上，
+    标签却说另一件事（"标签在说谎"）。
+    """
+    class _P:
+        def __init__(self, model):
+            self._model = model
+            self._provider_name = "deepseek"
+
+    class _S:
+        def __init__(self, prov):
+            self._provider = prov
+
+    cwd = os.getcwd()
+    try:
+        os.chdir(_ROOT)
+        import web.server as S
+        old_sched = getattr(S, "_scheduler", None)
+        old_prov = S._provider
+        S._provider = _P("deepseek-v4-flash")
+        S._scheduler = _S(_P("deepseek-flash"))
+        try:
+            got = S._active_model_info()
+        finally:
+            S._scheduler = old_sched
+            S._provider = old_prov
+        check("★★ 模型名取调度器那个（条目值），不是老实例那个",
+              got.get("model") == "deepseek-flash", repr(got))
+    finally:
+        os.chdir(cwd)
+
+
 def test_the_preflight_only_walks_and_leaves_no_footprints():
     """`preflight` —— 「只试装、不注册」，而且装不上时说得出为什么。
 
@@ -849,6 +884,34 @@ def test_the_link_can_go_red():
 
 # ----------------------------------------------------------------------
 
+def test_probe_errors_are_classified():
+    """联通测试的失败要分成"该改哪一格"的类别。
+
+    认证 / 余额 / 限流 / 地区那几张表在 `providers/base.py`（全仓唯一一份），
+    这里只验"桥接对不对" + 补上的两类（模型名 / 地址）。
+    """
+    from core import model_configs as mc
+
+    class E(Exception):
+        def __init__(self, msg, status=None):
+            super().__init__(msg)
+            self.status_code = status
+
+    cases = [
+        (E("Error code: 401 - invalid api key", 401), "auth"),
+        (E("429 rate limit", 429), "rate_limit"),
+        (E("insufficient_quota", 402), "balance"),
+        (E("Connection error.", None), "connection"),
+        (E("timed out", None), "timeout"),
+        (E("The model `x` does not exist", 404), "model"),
+        (E("404 page not found", 404), "address"),
+        (E("boom", None), "unknown"),
+    ]
+    for err, want in cases:
+        got = mc.classify_probe_error(err)
+        check("%s -> %s" % (str(err)[:40], want), got == want, got)
+
+
 def main() -> int:
     print("=" * 62)
     print("Model config entries -- the ledger")
@@ -870,9 +933,11 @@ def main() -> int:
                        test_the_seed_is_one_shot,
                        test_the_entry_becomes_a_live_provider,
                        test_the_scheduler_picks_up_the_default_entry,
+                       test_status_reads_the_provider_the_scheduler_swapped_in,
                        test_the_preflight_only_walks_and_leaves_no_footprints,
                        test_the_local_card_needs_no_key,
-                       test_the_link_can_go_red):
+                       test_the_link_can_go_red,
+                       test_probe_errors_are_classified):
                 try:
                     fn()
                 except Exception as exc:                        # noqa: BLE001

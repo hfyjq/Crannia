@@ -926,7 +926,9 @@ def _background_receipt(job, *, by_user: bool = False, timed_out: bool = False) 
     # 只有通知链真的接通了，回执才敢承诺"会收到回报"（标签不许说谎）。
     try:
         from core.tasks_notify import is_installed as _notify_on
-        _promise = "完成时会收到一条后台任务回报；" if _notify_on() else ""
+        # 回报的投递判据是会话空闲 —— 这一轮还在跑的时候它送不到。
+        #   回执必须把这件事说清（同 `agent_loop._hand_off` 那句）。
+        _promise = "完成后的回报要等这一轮结束才送得到；" if _notify_on() else ""
     except Exception:                                  # noqa: BLE001
         _promise = ""
     if timed_out:
@@ -1434,22 +1436,8 @@ def run_command(command: str = "", cwd: str = "", timeout_ms: int = 0,
         # 档位只决定默认值，不另开一个上限口径。
         timeout_ms = spec.command_timeout_ms
 
-    # 配额（设计 §6.4）：每会话后台命令 ≤ 3 —— 拒，并给路线
-    # 只对模型显式请求（`background=true`）生效：超时降级是"别白干"，
-    # 不能被配额杀掉（那样等于回到"到点就杀"）。用户 Ctrl+B 也不在这里拒
-    # —— 那条路是"已经在前台跑的命令"，拒了也不能让它停下来。
-    if background:
-        from core import jobs as _jobs
-        _qkey = _snap.session_id if _snap is not None else ""
-        if _jobs.running_count_for(_qkey, _jobs.KIND_COMMAND) >= 3:
-            return {
-                "success": False,
-                "denied": True,
-                "tier": "quota",
-                "error": ("**后台命令已经到上限了**（这个会话已有 3 条在后台跑）—— "
-                          "这一条**没有执行**。先用 `task(action=\"status\")` 看谁还在跑、"
-                          "`action=\"wait\"` 等一个回来，或者直接前台跑（会等到它结束）。"),
-            }
+    # 后台命令不设条数配额：一次请求跑几条由模型自己决定，
+    #   真要限制它的成本应落在单条命令的时长与输出上，不在这里按条数拒。
 
     # 档位只能收窄上面那个开关 —— `effective_approval` 是全仓唯一
     #     的收窄点（`min(用户的选择, 这一档的上限)`）。判据：

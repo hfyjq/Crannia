@@ -28,6 +28,12 @@ Download the latest `crannia-*-win-x64.exe` from Releases and run it. The instal
 unpacks a normal application directory and creates shortcuts; the bundled Python
 runtime lives under `resources/primary-runtime`, so no extra system setup is needed.
 
+The same installer also provides a terminal interface. Open a command prompt in
+any folder and run `crannia`. It shares the data folder and the backend with the
+desktop app: if the desktop app is already running, the TUI attaches to it;
+otherwise it starts its own. A standalone TUI package is published alongside the
+installer for machines without the desktop app.
+
 ### Option B — from source
 
 Requirements: Windows 10/11, Python **3.12+**, Node.js.

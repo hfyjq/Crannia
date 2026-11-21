@@ -39,8 +39,10 @@ let _token = crypto.randomBytes(24).toString("base64url");
 //:   只压对话框；终端那行 `[<tag> gone]` 一个字都不压 —— 它是原始读数，
 //:   而「发生了几次」本身就是要看得见的事实。
 const _goneNoticed = new Set();
-const API_PORT = Number(process.env.CRANNIA_API_PORT || 5000);
-const API_BASE = `http://127.0.0.1:${API_PORT}`;
+//: 端口与地址可改：启动时若接入的是已有后端（见 `attachExistingBackend`），
+//:   这两格要换成端点文件里那个 —— 所以是 `let`，不是 `const`。
+let API_PORT = Number(process.env.CRANNIA_API_PORT || 5000);
+let API_BASE = `http://127.0.0.1:${API_PORT}`;
 
 // 协议层
 
@@ -168,7 +170,11 @@ else {
       }
     }
     try {
-      await startBackend();
+      //: 一个数据根只许一个后端：先看端点文件，活着就接上，不 spawn。
+      //:   TUI 先起、GUI 后开是正常形态（两套安装共享数据与服务）；版本不一致时这里抛错。
+      if (!(await attachExistingBackend())) {
+        await startBackend();
+      }
       await startFramework();
       //: 代码包换上去之后要等"后端真的起来了"才算成功 —— 失败那一支回滚。
       if (_codePackApplied) { finalizeCodePack(_codePackApplied); _codePackApplied = null; }
@@ -408,8 +414,75 @@ function backendRoot() {
  *    （读错的症状：小窗语言永远跟着模板走）。
  */
 function dataRoot() {
+  // 后端 `core/paths.py` 认这个覆盖；壳读同一份数据根，判据必须跟着它走。
+  const override = String(process.env.CRANNIA_DATA_DIR || "").trim();
+  if (override) return override;
   if (!app.isPackaged) return backendRoot();
   return path.join(app.getPath("appData"), "Crannia");
+}
+
+// 已有后端：端点文件（一个数据根只许一个后端）
+//
+// 写这份文件的是后端（`core/endpoint.py`），壳只读：活着就接上，
+// 死了才 spawn。两套安装（桌面壳 / TUI）共用数据根，谁是后端由它回答。
+
+function endpointFile() {
+  return path.join(dataRoot(), "data", "runtime", "endpoint.json");
+}
+
+/** 读端点文件；读不到 / 字段不像样一律 null。 */
+function readEndpoint() {
+  try {
+    const d = JSON.parse(fs.readFileSync(endpointFile(), "utf8"));
+    const port = Number(d.port), pid = Number(d.pid);
+    const token = String(d.token || "");
+    if (!(port > 0 && port < 65536) || !token || !(pid > 0)) return null;
+    return { port, token, pid, version: String(d.version || "") };
+  } catch { return null; }
+}
+
+/** 问一下端点上的 `/api/status`；连不上 / 令牌不对返回 null。 */
+function probeEndpoint(ep) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${ep.port}/api/status`, {
+      timeout: 1500,
+      headers: { "X-Crannia-Token": ep.token },
+    }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => {
+        if (res.statusCode !== 200) return resolve(null);
+        try { resolve(JSON.parse(body)); } catch { resolve(null); }
+      });
+    });
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+    req.on("error", () => resolve(null));
+  });
+}
+
+/** 接上已有后端就返回 true；没有就返回 false（调用方照常 spawn）。
+ *
+ *  版本必须一致：两套安装各自更新，"能连上"不代表"能一起用"。
+ *  不一致时抛错，不退回 spawn —— 同一个数据根上再起一个后端正是要防的事。
+ */
+async function attachExistingBackend() {
+  const ep = readEndpoint();
+  if (!ep) return false;
+  const status = await probeEndpoint(ep);
+  if (!status) return false;
+  const expected = app.getVersion();
+  const got = String(status.version || "");
+  if (!got || got !== expected) {
+    throw new Error(
+      `版本不一致：桌面端是 ${expected}，正在运行的后端是 ${got || "未知"}。`
+      + "两套安装必须同一个号 —— 先升级其中一个再启动。");
+  }
+  API_PORT = ep.port;
+  API_BASE = `http://127.0.0.1:${API_PORT}`;
+  _token = ep.token;
+  console.log(`[backend] 接入已有后端：127.0.0.1:${API_PORT}（pid=${ep.pid}，${got}）`);
+  return true;
 }
 
 /** 版本号只比数字段（`1.0.0` 与 `1.0.1`）。读不出的段按 0 ——

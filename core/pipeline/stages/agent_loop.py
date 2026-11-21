@@ -26,8 +26,10 @@ from core.image_input import content_text
 from core.approval import ASK_COUNTED_KINDS, new_request_id, outcome_line
 from core.prompt_assembler import assemble_system_prompt, model_name_of
 from core.events import (
-    EVT_STEP_END, EVT_STEP_START, EVT_TOOL_NEUTRALIZED, make_emitter,
+    EVT_STEP_END, EVT_STEP_START, EVT_TOOL_NEUTRALIZED, emit_settled_tool,
+    make_emitter,
 )
+from core import tool_outcome as _tool_outcome
 from core.session_key import session_key_of_ctx
 from core.session_date import date_change_note
 from core.pipeline.stage import Stage, StageContext, register_stage
@@ -184,21 +186,32 @@ class AgentLoopStage(Stage):
         if replay:
             ctx.approval_replay = {}
             _replay_ok = False
+            #: 结算类结局（拒绝 / 提问回答）。这两条不走 `replay_pending_call`，
+            #: 所以要在这里补一条 `tool.end`——否则客户端那张"待审批"卡
+            #: 永远停在那里（它没有别的结束信号）。
+            _settled: tuple[str, str, str] | None = None
             try:
                 if replay.get("result") is not None:
                     # 提问的回答 —— 它不是拒绝，也不重放：
                     # 用户那句话就是结果。直接补回那次调用（与 deny 同一套
                     # 消息替换机制，但语义不同，键也不同 —— 绝不让"答案"
                     # 顶着 `deny` 的名字走）。
+                    _call_id = str(replay.get("call_id") or "")
                     _replay_ok = answer_pending_call(
                         ctx.messages,
-                        call_id=str(replay.get("call_id") or ""),
+                        call_id=_call_id,
                         message=str(replay["result"]))
+                    _settled = (_call_id, _tool_outcome.OUTCOME_COMPLETED, "")
                 elif replay.get("deny"):
+                    _call_id = str(replay.get("call_id") or "")
+                    _deny_msg = str(replay["deny"])
                     _replay_ok = deny_pending_call(
                         ctx.messages,
-                        call_id=str(replay.get("call_id") or ""),
-                        message=str(replay["deny"]))
+                        call_id=_call_id,
+                        message=_deny_msg)
+                    # 语义只从那一句头认（`outcome_line` 是它唯一的生产者）。
+                    _so, _sr = _tool_outcome.of_settlement_receipt(_deny_msg)
+                    _settled = (_call_id, _so, _sr)
                 else:
                     _replay_ok = replay_pending_call(
                         ctx.messages,
@@ -213,6 +226,13 @@ class AgentLoopStage(Stage):
                 print(f"[approval] 重放失败（退回旧回执）："
                       f"{type(_rp_exc).__name__}: {_rp_exc}")
                 _replay_ok = False
+            # 结算结论照发：卡片要说的是"用户做了什么决定"，
+            # 与"那条消息补没补成功"是两件事（补不成时退路会说话）。
+            if _settled is not None:
+                emit_settled_tool(
+                    getattr(ctx, "events", None), session_key_of_ctx(ctx),
+                    call_id=_settled[0], outcome=_settled[1],
+                    reason=_settled[2])
             # 退路必须保留：补不成时（旧对话 / 消息被压缩掉了），退回
             #   原来那句"请重新提交"的回执 —— 否则就是**用户批了却什么都没
             #   发生**，而这正是这套设计要消灭的静默。

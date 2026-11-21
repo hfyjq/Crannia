@@ -797,6 +797,19 @@ class MemoryManager:
         self.short_term.open_thread(channel_key, sid)
         return sid
 
+    @staticmethod
+    def _announce_thread_opened(channel_key: str, storage_id: str) -> None:
+        """名册里多了一条 —— 告诉前端来刷新（`thread.opened`）。
+
+        不抛：事件流坏了不该影响一段对话的创建。
+        """
+        try:
+            from core.events import EVT_THREAD_OPENED, get_event_bus
+            get_event_bus().emit(EVT_THREAD_OPENED, session_key=channel_key,
+                                 storage_id=storage_id)
+        except Exception:                       # noqa: BLE001
+            pass
+
     def new_session(
         self, old_session_id: str = "", *, channel_key: str = ""
     ) -> Tuple[str, List[Dict]]:
@@ -889,6 +902,7 @@ class MemoryManager:
             if old_session_id:
                 self.short_term.end_thread(old_session_id)
             self.short_term.open_thread(channel_key, sid)
+            self._announce_thread_opened(channel_key, sid)
 
         # 会话级内存态：走唯一登记表
         #

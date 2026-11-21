@@ -177,6 +177,15 @@ function _elapsedLabel(ms) {
   return Math.floor(n / 60000) + "m" + Math.round((n % 60000) / 1000) + "s";
 }
 
+//: 累计 token 的短写法。0 = 还不知道（第一轮回来之前），这一格不画。
+//:  口径与主线状态条一致：累计输出（只有 completion），不含每步重发的输入。
+function _tokenLabel(n) {
+  const v = Number(n) || 0;
+  if (v <= 0) return "";
+  if (v < 1000) return v + " tok";
+  return (v / 1000 >= 100 ? Math.round(v / 1000) : (v / 1000).toFixed(1)) + "k tok";
+}
+
 /** 一条后台任务 / 子代理。
  *
  *  后台任务：最多 3 行摘要（CSS `line-clamp`），点开看完整命令 ——
@@ -197,6 +206,9 @@ function TaskRow({ task, expandable }) {
       <div className="task-row-head">
         <span className={"task-row-name" + (open ? " open" : "")}>{label}</span>
         <span className="task-row-ms">{_elapsedLabel(task.elapsed_ms)}</span>
+        {task.output_tokens > 0 ? (
+          <span className="task-row-ms task-row-tokens">{_tokenLabel(task.output_tokens)}</span>
+        ) : null}
       </div>
       {open ? <pre className="task-row-full">{task.command || label}</pre> : null}
     </div>
@@ -537,6 +549,14 @@ function AppInner({ client }) {
   function pushAssistant(text, extra = {}) {
     const txt = (text || "").trim();
     if (!txt) return;
+    // `/recap` 的回复带着后端那句头（`#recap：` / `#recap-`）：它是回顾，不是
+    //   模型对用户说的话 —— 转成回顾块，别混进普通回复里。
+    if (txt.startsWith("#recap")) {
+      const body = txt.replace(/^#recap[：:-]\s*/, "");
+      setMessages((x) => x.concat([{ id: "r" + Math.random(),
+                                     role: "recap", content: body }]));
+      return;
+    }
     setMessages((x) => {
       // 两条通道（POST 与 SSE）到的是同一句话，先后不定，必须去重。
       //    比的是 trim 过的：同一个字符串的两次序列化，前后空白不保证逐字节相同。
@@ -1698,6 +1718,16 @@ function AppInner({ client }) {
     //:理由：状态只许有一个来源，否则"信号到了、状态还没到"会出现半截浮窗。
     offs.push(client.subscribe("plugin.blocked", () => { loadBlockedNotices(); }));
 
+    // 「我们到哪了」：后端在轮首发一条回顾。它不是谁的发言，画成对话里
+    //   居中的淡黄色窗（不是浮窗）；内容整段装进去，随消息列表滚动。
+    offs.push(client.subscribe("recap", (d) => {
+      if (!_liveMine()) return;
+      const text = String((d && d.recap) || "").trim();
+      if (!text) return;
+      setMessages((x) => x.concat([{ id: "r" + Math.random(),
+                                     role: "recap", content: text }]));
+    }));
+
     //:面板开着时，每轮收尾刷一次（判据同 WebUI：`if (_ctxPanelOpen) loadContextReport();`）。
     //:关着就不刷 —— 那是纯税：面板不在屏上，读出来的数没人看。
     offs.push(client.subscribe("task.end", () => { if (ctxOpenRef.current) loadCtxReport(); }));
@@ -1708,6 +1738,15 @@ function AppInner({ client }) {
     offs.push(client.subscribe("task.end", () => {
       bgableRef.current.clear();   // 这一轮结束，没有"可转"的前台任务了
       loadTasks();
+    }));
+
+    //:一条会话线程刚被打开（新建任务的第一句落地 / `/clear`）——
+    //:   左栏名册立刻跟上。此前只有 `task.end` 一个刷新点，于是跑的过程中
+    //:   那一条整段失踪（2026-11-20 用户反馈）。
+    //:群聊键不进这张名册（`/api/threads` 只列私聊那条），不用刷。
+    offs.push(client.subscribe("thread.opened", (d) => {
+      if (String((d && d.session) || "").startsWith("workspace:group:")) return;
+      refreshThreads();
     }));
 
     //:任务四种事件—— 它们只改计数与浮窗，不新开活动块。
@@ -3217,6 +3256,17 @@ function AppInner({ client }) {
                     return m.id === lastSummary
                       ? <div key={m.id} className="compact-divider">{m.content}</div>
                       : null;
+                  }
+                  // 回顾：对话里居中的淡黄色窗（不是浮窗），整段都在框里。
+                  if (m.role === "recap") {
+                    return (
+                      <div key={m.id} className="recap-block">
+                        <div className="recap-label">{t("回顾：")}</div>
+                        <div className="recap-content">
+                          <Markdown text={m.content} />
+                        </div>
+                      </div>
+                    );
                   }
                   if (m.role === "user") anchor = m.rowId || null;
                   const star = ((m.role === "user" || m.role === "assistant") && anchor)

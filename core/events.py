@@ -54,6 +54,10 @@ from typing import Any, Callable, Iterator
 # 回合 / 阶段生命周期
 EVT_TASK_START = "task.start"     # 收到一条用户消息，一轮开始
 EVT_TASK_END = "task.end"         # 一轮结束（含最终回复）
+#: 一条会话线程刚被打开 / 新建（名册里多了一条）。
+#: 前端靠它把「新建任务」的那一条立刻摆进左栏 —— 只靠 `task.end` 的话，
+#: 跑的过程中这一段整条失踪（2026-11-20 用户反馈）。
+EVT_THREAD_OPENED = "thread.opened"
 EVT_STEP_START = "step.start"     # 计划执行的某一步开始
 EVT_STEP_END = "step.end"         # 某一步结束
 EVT_TURN_START = "turn.start"     # agent_loop 内的一次 LLM 往返开始
@@ -816,6 +820,25 @@ def make_emitter(bus: EventBus | None, session_key: str
         bus.emit(type_, session_key=session_key, **data)
 
     return _emit
+
+
+def emit_settled_tool(bus: EventBus | None, session_key: str, *,
+                      call_id: str, name: str = "",
+                      outcome: str, reason: str) -> None:
+    """结算类 `tool.end`：拒绝 / 提问被回答 / 打断并补充。
+
+    这几条路没有"真实执行结果"可报 —— 只有结算语义。形状与 `agent_loop`
+    里执行完那条一致，`duration_ms` / `result_chars` 给 0：这两格在这里
+    没有意义，而让字段缺省会让客户端多一种分支。
+
+    `ok` 保持 `True`（那次调用的回执确实回来了）；结局看 `outcome` / `reason`。
+    """
+    if bus is None:
+        return
+    bus.emit(EVT_TOOL_END, session_key=session_key,
+             call_id=str(call_id or ""), name=str(name or ""),
+             ok=True, duration_ms=0, result_chars=0, error="",
+             outcome=outcome, reason=reason)
 
 
 def bg_start(kind: str, session_key: str) -> float:

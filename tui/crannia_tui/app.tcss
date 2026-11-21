@@ -1,0 +1,153 @@
+/* 全屏布局：上中下三段固定，中间吃掉剩余高度。
+ *
+ * 样式只写在这一处。小部件里不再放 DEFAULT_CSS —— 同一个属性写两遍时，
+ * 外部样式表赢，而改的人往往只改了自己眼前那份，界面上没有任何报错，
+ * 只是"改了没反应"。这个坑已经踩过一次（header 高度），所以收成单一来源。
+ */
+
+Screen {
+    layout: vertical;
+    background: $surface;
+}
+
+/* 抬头是对话区的第一块，不是固定区 —— 随内容滚走。
+ * 左右不再补 padding：Transcript 自己已经有一层，补两层会缩进成右移。 */
+/* 标志四行 + 文字最多四行（标题 / 模型与档位 / 分隔线 / 目录）。 */
+HeaderBar {
+    height: 8;
+    padding: 0;
+    margin-bottom: 1;
+}
+
+/* 标志宽 5 列（含左空一格）。整块居中由 ui.py 按宽度补左空白 ——
+   样式表的 align-horizontal 对定宽子部件不生效（实测）。 */
+HeaderBar #logo {
+    width: 100%;
+    color: $success;
+}
+
+HeaderBar #info {
+    width: 100%;
+    text-align: center;
+}
+
+Transcript {
+    height: 1fr;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+Transcript .user {
+    margin-top: 1;
+}
+
+/* 让每块之间恰好隔一行：统一给"上方留白"而不是有人给上下都有，
+ * 否则相邻两块会叠成两行空行。唯一的例外是连续的卡片，那个在
+ * `Transcript.add_card()` 里按前一块决定（一串动作应当贴紧）。 */
+Transcript .agent {
+    margin-top: 1;
+}
+
+Transcript .note {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+/* 工具卡。高度跟着内容走（失败时多一行），相邻两张之间不留空行 ——
+ * "一轮里连着跑七八个工具"时，留空会把它拆成七八段，看不出是一串动作。 */
+Transcript .tool {
+    height: auto;
+}
+
+#status {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+/* 审批面板：平时藏着，出现时**占的正是输入框那个槽** ——
+ * 同样的位置、同样的圆角边框，读起来是"这里暂时换了个用途"，
+ * 而不是"弹了个窗"。选中态的标记（▌）画在内容里，颜色跟随文本。 */
+ApprovalPanel {
+    display: none;
+    height: auto;
+    margin: 0 1;
+    padding: 0 1;
+    border: round $primary;
+}
+
+ApprovalPanel:focus {
+    border: round $accent;
+}
+
+/* 斜杠补全条：藏在输入框上方，输入以 / 起头时才出现。
+ * 高度跟着候选数走；没有候选时不占任何行。 */
+SuggestBar {
+    display: none;
+    height: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+/* 新版本提示：贴输入框右上角。只在查到更高版本时占这一行。 */
+UpdateHint {
+    display: none;
+    height: 1;
+    padding: 0 2;
+    content-align: right middle;
+}
+
+/* `/btw` 回答窗：顶上只剩一行横幅，其余全是这个蓝框。
+ * 打开时转写区让位（display:none），关掉之后恢复。 */
+BtwPanel {
+    display: none;
+    height: 1fr;
+    margin: 0 1;
+    padding: 0 1;
+    border: round $accent;
+}
+
+BtwPanel #btw-text {
+    width: 100%;
+}
+
+/* 多行输入框：高度跟着内容走，空的时候一行。 */
+#composer {
+    height: auto;
+    margin: 0 1;
+    border: round $primary;
+}
+
+#composer:focus {
+    border: round $accent;
+}
+
+StatusBar {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+StatusBar #state {
+    width: auto;
+}
+
+/* 中间两格：占剩余宽度的一半并居中，落在左右两端之间。 */
+StatusBar #tasks {
+    width: 1fr;
+    text-align: center;
+}
+
+StatusBar #hint {
+    width: 1fr;
+    text-align: right;
+}
+
+/* 后台任务 / 子代理的详细页：占输入框上方的槽，有内容才出现。 */
+TaskDetail {
+    display: none;
+    height: auto;
+    margin: 0 1;
+    padding: 0 1;
+    border: round $primary;
+}

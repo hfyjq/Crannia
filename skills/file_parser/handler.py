@@ -12,6 +12,7 @@ definitions live in manifest.yaml so the LLM sees them.
 """
 
 import io
+import re
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
 
@@ -229,6 +230,172 @@ def _pdf_read_plan(path):
         )
     print("[file_parser] PDF 文本层已自动修复：%s" % diag.repair.summary())
     return diag.repair
+
+
+# ------------------------------------------------------------------
+# 按页读（已知页码时取那几页的原文）
+# ------------------------------------------------------------------
+
+#: 单次最多读几页。与本仓库"一次工具结果就把事说清"的口径一致：
+#: 页数多的需求用页码范围分几次读，不要一次拉一整本。
+_READ_PAGES_MAX = 20
+
+#: 单次正文字符预算。低于 `tool_result_max_chars`（生产 6000），
+#: 留出页眉与尾注的位置 —— 这样一次结果就能完整装下，不必再走落盘指针。
+_READ_PAGES_CHARS = 5000
+
+#: 预算只剩这么多时就不再塞下一页（更短的片段没有阅读价值，只是噪声）。
+_READ_PAGES_MIN_CHARS = 200
+
+_PAGE_SEP_RE = re.compile(r"[,，、\s]+")
+_PAGE_RANGE_RE = re.compile(r"(\d+)\s*[-~－]\s*(\d+)")
+
+
+def _parse_page_spec(spec: str, total: int) -> Tuple[List[int], List[str]]:
+    """解析页码表达式，返回 (页码列表, 附注)。
+
+    接受 `3` / `1-5` / `1,3,7-9`，页码从 1 起、闭区间。
+    越界的部分夹进 [1, total] 并把这件事记成附注 —— 夹取要如实说出来，
+    不能静默少读几页。写法本身读不懂才抛 `ValueError`（那是调用错误，
+    不是"这份文件的问题"）。
+    """
+    text = str(spec or "").strip()
+    if not text:
+        raise ValueError('没有给页码。用 pages="1-5" 这样的写法（从 1 起，闭区间）。')
+    wanted: List[int] = []
+    notes: List[str] = []
+    for part in _PAGE_SEP_RE.split(text):
+        if not part:
+            continue
+        m = _PAGE_RANGE_RE.fullmatch(part)
+        if m:
+            start, end = int(m.group(1)), int(m.group(2))
+        elif part.isdigit():
+            start = end = int(part)
+        else:
+            raise ValueError("页码写得读不懂：%s。用 3 / 1-5 / 1,3,7-9 这几种写法。"
+                             % part)
+        if start > end:
+            raise ValueError("页码范围反了：%s（起点大于终点）。" % part)
+        if start < 1:
+            raise ValueError("页码从 1 起，收到 %d。" % start)
+        if start > total:
+            notes.append("第 %d 页起没有内容（全文共 %d 页）" % (start, total))
+            continue
+        if end > total:
+            notes.append("要的第 %d-%d 页只有到第 %d 页（全文共 %d 页）"
+                         % (start, end, total, total))
+        wanted.extend(range(start, min(end, total) + 1))
+    return sorted(set(wanted)), notes
+
+
+def _page_span(pages: List[int]) -> str:
+    """把页码列表收成 `1-3,7` 这种写法（尾注里让它可读、可直接粘回去）。"""
+    ordered = sorted(set(int(p) for p in pages))
+    out: List[str] = []
+    i = 0
+    while i < len(ordered):
+        j = i
+        while j + 1 < len(ordered) and ordered[j + 1] == ordered[j] + 1:
+            j += 1
+        out.append(str(ordered[i]) if i == j
+                   else "%d-%d" % (ordered[i], ordered[j]))
+        i = j + 1
+    return ",".join(out)
+
+
+def read_pdf_pages(file_path: str, pages: str) -> str:
+    """按页码读 PDF 的正文，直接把那几页的文字返回（回执是纯文本）。
+
+    与 `parse_pdf` 的分工：那个把全文切块建索引，正文只能靠 `search_chunks`
+    检索；这个给的是已知页码时的原文（某张报表、附录、图纸），不建索引、
+    也不进检索。
+
+    Args:
+        file_path: PDF 路径（相对路径按工作区解析）。
+        pages: 页码表达式，从 1 起，如 `3` / `1-5` / `1,3,7-9`。
+
+    单次最多 20 页、约 5000 字符；没读到的部分如实说明并给出下一次的
+    页码，不静默截断。
+    """
+    _require_security()
+    resolved_path = _require_file(file_path)
+    resolved = _security.validate_path(str(resolved_path))  # type: ignore[union-attr]
+
+    if resolved.suffix.lower() != ".pdf":
+        return ("错误：%s 不是 PDF（后缀 %s）。解析 PDF 用这个工具，"
+                "别的格式用 `parse_txt` 那一族。"
+                % (resolved.name, resolved.suffix or "无"))
+
+    try:
+        reader = PdfReader(str(resolved))
+        total = len(reader.pages)
+    except Exception as exc:                                  # noqa: BLE001
+        return "错误：打不开这份 PDF（%s: %s）。" % (type(exc).__name__, exc)
+    if total <= 0:
+        return "错误：这份 PDF 没有页（或者页数读不出来）。先用 `pdf_info` 看它。"
+
+    try:
+        wanted, notes = _parse_page_spec(pages, total)
+    except ValueError as exc:
+        return "错误：%s" % exc
+    if not wanted:
+        return ("没有可读的页码（%s）。全文共 %d 页，用 pages=\"1-%d\"。"
+                % ("；".join(notes) or "都超出范围", total,
+                   min(total, _READ_PAGES_MAX)))
+
+    try:
+        plan = _pdf_read_plan(resolved)
+    except ValueError as exc:
+        return "错误：%s" % exc
+
+    blocks: List[str] = []
+    read: List[int] = []
+    used = 0
+    try:
+        import pdfplumber
+        with pdfplumber.open(str(resolved)) as pdf:
+            for pno in wanted[:_READ_PAGES_MAX]:
+                page = pdf.pages[pno - 1]
+                body = (_page_text(page, plan) or "").strip()
+                if not body:
+                    body = ("（本页没有可提取的文本层；若是扫描件，"
+                            "用 `pdf_to_images` 渲成图片看。）")
+                header = "\n--- 第 %d 页 / 共 %d 页 ---\n" % (pno, total)
+                room = _READ_PAGES_CHARS - used
+                if len(body) > room:
+                    if room >= _READ_PAGES_MIN_CHARS:
+                        blocks.append(
+                            header + body[:room]
+                            + "\n[本页被截断：原文 %d 字符，单次约 %d 字符。"
+                              "要检索这一页的内容用 `parse_pdf` + `search_chunks`；"
+                              "要\"看\"这一页用 `pdf_to_images`。]"
+                            % (len(body), _READ_PAGES_CHARS))
+                        read.append(pno)
+                    break
+                blocks.append(header + body)
+                read.append(pno)
+                used += len(body) + len(header)
+    except Exception as exc:                                  # noqa: BLE001
+        # 空密码能开的加密文档 pdfminer 自己会试；试不过的才落到这里。
+        _name = type(exc).__name__
+        if _name in ("PDFPasswordIncorrect", "PDFEncryptionError") \
+                or "password" in str(exc).lower():
+            return ("错误：这份 PDF 加了密，读不出正文。可以用密码打开的话，"
+                    "另存一份不加密的再读；拿不到密码就如实告诉用户。")
+        return "错误：读这几页时失败（%s: %s）。" % (_name, exc)
+
+    tail = list(notes)
+    skipped = [p for p in wanted if p not in read]
+    if skipped:
+        tail.append("还有 %d 页没读（本次最多 %d 页、约 %d 字符）；"
+                    "下一次用 pages=\"%s\" 继续。"
+                    % (len(skipped), _READ_PAGES_MAX, _READ_PAGES_CHARS,
+                       _page_span(skipped[:_READ_PAGES_MAX])))
+    text = "".join(blocks).strip("\n")
+    if tail:
+        text += "\n\n[说明] " + "；".join(tail)
+    return text
 
 
 def parse_txt(file_path: str, encoding: str = "utf-8") -> List[Dict]:
@@ -701,15 +868,21 @@ def _cross_zone_allowed(wm) -> bool:
     return wm.take_cross_zone_grant()
 
 
-def _delete_prompt(file_list: str) -> str:
+def _delete_prompt(file_list: str, *, bulk: bool = False) -> str:
     """删除审批的提示语 —— 由 `core/approval.py` 那唯一一份选项表渲染。
 
     不要在别处再拼一份：选项表一旦有多份副本，跨区与删除两条通道
     会长出不一致的按钮与措辞。
+
+    *bulk* 必须换表，不能只换抬头：批量删除只有「1 同意 / 2 不同意」，
+    而 `delete` 那张表的 `"2"` 是「同意并且不再问删除」（会话级）。
+    拿错表给文本通道，用户回 `2` 的意思是「同意」，结算器（`delete_bulk`）
+    读出来的却是「不同意」——同一串数字在两条通道上是相反的意思。
     """
     from core.approval import render_delete_body, render_prompt
-    return render_prompt("delete", 1,
-                         body=render_delete_body(file_list),
+    kind = "delete_bulk" if bulk else "delete"
+    return render_prompt(kind, 1,
+                         body=render_delete_body(file_list, kind=kind),
                          footer=False)
 
 
@@ -1182,7 +1355,7 @@ def delete_files(file_paths: list | None = None, pattern: str = "") -> dict:
         "file_paths": [str(p) for p in valid],
         "invalid": invalid,
         # 选项表收在 `core/approval.py`（唯一一份）
-        "prompt": _delete_prompt(file_list),
+        "prompt": _delete_prompt(file_list, bulk=_over),
         # 把已经排好版、已经折叠过的列表也带出去 —— 浮窗的渲染源
         # 就是它。若浮窗自己拿 `file_paths` 重拼一份、且没有折叠逻辑，
         # 同一个授权会在两条通道上长得不一样（IM 列 5 个，Web 全列）。

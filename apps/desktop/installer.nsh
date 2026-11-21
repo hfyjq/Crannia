@@ -51,6 +51,40 @@
 !macroend
 
 ; ---------------------------------------------------------------------
+; 入口 shim：让 `crannia` 在任何目录都能用
+; ---------------------------------------------------------------------
+;
+; 写进 `%LOCALAPPDATA%\Microsoft\WindowsApps` —— 那个目录每个用户都已经
+; 在 PATH 上（Windows 10/11 的应用执行别名目录），所以**不改注册表 PATH**。
+; 理由：改 PATH 是一条装完之后还留在系统里、并且清理写坏就会伤到别人的
+; 状态；而这里卸载只需要删一个文件，删掉的正是我们写进去的那一个。
+;
+; 写进去的是**转交器**，不是启动器的拷贝：`tui\crannia.cmd` 靠
+; "自己旁边"找代码与解释器（`<安装>\resources\app\tui` 与
+; `<安装>\resources\primary-runtime`），拷进这个目录之后旁边什么都没有，
+; 启动时只会报"找不到运行时"。转交器把绝对路径写死，启动器留在原地。
+;
+; 第一行是归属标记：卸载时只删指向**本安装**的那一个。同一目录里还可能
+; 有别的应用（以及独立安装的 TUI）写进去的别名，删错了就是弄坏别人。
+;
+; 目录写不进去（组策略 / 权限）就是不装这个 shim：安装照常完成，
+; 用户可以从 `$INSTDIR\bin\crannia.cmd` 启动。**不为此让安装失败**。
+!macro customInstall
+  ${IfNot} ${FileExists} "$LOCALAPPDATA\Microsoft\WindowsApps"
+    CreateDirectory "$LOCALAPPDATA\Microsoft\WindowsApps"
+  ${EndIf}
+  ClearErrors
+  FileOpen $0 "$LOCALAPPDATA\Microsoft\WindowsApps\crannia.cmd" w
+  IfErrors cranniaShimInstallDone
+  FileWrite $0 "@rem Owner: $INSTDIR$\r$\n"
+  FileWrite $0 "@echo off$\r$\n"
+  FileWrite $0 "call $\"$INSTDIR\bin\crannia.cmd$\" %*$\r$\n"
+  FileWrite $0 "exit /b %ERRORLEVEL%$\r$\n"
+  FileClose $0
+  cranniaShimInstallDone:
+!macroend
+
+; ---------------------------------------------------------------------
 ; 卸载前说明：程序会删掉，数据不会。
 ; ---------------------------------------------------------------------
 ;
@@ -63,6 +97,22 @@
 ; `**程序本身**` 会原样连着星号显示出来。注释里可以写，正文不行。
 ; 只在非静默时弹：`/S` 静默卸载（自动化 / 企业部署）不该被一个模态框卡住。
 !macro customUnInstall
+  ;: 只删指向本安装的那一个 shim —— 同一目录里还有别的应用的别名，
+  ;: 以及独立安装的 TUI 写的那个，一个都不许碰。
+  Push $0
+  Push $1
+  ClearErrors
+  FileOpen $0 "$LOCALAPPDATA\Microsoft\WindowsApps\crannia.cmd" r
+  IfErrors cranniaShimUninstallDone
+  FileRead $0 $1
+  FileClose $0
+  ;: FileRead 带着行尾 CRLF —— 去掉最后两个字符再逐字比较。
+  StrCpy $1 $1 -2
+  StrCmp $1 "@rem Owner: $INSTDIR" 0 cranniaShimUninstallDone
+  Delete "$LOCALAPPDATA\Microsoft\WindowsApps\crannia.cmd"
+  cranniaShimUninstallDone:
+  Pop $1
+  Pop $0
   ${IfNot} ${Silent}
     ;: ⚠️ 只有 `MB_OK` 一个按钮 —— **文案不许写"点取消"**（那会指向一个不存在的按钮）。
     MessageBox MB_OK|MB_ICONINFORMATION "$(cranniaUninstallData)"

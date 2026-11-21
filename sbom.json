@@ -2617,6 +2617,19 @@
     },
     {
       "type": "library",
+      "name": "linkify-it-py",
+      "version": "2.2.0",
+      "purl": "pkg:pypi/linkify-it-py@2.2.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "lodash-es",
       "version": "4.18.1",
       "purl": "pkg:npm/lodash-es@4.18.1",
@@ -2725,6 +2738,19 @@
     },
     {
       "type": "library",
+      "name": "markdown-it-py",
+      "version": "4.3.0",
+      "purl": "pkg:pypi/markdown-it-py@4.3.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "marked",
       "version": "16.4.2",
       "purl": "pkg:npm/marked@16.4.2",
@@ -2799,6 +2825,32 @@
       "name": "mcp-types",
       "version": "2.3.0",
       "purl": "pkg:pypi/mcp-types@2.3.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "mdit-py-plugins",
+      "version": "0.7.0",
+      "purl": "pkg:pypi/mdit-py-plugins@0.7.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "mdurl",
+      "version": "0.1.2",
+      "purl": "pkg:pypi/mdurl@0.1.2",
       "licenses": [
         {
           "license": {
@@ -3126,6 +3178,19 @@
     },
     {
       "type": "library",
+      "name": "platformdirs",
+      "version": "4.14.8",
+      "purl": "pkg:pypi/platformdirs@4.14.8",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "points-on-curve",
       "version": "0.2.0",
       "purl": "pkg:npm/points-on-curve@0.2.0",
@@ -3326,6 +3391,19 @@
         {
           "license": {
             "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "Pygments",
+      "version": "2.21.0",
+      "purl": "pkg:pypi/pygments@2.21.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause"
           }
         }
       ]
@@ -3780,6 +3858,32 @@
     },
     {
       "type": "library",
+      "name": "rich",
+      "version": "15.0.0",
+      "purl": "pkg:pypi/rich@15.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rl_accel",
+      "version": "0.9.3",
+      "purl": "pkg:pypi/rl-accel@0.9.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "robust-predicates",
       "version": "3.0.3",
       "purl": "pkg:npm/robust-predicates@3.0.3",
@@ -4006,6 +4110,19 @@
       "name": "texttable",
       "version": "1.7.2",
       "purl": "pkg:pypi/texttable@1.7.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "textual",
+      "version": "8.2.8",
+      "purl": "pkg:pypi/textual@8.2.8",
       "licenses": [
         {
           "license": {

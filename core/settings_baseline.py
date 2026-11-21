@@ -7,7 +7,8 @@
 
 | 读者 | 什么时候 |
 |---|---|
-| ~~新装环境~~ | 没有这个读者（不播种）—— `data/settings.json` 不存在时，各模块的 inline 兜底生效，「缺键 = 出厂默认」这条语义因此活着（以后改默认值，已装用户拿得到） |
+| TUI 首次启动 | `heal()` 在文件不存在 / 坏了时按这份播种（GUI 侧仍不播种，走 inline 兜底） |
+| ~~新装环境~~ | 没有这个读者（GUI 不播种）—— `data/settings.json` 不存在时，各模块的 inline 兜底生效，「缺键 = 出厂默认」这条语义因此活着（以后改默认值，已装用户拿得到） |
 | 「恢复默认设置」 | 以它为准覆盖回去 —— 这就是本模块要的东西 |
 
 ## 为什么要把它提出来：「出厂默认」没有一处能回答
@@ -43,6 +44,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -132,3 +135,69 @@ def plan_restore(current: Optional[dict] = None,
             changed[k] = [cur.get(k), v]
             new[k] = v
     return new, changed, skipped
+
+
+def _atomic_write(path: Path, data: dict) -> None:
+    """同目录临时文件 + replace —— 读侧永远看不到半截 JSON。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                   encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _backup(path: Path, stamp: Optional[str] = None) -> Path:
+    """把坏文件挪走。不覆盖既有备份（同一秒坏两次也不丢第一份）。"""
+    base = stamp or time.strftime("%Y%m%d-%H%M%S")
+    target = path.with_name(path.name + ".bad-" + base)
+    n = 1
+    while target.exists():
+        n += 1
+        target = path.with_name(path.name + ".bad-" + base + "-%d" % n)
+    os.replace(path, target)
+    return target
+
+
+def heal(path: Path, *, baseline_path: Optional[Path] = None,
+         stamp: Optional[str] = None,
+         overrides: Optional[dict] = None) -> dict:
+    """确保设置文件可用：缺文件就用基准播种；坏了就先备份再用基准重建；好的不动。
+
+    这是 TUI 首次启动那一步。GUI 侧的口径仍是"不播种"：
+    不存在的文件照旧走各模块的 inline 兜底。
+    两边不冲突，一份完整的基准快照与"缺键 = 出厂默认"读到的是同一组值。
+
+    `overrides` 只在这一次播种时改写基准里的那几格 —— TUI 用它把
+    `background_services` 关掉（TUI 首启不跑通道与定时任务）。
+    已有文件一个字节也不动：那里面是用户的决定，不是我们的默认值。
+
+    返回 `{"action": "ok"|"seeded"|"backup"|"error", "backup": <路径或空>,
+    "error": <原因或空>}`。写不进去不抛：设置文件处置失败不该挡住启动。
+    """
+    p = Path(path)
+    backup = ""
+    if p.exists():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {"action": "ok", "backup": "", "error": ""}
+        except (OSError, ValueError):
+            pass
+        try:
+            backup = str(_backup(p, stamp))
+        except OSError as exc:
+            return {"action": "error", "backup": "",
+                    "error": "坏文件备份失败：%s" % exc}
+    base = baseline(baseline_path)
+    if not base:
+        return {"action": "error", "backup": backup, "error": "出厂基准读不到"}
+    if overrides:
+        base = {**base, **{k: v for k, v in overrides.items()
+                           if not str(k).startswith("_")}}
+    try:
+        _atomic_write(p, base)
+    except OSError as exc:
+        return {"action": "error", "backup": backup,
+                "error": "写入设置失败：%s" % exc}
+    return {"action": "backup" if backup else "seeded",
+            "backup": backup, "error": ""}

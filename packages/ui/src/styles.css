@@ -714,6 +714,15 @@
   margin:14px auto 18px;color:var(--c-app-fg-30);font-size:11px;text-align:center}
 .compact-divider::before,.compact-divider::after{content:"";flex:1;height:1px;
   background:var(--c-app-line-18)}
+
+/* 回顾块：对话里居中的淡黄色窗（不是浮窗）—— 整段回顾都装在里面。
+   颜色取 warn 那一族令牌，深色主题由 `derive_dark_palette.py` 一起推导。 */
+.recap-block{max-width:760px;margin:14px auto 20px;padding:12px 18px;
+  border:1px solid var(--c-warn-line-05);border-radius:10px;
+  background:var(--c-warn-bg-05);color:var(--c-warn-fg-03)}
+.recap-block .recap-label{font-size:10px;font-weight:700;letter-spacing:.08em;
+  color:var(--c-warn-fg-05);margin-bottom:6px}
+.recap-block .recap-content{font-size:12px;line-height:1.6;text-align:left}
 .bottom-composer{padding-left:max(28px,calc((100% - 880px)/2));padding-right:max(28px,calc((100% - 880px)/2))}
 
 /* ② 状态横幅：用时/token 跟着那句话走，不再被推到最右边。

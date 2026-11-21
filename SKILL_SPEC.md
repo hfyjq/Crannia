@@ -62,6 +62,7 @@ description: >            # 一句话描述
 |---|---|---|
 | `api` | int | 契约版本。框架不支持时不装载，并说明要求的版本 |
 | `requires` | list[str] | 必须有的框架能力。缺任一项则不装载 |
+| `requires_config` | list[str] | 需要哪些配置（配置项名，通常就是技能目录名）。缺了照常装载；`crannia doctor` 报 WARN，工具失败时回执带 `/config <名字>` 路线 |
 | `optional` | list[str] | 希望有的框架能力。缺了照常装载，用 `ctx.has()` 走简版实现，装载报告里记一行 |
 | `external` | list | 需要的外部程序。缺了照常装载，技能页显示缺什么。见 §3.5 |
 | `settings` | object | 声明式配置。`x-secret: true` 的字段在界面打码 |
@@ -73,6 +74,19 @@ description: >            # 一句话描述
 | `load_strategy` | string | `on_demand`（默认）或 `eager` |
 
 框架能力名：`artifacts` · `artifacts.inline` · `workspace` · `i18n` · `jobs` · `jobs.skill` · `context` · `storage` · `memory` · `llm` · `approval`。
+
+`requires_config` 与 `requires` 是两根轴：**能力缺了不装载**（装了也只能半残），
+**配置缺了照样装**（工具还在，只是调用会失败）。判据只一份
+（`core/config_requirements.py`）：
+
+```yaml
+requires_config:
+  - mail_parser          # 配置项名；声明式技能通常就是自己的目录名
+```
+
+「配好了」看那个配置的家：声明式（`settings.storage`）看文件是不是非空对象；
+旧特例看 `data/settings.json` 的 `skill_configs.<名字>` 是不是非空对象。
+只看有没有东西，不逐字段校验 `required` —— 填了一半与空配置在"能不能用"上常常一样。
 
 ### 2.3 tools
 

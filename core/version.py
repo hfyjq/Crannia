@@ -9,6 +9,6 @@ canonical source.  Keep pyproject.toml `version` field in sync manually
 or use [tool.hatch.version] path = "core/version.py".
 """
 
-__version__ = "1.0.0"
-__version_tuple__ = (1, 0, 0)
+__version__ = "1.1.0"
+__version_tuple__ = (1, 1, 0)
 __build__ = ""

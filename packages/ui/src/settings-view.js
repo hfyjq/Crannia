@@ -65,6 +65,14 @@ export const SECTIONS = [
  */
 export const ROWS = [
   // ── 工作设置 ──────────────────────────────────────────────────────
+  //:这两格是新会话的默认值，与主界面那枚 chip 分工不同：
+  //:   chip 改的是「当前这一段」（`/api/mode` / `/effort`；`/effort` 不落盘），
+  //:而「以后新会话用什么」只有这一个家。删掉它们等于删掉这个功能本身。
+  //:「工作模式」放在工作设置的第一行 —— 它决定的是 agent 怎么干活，
+  //:   与「对话设置」里那些观感开关不是一类（2026-11-20 用户反馈：在第二页不显眼）。
+  { id: "mode_default", section: "work", kind: "choice", key: "default_mode",
+    from: "modes", label: "工作模式",
+    note: "更改默认模式", extra: true },
   { id: "cross_zone", section: "work", kind: "toggle", key: "cross_zone_enabled",
     label: "跨区搜索", note: "允许 Agent 离开工作区做只读操作" },
   { id: "auto_approve", section: "work", kind: "toggle", key: "auto_approve",
@@ -212,12 +220,7 @@ export const ROWS = [
   { id: "approval_wait", section: "chat", kind: "number", key: "approval_timeout_seconds",
     label: "审批等待", unit: "秒", min: 0, max: 3600,
     note: "自动模式下的请求挂起时间，超出时间的请求按拒绝处理。留 0 则为持续挂起" },
-  //:这两格是新会话的默认值，与主界面那枚 chip 分工不同：
-  //:   chip 改的是「当前这一段」（`/api/mode` / `/effort`，`/effort` 不落盘），
-  //:而「以后新会话用什么」只有这一个家。删掉它们等于删掉这个功能本身。
-  { id: "mode_default", section: "chat", kind: "choice", key: "default_mode",
-    from: "modes", label: "工作模式",
-    note: "更改默认模式", extra: true },
+  //:「模型强度」与上面那格同族（新会话的默认值），留在对话设置。
   { id: "effort_default", section: "chat", kind: "choice", key: "effort_level",
     from: "effort_levels", label: "模型强度",
     note: "更改模型默认强度", extra: true },

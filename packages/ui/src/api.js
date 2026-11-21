@@ -211,6 +211,9 @@ export const EVENT_TYPES = [
   "approval.request", "approval.resolved",
   "context.state", "memory.saved", "memory.organized",
   "turn.queued", "files.changed", "error",
+  //:一条会话线程刚被打开 —— 左栏名册要立刻跟上（新建任务的第一句落地时，
+  //:   名册里就该有它；此前只靠 `task.end`，跑的过程中这一段整条失踪）。
+  "thread.opened",
   // 跑着的时候补的那句话被收下了：摘「排队中」· 旧块收口 ·
   //   新开一块。同一条纪律：加事件 = 这份名单 + `App.jsx` 的 `client.subscribe`。
   "steer.delivered",

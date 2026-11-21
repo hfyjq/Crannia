@@ -3,6 +3,7 @@
   "auto_start_framework": false,
   "boot_on_startup": false,
   "auto_start_channel": true,
+  "background_services": true,
   "response_language": null,
   "interface_language": null,
   "proxy_mode": "system",

@@ -104,6 +104,8 @@ class CronStore:
                     rule_json   TEXT NOT NULL,
                     channel     TEXT NOT NULL DEFAULT '',
                     deliver     TEXT NOT NULL DEFAULT 'here',
+                    -- alarm = 到点只提醒一句；report = 到点去取回内容。
+                    kind        TEXT NOT NULL DEFAULT 'report',
                     enabled     INTEGER NOT NULL DEFAULT 1,
                     next_run    TEXT,
                     running     INTEGER NOT NULL DEFAULT 0,
@@ -142,11 +144,17 @@ class CronStore:
             have = {r[1] for r in conn.execute("PRAGMA table_info(cron_runs)")}
             if "actions" not in have:
                 conn.execute("ALTER TABLE cron_runs ADD COLUMN actions TEXT NOT NULL DEFAULT ''")
+            # 同一族的第二条：老库的 `cron_jobs` 没有 `kind`，
+            #   读出来是"没有这一列"而不是"默认 report"。
+            have = {r[1] for r in conn.execute("PRAGMA table_info(cron_jobs)")}
+            if "kind" not in have:
+                conn.execute("ALTER TABLE cron_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'report'")
 
     # ---- jobs：写 ----
 
     def add(self, *, title: str, prompt: str, rule_json: str, channel: str = "",
-            deliver: str = "here", next_run: Optional[str] = None,
+            deliver: str = "here", kind: str = "report",
+            next_run: Optional[str] = None,
             end_at: Optional[str] = None) -> str:
         """建一条任务，返回 id。上限不在这里判 —— 那是调用方（工具层）的活，
         因为"拒"要说得出话。"""
@@ -156,10 +164,11 @@ class CronStore:
             conn.execute(
                 """INSERT INTO cron_jobs
                    (id, created_at, updated_at, title, prompt, rule_json,
-                    channel, deliver, enabled, next_run, running, claimed_at, end_at)
-                   VALUES (?,?,?,?,?,?,?,?,1,?,0,NULL,?)""",
+                    channel, deliver, kind, enabled, next_run, running,
+                    claimed_at, end_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,1,?,0,NULL,?)""",
                 (jid, now, now, title, prompt, rule_json, channel, deliver,
-                 next_run, end_at))
+                 kind, next_run, end_at))
         return jid
 
     def update(self, job_id: str, **fields: Any) -> bool:
@@ -167,7 +176,7 @@ class CronStore:
 
         列名白名单：这是唯一一处把外部字符串拼进 SQL 的地方，必须挡住。
         """
-        allowed = {"title", "prompt", "rule_json", "channel", "deliver",
+        allowed = {"title", "prompt", "rule_json", "channel", "deliver", "kind",
                    "enabled", "next_run", "running", "claimed_at", "end_at"}
         bad = set(fields) - allowed
         if bad:

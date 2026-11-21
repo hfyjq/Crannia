@@ -42,12 +42,17 @@ import json
 from pathlib import Path
 from typing import Any
 
-__all__ = ["available", "schema_for", "storage_for", "load", "public", "save",
-           "MASK"]
+__all__ = ["available", "manifest_of", "schema_for", "storage_for", "load",
+           "public", "save", "MASK"]
 
 MASK = "****"
 
 _SCALARS = (str, int, float, bool)
+
+
+def manifest_of(skill_name: str) -> dict:
+    """读 `skills/<name>/manifest.yaml`；读不到，空表（不抛）。"""
+    return _manifest(skill_name)
 
 
 def _manifest(skill_name: str) -> dict:

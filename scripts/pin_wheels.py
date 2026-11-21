@@ -1,9 +1,26 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""把 `requirements.txt` 解析成锁文件里那张 wheel 表。
+"""把 `requirements.txt` 与 `tui/requirements.txt` 解析成锁文件里那张 wheel 表。
 
     .venv/Scripts/python.exe scripts/pin_wheels.py            # 写进锁文件
     .venv/Scripts/python.exe scripts/pin_wheels.py --check     # 只看差多少，不写
+
+## 为什么两份需求文件都进同一份锁
+
+GUI 与 TUI 共用一套解释器与 site-packages（2026-11-21）：独立包
+不再维护第二份运行时锁，也就不存在"两份锁各说自己是最新"的问题。
+代价是 GUI 安装包多几 MB（textual / rich 及其传递依赖）。
+
+## 只想加依赖、不想顺手升级大件
+
+把自己要钉的版本放进一个约束文件，用环境变量交给 pip：
+
+    PIP_CONSTRAINT=C:/Temp/constraints.txt .venv/Scripts/python.exe scripts/pin_wheels.py
+
+约束内容可以是 `锁里每一格 name==version` —— 这样已有版本一个都不动，
+只解析新加的那几条。两条坑：pip 把 `PIP_CONSTRAINT` 按空格拆成多个
+文件，所以路径不能带空格；解析期仍会下载被选中的 wheel（哪怕只是取哈希），
+网络不好时大件会卡住 —— 这正是需要约束的原因。
 
 ## 它解决什么
 
@@ -49,6 +66,10 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LOCK = _ROOT / "apps" / "desktop" / "primary-runtime-lock.json"
 REQUIREMENTS = _ROOT / "requirements.txt"
+#: TUI 的依赖也进同一份运行时（2026-11-21）：两件产物共用一套
+#:   解释器与 site-packages，独立包不必再维护第二份锁。代价是 GUI 安装包
+#:   多几 MB（textual / rich 及其传递依赖）。
+TUI_REQUIREMENTS = _ROOT / "tui" / "requirements.txt"
 
 #: 只认这一个主机（判据见文件头）。加白名单 = 一次供应链变更，要单独说。
 ALLOWED_HOSTS = ("files.pythonhosted.org",)
@@ -70,12 +91,14 @@ SDIST_PACKAGES: dict[str, list[str]] = {
 }
 
 
-def _pip_report(reqs: Path) -> list[dict]:
+def _pip_report(reqs: list[Path]) -> list[dict]:
     """跑一次 `pip` 的解析（不装东西），回那份 report 的 `install[]`。"""
     tmp = Path(tempfile.mkdtemp(prefix="lv-pin-"))
     report = tmp / "report.json"
     cmd = [sys.executable, "-m", "pip", "install", "--dry-run", "--ignore-installed",
-           "--report", str(report), "-r", str(reqs)]
+           "--report", str(report)]
+    for req in reqs:
+        cmd += ["-r", str(req)]
     print("[pin] %s" % " ".join(cmd[1:]))
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
@@ -125,16 +148,19 @@ def build_table(items: list[dict]) -> tuple[list[dict], dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="pin requirements.txt into the runtime lock")
+    ap = argparse.ArgumentParser(description="pin requirements into the runtime lock")
     ap.add_argument("--lock", default=str(DEFAULT_LOCK))
-    ap.add_argument("--requirements", default=str(REQUIREMENTS))
+    ap.add_argument("--requirements", action="append", default=None,
+                    help="可重复；默认 requirements.txt + tui/requirements.txt")
     ap.add_argument("--check", action="store_true",
                     help="只报告差异，不写文件（收尾/CI 用）")
     args = ap.parse_args(argv)
 
+    reqs = ([Path(p) for p in args.requirements] if args.requirements
+            else [REQUIREMENTS, TUI_REQUIREMENTS])
     lock_path = Path(args.lock)
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    wheels, packages = build_table(_pip_report(Path(args.requirements)))
+    wheels, packages = build_table(_pip_report(reqs))
 
     old = [w.get("sha256") for w in (lock.get("wheels") or [])]
     new = [w["sha256"] for w in wheels]

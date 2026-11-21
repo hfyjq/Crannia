@@ -17,6 +17,11 @@ requires:
   - artifacts.inline      # 产物记录带 `inline`：大图给下载行而不是硬塞 <img>
   - workspace             # 落点走 primary_output_dir（本 skill 唯一的写路径口径）
 
+# 配置需求（与上面那根轴不同：`requires` 缺了不装载，这个缺了照样装，
+# 只是医生报 WARN、工具失败带 `/config media_gen` 路线）。
+requires_config:
+  - media_gen
+
 # 本技能的工具不需要自动模式再判一遍：
 #   · 它写的文件在工作区里、可逆、一次一个；
 #   · 花费是用户自己的事，弹窗拦不住任何真风险，只会让"画张图"每次都停一下。

@@ -27,6 +27,8 @@ Crannia 是一个开源的通用型 Agent，可以协助完成事项，或构筑
 应用目录并创建快捷方式；随包的 Python 运行时在 `resources/primary-runtime` 下，
 不需要额外配置系统环境。
 
+安装包亦提供命令行启动方式，在任意目录下打开命令提示符并键入“crannia”回车，即可呼出TUI。值得注意的是，TUI与GUI共用后端，当GUI未在运行时TUI将自启一个后端、若GUI已经存在则TUI会直接接入。release另附TUI独立安装包。
+
 ### 方式二：从源码运行
 
 要求：Windows 10/11，Python **3.12+**，Node.js。

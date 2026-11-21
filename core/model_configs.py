@@ -880,6 +880,86 @@ def _seed_from_config() -> dict | None:
 # 给界面/端点的那一份（打码，判据 4）
 # ----------------------------------------------------------------------
 
+def card_defaults() -> list[dict]:
+    """每张卡的默认值（首次引导 / 命令行用）：id / 名称 / 目录 / 地址 / 默认模型。
+
+    读 provider 的 `manifest.yaml`，不联网。读不到就给空串 ——
+    引导那边会退化成"让用户自己填"，而不是拿一张编出来的地址去试。
+    """
+    import yaml
+
+    out: list[dict] = []
+    for cid, label, dirname in CARDS:
+        base, model = "", ""
+        try:
+            p = PROVIDERS_DIR / dirname / "manifest.yaml"
+            data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            cfg = data.get("config") or {}
+            base = str(cfg.get("base_url") or "")
+            model = str(cfg.get("default_model") or "")
+        except Exception:                            # noqa: BLE001
+            pass
+        out.append({"id": cid, "label": label, "provider": dirname,
+                    "base_url": base, "default_model": model})
+    return out
+
+
+def classify_probe_error(err: object) -> str:
+    """联通测试失败 -> 该改哪一格的类别。
+
+    认证 / 余额 / 限流 / 地区 / 内容 / 请求 / 上游异常 / 连不上 / 超时
+    直接复用 `providers/base.py` 的那两张判据（全仓唯一一份）；
+    这里只补它们不管的两类：
+      · `model`   —— 模型名不对（报文里带 model 字样的 404）；
+      · `address` —— 地址不对（404 但不像模型名）。
+    认不出给 `unknown` —— 不装成"网络问题"。
+    """
+    from providers.base import classify_api_error, classify_transport_error
+
+    kind = classify_transport_error(err)
+    if kind:
+        return kind
+    kind = classify_api_error(err) or ""
+    if kind:
+        return kind
+    text = str(err or "").lower()
+    if "model" in text and any(w in text for w in (
+            "not found", "not_found", "does not exist", "invalid model",
+            "unknown model", "no such model")):
+        return "model"
+    if "404" in text or "not found" in text:
+        return "address"
+    return "unknown"
+
+
+def probe(cid: str) -> tuple[bool, str, str]:
+    """拿这条配置真发一次最小请求（首次引导的"联通测试"）。
+
+    与 `preflight` 分工：那条只试装、不联网；这条联网。
+    超时由调用方控制（TUI 那边整段子进程有超时，见 `setup.py`）。
+    返回 `(通没通, 类别, 一句人话)`；类别是 `classify_probe_error` 的取值，
+    通了则为空串。
+    """
+    why = preflight(cid)
+    if why:
+        return False, "install", why
+    entry = get(cid)
+    if not entry:
+        return False, "unknown", "没有这条配置"
+    dirname = CARD_PROVIDER.get(str(entry.get("card") or ""))
+    if not dirname:
+        return False, "install", "这张卡不认识（%r）" % entry.get("card")
+    try:
+        from bus.loaders.provider_loader import build_provider
+        provider, _derived = build_provider(
+            PROVIDERS_DIR / dirname, {"model": _model_cfg_of(entry, cid)})
+        provider.chat([{"role": "user", "content": "ping"}])
+    except Exception as exc:                         # noqa: BLE001
+        return (False, classify_probe_error(exc),
+                "%s: %s" % (type(exc).__name__, str(exc)[:300]))
+    return True, "", ""
+
+
 def cards_payload() -> dict:
     """`GET /api/model-configs` 的载荷。
 

@@ -12,7 +12,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { jsonRequest } from "./api.js";
 import { t } from "./i18n.js";
 
-//:与 `设置项勘察-.md` §2 那张表逐字一致（只带四个外观键）。
+//:与设置页那张表逐字一致（只带四个外观键）。
 const GUI_KEYS = ["lv.colors", "lv.colors.dark", "lv.theme", "lv.sideW"];
 
 function readGuiKeys() {

@@ -152,6 +152,43 @@ def _is_bad(rc: int, passed, total) -> bool:
     return total is not None and passed < total
 
 
+def _run_tui_suite() -> int:
+    """TUI 的测试 —— 它用自己的解释器（主 venv 没有 `textual`）。
+
+    找不到那个解释器时不算失败（公开副本不一定带 TUI 的 venv），
+    但要看得见：打一行"未跑" —— 别让"没跑"长得像"通过"。
+    """
+    script = _ROOT / "tui" / "run_tests.py"
+    if not script.is_file():
+        return 0
+    cands = []
+    env_py = os.environ.get("CRANNIA_TUI_PYTHON", "").strip()
+    if env_py:
+        cands.append(Path(env_py))
+    venv = _ROOT / "tui" / ".venv"
+    cands += [venv / "Scripts" / "python.exe",
+              venv / "bin" / "python3", venv / "bin" / "python"]
+    py = next((p for p in cands if p.is_file()), None)
+    if py is None:
+        print("\n[tui] 未跑：找不到 TUI 的解释器（tui/.venv 或 CRANNIA_TUI_PYTHON）")
+        return 0
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    try:
+        r = subprocess.run([str(py), str(script)], cwd=str(_ROOT), env=env,
+                           stdin=subprocess.DEVNULL, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=600)
+    except subprocess.TimeoutExpired:
+        print("\n[tui] 失败：超时（600s）")
+        return 1
+    print("\n[tui] %s" % ("通过" if r.returncode == 0 else "失败"))
+    if r.returncode != 0:
+        print((r.stdout or "")[-2000:])
+        if r.stderr:
+            print((r.stderr or "")[-800:])
+    return r.returncode
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="全量测试 · 并行跑法")
     ap.add_argument("files", nargs="*", help="只跑这几个（默认全量）")
@@ -251,7 +288,10 @@ def main() -> int:
             encoding="utf-8")
         print("通过数已写到 %s（%d 条）" % (args.counts, len(counts)))
 
-    return 1 if failures else 0
+    # TUI 的测试在自己的解释器里跑（见 `_run_tui_suite`）；它的结果不进
+    # `--counts` —— 那张表是主仓锚点的输入，TUI 的计数另有归属。
+    tui_rc = _run_tui_suite()
+    return 1 if (failures or tui_rc) else 0
 
 
 if __name__ == "__main__":
