@@ -1,0 +1,38 @@
+{
+  "//": "随包的 Python 源码树 —— 唯一名单。GUI 的 resources/app（electron-builder 的 extraResources.filter）与 TUI 独立包（scripts/make_tui_package.py）都读这一份，不许各抄一遍。",
+  "//exclude": "scripts/make_tui_package.py 只认下面这三条（多一条它当场报错）：加排除规则要同时改那边，不许只对 Electron 生效。",
+  "dirs": [
+    "core",
+    "bus",
+    "providers",
+    "channels",
+    "web",
+    "mcpx",
+    "skills",
+    "creators",
+    "vendor/ripgrep",
+    "licenses",
+    "tui/crannia_tui"
+  ],
+  "files": [
+    "locales/en.json",
+    "data/settings.example.json",
+    "config.yaml",
+    "apps/desktop/quotes.txt",
+    "main.py",
+    "crannia_tray.py",
+    "requirements.txt",
+    "THIRD-PARTY.md",
+    "LICENSE",
+    "NOTICE",
+    "THIRD-PARTY-PYTHON.md",
+    "THIRD-PARTY-FRONTEND.md",
+    "sbom.json",
+    "tui/crannia.cmd"
+  ],
+  "exclude": [
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "skills/probe_good/**"
+  ]
+}

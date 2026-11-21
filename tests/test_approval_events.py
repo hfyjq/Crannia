@@ -209,6 +209,36 @@ def test_both_render_paths_produce_the_same_body():
     print("  [ok] 两条通道正文一致；且修前的写法确实会全列（负对照）")
 
 
+def test_bulk_delete_popup_carries_the_file_list():
+    """批量删除的浮窗正文必须有文件列表（冒号后面不许空着）。
+
+    真机现场：浮窗只有一句「想批量删除以下文件（数量超过了你设的阈值）：」，
+    下面什么都没有 —— 用户被要求批准一个他看不到的列表。
+    根因：正文兜底只认 `delete`，`delete_bulk` 落到默认抬头就停了。
+    """
+    from core.approval import compact_file_list
+
+    paths = ["D:/ws/bulk_%02d.txt" % i for i in range(1, 13)]
+    carried = compact_file_list(
+        ["  %d. %s" % (i + 1, p.rsplit("/", 1)[-1])
+         for i, p in enumerate(paths)],
+        total_note="文件 （共 12 个文件，1.0 KB）")
+    s = _bare_scheduler()
+    s._pending_delete_bulk[ALICE] = {
+        "active": True, "stage": "ask", "kind": "delete_bulk",
+        "file_paths": paths, "file_list": carried,
+        "request_id": "bulk-12",
+    }
+    payload = s.pending_approval(ALICE)
+    assert payload is not None, "批量删除的浮窗没渲染出来"
+    body = payload["body"]
+    assert "批量" in body, body
+    assert "bulk_01" in body, ("冒号后面没有文件列表", body)
+    assert "另外 7 个" in body, ("折叠了却没写省了几个", body)
+    assert [o["key"] for o in payload["options"]] == ["1", "2"], payload["options"]
+    print("  [ok] 批量删除的浮窗带列表、带折叠说明、选项是 1/2")
+
+
 def test_fallback_uses_the_same_policy_on_old_pendings():
     """升级前就挂着的 pending（没有 `file_list`）走兜底 —— 但仍然折叠。
 

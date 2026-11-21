@@ -35,64 +35,35 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 //: 仓根（`apps/desktop/` 往上两级）。
 const ROOT = join(here, "..", "..");
 
-/** 后端那一套源码 —— 白名单（见文件头判据 2）。 */
+/** 后端那一套源码 —— 白名单（见文件头判据 2）。
+ *
+ *  名单住在 `package-tree.json`：GUI 的 `resources/app` 与 TUI 独立包读同一份
+ *  （`scripts/make_tui_package.py`），不许各抄一遍。下面这些逐条理由仍成立：
+ *
+ *  - `vendor/ripgrep`：`core/rg.py` 的执行层。漏了 = 装出来的包里没有二进制，
+ *    `grep` 当场报"找不到 ripgrep"；许可文本与二进制同目录，一起发。
+ *  - `locales/en.json`：`core/i18n.available()` 扫安装根下的 `locales/`，
+ *    漏了 = 安装版没有英语可选（开发树相对 cwd，一切正常）。
+ *  - `THIRD-PARTY*` / `LICENSE` / `NOTICE` / `licenses/` / `sbom.json`：
+ *    MIT / LGPL / MPL 的履约材料，必须随发行包走。
+ *  - 本机的 `__pycache__` 目录与 `.pyc` 文件：不发。
+ *  - `skills/probe_good/`：`create_skill` 的测试夹具，不该出现在用户装到的包里。
+ *
+ *  白名单，不是黑名单 —— 仓根躺着 `.env`（明文凭据）、`data/`（用户的记忆库）、
+ *  `dist/`（另一个包），一个都不许进。
+ */
+const _TREE = JSON.parse(
+  readFileSync(join(here, "package-tree.json"), "utf8"));
 const BACKEND_TREE = [
-  "core/**/*",
-  "bus/**/*",
-  "providers/**/*",
-  "channels/**/*",
-  "web/**/*",
-  "mcpx/**/*",
-  "skills/**/*",
-  "creators/**/*",
-  //: 随包的 ripgrep（`core/rg.py` 用它做 `grep` 的执行层）。
-  //:   判据：用户装一次就该齐活 —— 运行期绝不下载、也不要他另装。
-  //:   漏了这一行 = 装出来的包里没有二进制，`grep` 当场报"找不到 ripgrep"。
-  //:   许可文本（`LICENSE-MIT.txt` / `UNLICENSE.txt` / `COPYING.txt` /
-  //:   `NOTICE-vscode-ripgrep.txt`）与二进制同一个目录，一起发。
-  "vendor/ripgrep/**/*",
-  //:   2026-11-13：语言包。漏了这一行 = 安装版没有英语可选 ——
-  //:   `core/i18n.available()` 扫的是安装根下的 `locales/`，包里没有就只剩中文，
-  //:   而开发树一切正常（它相对 cwd）。只发语言包本身：`source.json` 是扫描产物。
-  "locales/en.json",
-  "config.yaml",
-  "apps/desktop/quotes.txt",
-  //: 顶层那两个入口与依赖表：`main.py` / `crannia_tray.py` 是别的跑法用的，
-  //:   发出去不占地方，而"包里少了它"是那种只有真跑才发现的问题。
-  "main.py",
-  "crannia_tray.py",
-  "requirements.txt",
-  //: 第三方署名必须跟着发行包走。
-  //:   判据：`web/static/img/provider-*.svg` 是 LobeHub 的 MIT 产物，
-  //:   而 MIT 唯一的要求就是"保留版权声明与许可文本" —— 漏了白名单
-  //:   = 发出去的副本没有署名，等于没署。见 `THIRD-PARTY.md`。
-  "THIRD-PARTY.md",
-  //: 项目自身的许可：`LICENSE` + `NOTICE` 必须随安装包走。
-  "LICENSE",
-  "NOTICE",
-  //: LGPL / MPL 的完整许可文本 ——
-  //:   `python-telegram-bot` / `pystray` / `py7zr` 系是 LGPL，`certifi` / `tqdm` /
-  //:   `orjson` 是 MPL-2.0。判据：保留声明 + 许可文本是履约的最低要求；
-  //:   这些库本身也各自带着 `dist-info/licenses/`，这里是人一眼能找得到的那份。
-  "licenses/**/*",
-  //: 全量 SBOM：Python 包清单 + 前端闭包清单（含逐包许可原文）+
-  //:   CycloneDX JSON。它们由 `scripts/audit_licenses.py --all` 生成，
-  //:   是随包证据，不是开发文档。
-  "THIRD-PARTY-PYTHON.md",
-  "THIRD-PARTY-FRONTEND.md",
-  "sbom.json",
-  //: 产物目录里会有 `.pyc` / `__pycache__`（本机的），别发。
-  "!**/__pycache__/**",
-  "!**/*.pyc",
-  //: 测试 / 演示用的探针 skill 不进发行包 —— 它们是仓库里的测试夹具
-  //:   （`probe_good` 是 `create_skill` 的体检样本；`weather_probe` 已于删除）。
-  //:   用户装到的包里不该出现"我们的测试残留"。
-  "!skills/probe_good/**",
+  ..._TREE.dirs.map((d) => `${d}/**/*`),
+  ..._TREE.files,
+  ..._TREE.exclude.map((p) => `!${p}`),
 ];
 
 /** 壳自己的那几样 —— 进 asar（`files`）。 */
@@ -145,12 +116,14 @@ export default {
   asar: true,
 
   //: 用本机已经装好的那份 electron，不去网上再下一遍。
-  //:   `npm install` 的时候 `node_modules/electron/dist` 就已经下好了，而
+  //:   `npm ci` 之后 `node_modules/electron/dist` 就该在了 —— 根 `package.json`
+  //:   的 `postinstall` 负责取它（electron 44 的 npm 包没有自己的
+  //:   postinstall；缺了那一步，干净克隆里的 dist 是空的，打包会停在这一行）。
   //:   electron-builder 默认会再从 GitHub 拉一份 —— 代理配错时会以
   //:   `ECONNREFUSED 127.0.0.1:443` 失败，包打到一半就停了。
   //:   不影响正确性：用的是同一个 electron（版本仍读 `package.json` 的
   //:   `devDependencies.electron`），只是换了个取件的地方。
-  //:   这一条只在"本机已经有它"时成立 —— 换一台机器先 `npm install`。
+  //:   这一条只在"本机已经有它"时成立 —— 换一台机器先 `npm ci`。
   electronDist: join(ROOT, "node_modules", "electron", "dist"),
 
   //: 入口在仓根 `package.json` 里是新加的（electron-builder 认它）。
@@ -170,6 +143,14 @@ export default {
     //:    `python scripts/prepare_runtime.py`，否则这一条会静默什么都不加。
     { from: join(ROOT, "apps", "desktop", "runtime", "primary-runtime"),
       to: "primary-runtime" },
+  ],
+
+  //: TUI 的入口（2026-11-21）：`bin\crannia.cmd` 是安装器要拷到
+  //:   PATH 目录（`%LOCALAPPDATA%\Microsoft\WindowsApps`）的那一份。
+  //:   代码在 `resources/app/tui`、解释器在 `resources/primary-runtime` ——
+  //:   启动器自己认这个布局（见 `tui/crannia.cmd` 的 A0 段）。
+  extraFiles: [
+    { from: join(ROOT, "tui", "crannia.cmd"), to: "bin/crannia.cmd" },
   ],
 
   //: 只保留中英两个 Chromium 语言包（2026-11-15）。

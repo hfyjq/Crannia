@@ -240,7 +240,7 @@ def test_cancel_at_turn_top_brakes_both_paths_identically():
     got = {}
     for name, run in _BOTH:
         content, messages, calls, events = run([{"content": "不该走到这里"}], pre_cancel=True)
-        assert "已按你的要求中断本轮" in content, f"{name}: 中断文案不对: {content!r}"
+        assert "已打断" in content, f"{name}: 中断文案不对: {content!r}"
         assert calls == [], f"{name}: 中断之后还派发了工具 {calls}"
         assert events == [], (
             f"{name}: 迭代开头那道闸**刻意不发事件**（那一轮连 turn.start 都没发过 "

@@ -506,6 +506,11 @@ _READ_SET_BASELINE = frozenset({
     "list_supported_platforms", "list_workspace_files", "memory_read", "memory_search",
     "parse_csv", "parse_docx", "parse_pdf", "parse_pptx",
     "parse_txt", "parse_xlsx", "pdf_info", "read_excel_data", "read_file",
+    # `read_pdf_pages`（按页码读 PDF）—— 判据与下面几条同一条：
+    #   不是"把现成的提成 read"，而是从出生起就只有读操作（打开 PDF、取文本，
+    #   一个字节不写）。进 `read` 的两个真后果是有意的：
+    #      并发判据会把它当只读并发预取；只读子 agent 会放行它。
+    "read_pdf_pages",
     # 新加的三件读工具 —— 不是"把现成的提成 read"，
     #   而是从出生起就只有读操作（画像走 iter_rows、定位只扫、批注只读注释）。
     #   按本测试自己的规矩，这要动基线，那是一次单独看得见的动作（就是这一笔）。

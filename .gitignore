@@ -145,3 +145,8 @@ data/attachments/
 
 # 本地工作记忆（agent 笔记），不进版本
 .workbuddy/
+
+# 发布产物：TUI 独立包与暂存目录（几百兆，由 scripts/make_tui_package.py 现造）。
+# 公告正文（dist-release/release-notes-*.md）是源码，不在此列。
+dist-release/*.zip
+dist-release/crannia-tui-*/

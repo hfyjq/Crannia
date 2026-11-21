@@ -119,6 +119,13 @@ SESSION_SCOPED: Tuple[SessionState, ...] = (
         _lazy("core.todos", "forget"),
         "不清：下一段对话一开口就看见上一段任务的清单"),
     SessionState(
+        # 「凭据会进历史」只提醒一次。不清的话，下一段对话第一次写配置
+        #   时不再提醒（用户换了一段对话，理应重新被告知一次）。
+        "secret_fill_noted", "core/config_requirements.py::_fill_noted",
+        "purge_session",
+        _lazy("core.config_requirements", "forget_session"),
+        "不清：下一段第一次写配置时不再提醒"),
+    SessionState(
         # 常驻 shell：不清的话，上一段对话起的 bash 进程会一直活着
         #   （连同里面的变量 / venv），而新一段对话第一条命令会沿用它的 cwd。
         "persistent_shell", "core/persistent_shell.py::_sessions", "purge_session",
@@ -268,6 +275,12 @@ SESSION_SCOPED: Tuple[SessionState, ...] = (
         _lazy("core.jobs", "forget_foreground"),
         "前台命令的 Ctrl+B 事件（按会话键）。不清：上一段对话的 proc 登记会留到"
         "下一次转后台时被错误地置事件 —— 而那条命令早就结束了"),
+    SessionState(
+        # 子代理的就地审批：`/clear` 要把还在等的那几条放走 ——
+        #   那些子线程正阻塞在一个不会再有人回答的弹窗上。
+        "child_approvals", "core/child_approval.py::_QUEUES", "purge_session",
+        _lazy("core.child_approval", "cancel_session"),
+        "不清：等在审批上的子线程一直挂着；下一段对话还会看到上一段的待批"),
     SessionState(
         "background_pending", "core/tasks_notify.py::_pending", "purge_session",
         _lazy("core.tasks_notify", "forget"),
@@ -844,6 +857,12 @@ PROCESS_SHARED: Tuple[ProcessState, ...] = (
         "_meta_cache", "core/model_capabilities.py::_meta_cache",
         "无锁（与 `_table_cache` 同一次读填好）",
         "能力表的 `source` / `fetched` 元数据（同上，全局只读，不挂 `/clear`）"),
+    ProcessState(
+        "_ITEMS", "core/web_cache.py::_ITEMS",
+        "`core.web_cache._LOCK` 护着（读、写、清、淘汰都在锁内）",
+        "抓取响应的进程级缓存（键是归一化后的 URL，30 分钟 / 256 MiB）。"
+        "它不是会话态：同一份内容被哪一段对话读过不影响它，"
+        "所以 `/clear` 不清（清了只是下一次重新出网）"),
     ProcessState(
         "_cache", "core/model_configs.py::_cache",
         "`core/model_configs._LOCK` 护着（同 `core/groups._cache`）",

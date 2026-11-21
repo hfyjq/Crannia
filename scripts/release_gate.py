@@ -4,6 +4,7 @@
 
     .venv/Scripts/python.exe scripts/release_gate.py              # 跑机械部分
     .venv/Scripts/python.exe scripts/release_gate.py --with-npm-ci
+    .venv/Scripts/python.exe scripts/release_gate.py --from-clone  # 从 HEAD 导出的干净树里打
     .venv/Scripts/python.exe scripts/release_gate.py --manual-ok  # 人工那步也做过了
 
 ## 为什么要有它
@@ -20,9 +21,24 @@
 | 2 | 备自带运行时（`prepare_runtime.py`，含冒烟） | 没有运行时 = 装完打不开；依赖表非空 ≠ 真能 import |
 | 3 | 前端构建（`npm run build`） | 产物不在 git 里，不 build 会发个旧前端 |
 | 4 | 打安装包（`npm run package`） | —— |
+| 4b | TUI 独立包（`make_tui_package.py`） | 运行时 + 代码树 + 启动器；`--skip-tui` 可跳过 |
 | 5 | 验产物（`make_release.py --check-only`） | 解释器 / 依赖清单 / runtime.json / app 里的四件 |
 | 6 | 真装一次 + 真启动一次 —— 人做 | 机械判不了"双击之后能不能用" |
 | 7 | 打印这一版的 `sha256` + 下一步（传 manifest） | —— |
+
+## `--from-clone`：从 HEAD 导出，不从工作树抄
+
+上面第 1 步只证明"工作树是干净的"，证明不了"发出去的那棵树能打出包"。本机那棵
+树里有 `.venv` / `node_modules` / `data/` / `apps/desktop/release/` —— 打包时都会被
+顺带摸到，而它们一个都不会随包发出去。`--from-clone` 先把 `HEAD` 导出到临时目录
+（`git archive`，只含已被跟踪的文件），在那棵树里跑 2–5 步：
+
+* 强制先跑 `npm ci`（导出的树里没有 `node_modules`）；
+* 复用本机的运行时下载缓存（内容寻址 + 哈希校验，不影响"干净"这条）；
+* 有未提交改动时默认拒绝（它们不会进这个包），`--allow-dirty` 可越过并出声；
+* 产物在导出的那棵树里，默认保留并打印路径，`--clean-clone` 才删。
+
+不用 `git clone`：本仓 `.git` 三点几 GB，克隆一次几分钟；这一步要的只是那棵树。
 
 ## 退出码
 
@@ -37,6 +53,8 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -75,6 +93,48 @@ def _dirty_files() -> list:
     return [ln for ln in out.stdout.splitlines() if ln.strip()]
 
 
+def export_head(dest: Path, root: Path = _ROOT) -> tuple[bool, str]:
+    """把 `HEAD` 那棵树导出到 `dest` —— 只含已被跟踪的文件。
+
+    `--from-clone` 要证明的是「发出去的那棵树能打出包」，所以不能从工作树抄：
+    工作树里还躺着 `.venv` / `node_modules` / `data/` / `apps/desktop/release/`，
+    它们一个都不会随包发出去，却会在原地打包时被顺带摸到。
+
+    不用 `git clone`：本仓 `.git` 三点几 GB，克隆一次几分钟；而这里要的只是
+    那一棵树，`git archive` 给的就是它（也没有 `.git` 让后续步骤误用）。
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    tar = dest.parent / (dest.name + ".tar")
+    try:
+        proc = subprocess.run(
+            ["git", "archive", "--format=tar", "-o", str(tar), "HEAD"],
+            cwd=str(root), capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+        if proc.returncode != 0:
+            why = (proc.stderr or "").strip().splitlines()
+            return False, (why[-1] if why else "git archive 退出码 %d" % proc.returncode)
+        with tarfile.open(tar) as tf:
+            tf.extractall(dest, filter="data")
+        return True, ""
+    except (OSError, tarfile.TarError) as exc:
+        return False, "%s: %s" % (type(exc).__name__, exc)
+    finally:
+        try:
+            tar.unlink()
+        except OSError:
+            pass
+
+
+def _finish(code: int, clone_dir: Path | None, clean: bool) -> int:
+    """收尾：导出的那棵树留不留。产物就在它里面，所以默认留。"""
+    if clone_dir is not None:
+        if code == 0 and clean:
+            shutil.rmtree(clone_dir.parent, ignore_errors=True)
+        else:
+            print("[gate] 导出的干净树：%s" % clone_dir)
+    return code
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="发布门禁")
     ap.add_argument("--with-npm-ci", action="store_true",
@@ -83,10 +143,17 @@ def main(argv=None) -> int:
                     help="允许脏树（产物不可复现 —— 会打印哪些文件脏）")
     ap.add_argument("--skip-build", action="store_true", help="跳过前端构建")
     ap.add_argument("--skip-package", action="store_true", help="跳过打包（复用已有产物）")
+    ap.add_argument("--skip-tui", action="store_true",
+                    help="跳过 TUI 独立包（只发 GUI 时用）")
+    ap.add_argument("--from-clone", action="store_true",
+                    help="先把 HEAD 导出成一棵干净树，在它里面跑 —— 本机的 "
+                         "node_modules / .venv / data 一个都不进去（会自动先跑 npm ci）")
+    ap.add_argument("--clean-clone", action="store_true",
+                    help="成功之后删掉导出的那棵树（产物在里面，删之前先拷走）")
     ap.add_argument("--manual-ok", action="store_true",
                     help="第 6 步（真装 + 真启动）已经由人做过")
     ap.add_argument("--channel", default=None, choices=("stable", "beta"),
-                    help="默认按版本号推（预发布后缀 ⇒ beta）。预发布版本显式写 "
+                    help="默认按版本号推（预发布后缀 -> beta）。预发布版本显式写 "
                          "stable 会被拒绝 —— 那条路会让 Stable 客户端装上 Beta 包。")
     args = ap.parse_args(argv)
 
@@ -106,21 +173,56 @@ def main(argv=None) -> int:
     py = str(_ROOT / ".venv" / "Scripts" / "python.exe")
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
 
+    #: 后面每一步都在 `work_root` 里跑：默认是本机工作树，`--from-clone` 时是
+    #:   HEAD 导出的那棵干净树（见 `export_head`）。
+    work_root = _ROOT
+    clone_dir: Path | None = None
+    if args.from_clone:
+        dirty = _dirty_files()
+        if dirty:
+            print("[gate] --from-clone：工作树有 %d 个未提交改动 —— 它们**不会**进这个包：" % len(dirty))
+            for line in dirty[:20]:
+                print("        %s" % line)
+            if not args.allow_dirty:
+                print("[gate] 要么先提交，要么确认「这些改动本来就不该发」并加 --allow-dirty。")
+                return 1
+            print("[gate] （--allow-dirty）继续，但打出来的是 **HEAD**，不是你现在看到的这棵树。")
+        clone_dir = Path(tempfile.mkdtemp(prefix="crannia-gate-")) / "repo"
+        ok, why = export_head(clone_dir)
+        if not ok:
+            print("[gate] 导出 HEAD 失败：%s" % why)
+            return _finish(1, clone_dir, args.clean_clone)
+        print("[gate] 已从 HEAD 导出一棵干净树：%s" % clone_dir)
+        #: 下载缓存是内容寻址 + 每次按 sha256 校验的 —— 复用它不会让这棵树「不干净」，
+        #:   只是不重新下三百多兆。
+        src_cache = _ROOT / "apps" / "desktop" / ".runtime-cache"
+        if src_cache.is_dir():
+            try:
+                shutil.copytree(src_cache, clone_dir / "apps" / "desktop" / ".runtime-cache",
+                                dirs_exist_ok=True)
+                print("[gate] 复用运行时下载缓存（哈希校验照跑）")
+            except OSError as exc:
+                print("[gate] 缓存没复用上（%s）—— 会重新下载。" % exc)
+        work_root = clone_dir
+
     # 1. 干净树
-    dirty = _dirty_files()
-    if dirty:
-        print("[gate] 1. 工作树**不干净** —— %d 个改动：" % len(dirty))
-        for line in dirty[:20]:
-            print("        %s" % line)
-        if not args.allow_dirty:
-            print("[gate] 脏树打出来的包**无法复现**。确认要继续就加 --allow-dirty。")
-            return 1
-        print("[gate] （--allow-dirty）继续，但这一版**不要当正式版发**。")
+    if clone_dir is not None:
+        print("[gate] 1. 从 HEAD 导出 -> 工作树只含已提交的文件 [ok]")
     else:
-        print("[gate] 1. 工作树干净 [ok]")
+        dirty = _dirty_files()
+        if dirty:
+            print("[gate] 1. 工作树**不干净** —— %d 个改动：" % len(dirty))
+            for line in dirty[:20]:
+                print("        %s" % line)
+            if not args.allow_dirty:
+                print("[gate] 脏树打出来的包**无法复现**。确认要继续就加 --allow-dirty。")
+                return 1
+            print("[gate] （--allow-dirty）继续，但这一版**不要当正式版发**。")
+        else:
+            print("[gate] 1. 工作树干净 [ok]")
 
     steps: list = []
-    if args.with_npm_ci:
+    if args.with_npm_ci or clone_dir is not None:
         steps.append(("2a. npm ci（锁文件装依赖）", [npm, "ci"]))
     #: 冒烟必须跑：`--check-only` 只验静态文件，"依赖清单非空"不等于
     #:   随包运行时真能 import（Flask / OpenAI / Office / PDF / NumPy）。
@@ -129,24 +231,29 @@ def main(argv=None) -> int:
         steps.append(("3. 前端构建", [npm, "run", "build"]))
     if not args.skip_package:
         steps.append(("4. 打安装包", [npm, "run", "package"]))
+    #: TUI 独立包（2026-11-21）：是安装形态那一件。它自带运行时，
+    #:   所以这一步比 GUI 那次慢（拷几百兆 + 打 zip）。
+    if not args.skip_tui:
+        steps.append(("4b. TUI 独立包", [py, "scripts/make_tui_package.py"]))
     steps.append(("5. 验产物", [py, "scripts/make_release.py", "--check-only"]))
 
     for name, cmd in steps:
-        ok, why = _run(name, cmd)
+        ok, why = _run(name, cmd, cwd=work_root)
         if not ok:
             print("[gate] [FAIL] %s 失败：%s" % (name, why))
-            return 1
+            return _finish(1, clone_dir, args.clean_clone)
         print("[gate] [ok] %s" % name)
 
     # 6. 人工那一步
     print("\n[gate] 6. **只能人做的一步**：")
-    print("        双击 apps/desktop/release/ 下那个 exe 装一次 → 装完**自己启动一次** →")
+    print("        双击 %s 下那个 exe 装一次 → 装完**自己启动一次** →"
+          % (work_root / "apps" / "desktop" / "release"))
     print("        看到主窗口、发一句话能回，才算过。")
     print("        [!] 机械判不了这个；**只看打包命令返回 0 是最常见的自欺**。")
     if not args.manual_ok:
         print("\n[gate] 机械部分全过，但**第 6 步没做** —— 这不叫通过。")
         print("[gate] 验收之后重跑一次并加 --manual-ok，或者把这一版标记成'未验'。")
-        return 3
+        return _finish(3, clone_dir, args.clean_clone)
 
     # 7. 下一步
     print("\n[gate] 7. 下一步（发 manifest，仓库 = hfyjq/Crannia 的 GitHub Pages）：")
@@ -154,13 +261,14 @@ def main(argv=None) -> int:
     print("        %s scripts/make_release.py --channel %s ^" % (py, channel))
     print("            --url https://github.com/hfyjq/Crannia/releases/download/<tag>/"
           "crannia-%s-win-x64.exe ^" % __version__)
+    print("            --tui-url <TUI 代码包的直链> ^")
     print("            --out <gh-pages 检出目录>/%s/version.json" % channel)
     print("        # 推到 gh-pages 分支 -> https://hfyjq.github.io/Crannia/%s/version.json"
           % channel)
     print("        [!] 只动**这一条渠道**的 version.json；另一条不要碰。")
     print("        [!] Pages 有缓存（约 10 分钟）—— 没生效先等，别改代码。")
     print("\n[gate] 全过 [ok]")
-    return 0
+    return _finish(0, clone_dir, args.clean_clone)
 
 
 if __name__ == "__main__":

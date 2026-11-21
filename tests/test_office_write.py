@@ -549,8 +549,8 @@ def test_export_document_renders_ppt():
 def _make_merged_docx(name: str) -> Path:
     """Build a table with merged cells (leave-request form layout).
 
-    r0: `学院` | `材料与新能源学院`(合并 c1-c4) | `班级` | `新材25-01`
-    r1: `姓名`(合并 c0-c1) | `学号` | `2025444212` | 空 | 空 | 空
+    r0: `学院` | `示例学院`(合并 c1-c4) | `班级` | `示例班`
+    r1: `姓名`(合并 c0-c1) | `学号` | `2025000000` | 空 | 空 | 空
     """
     from docx import Document
     p = Path("workspace") / name
@@ -559,13 +559,13 @@ def _make_merged_docx(name: str) -> Path:
     t = d.add_table(rows=2, cols=7)
     t.cell(0, 0).text = "学院"
     t.cell(0, 1).merge(t.cell(0, 4))
-    t.cell(0, 1).text = "材料与新能源学院"
+    t.cell(0, 1).text = "示例学院"
     t.cell(0, 5).text = "班级"
-    t.cell(0, 6).text = "新材25-01"
+    t.cell(0, 6).text = "示例班"
     t.cell(1, 0).merge(t.cell(1, 1))
     t.cell(1, 0).text = "姓名"
     t.cell(1, 2).text = "学号"
-    t.cell(1, 3).text = "2025444212"
+    t.cell(1, 3).text = "2025000000"
     d.save(str(p))
     return p
 
@@ -577,17 +577,17 @@ def test_merged_cell_read_side_gives_column_numbers():
     cells to infer columns, and it gets them wrong. A merged region must
     appear once, annotated with its span:
 
-        c1=材料与新能源学院[合并 c1-c4]
+        c1=示例学院[合并 c1-c4]
     """
     from skills.office_parser.handler import parse_docx
     p = _make_merged_docx("_test_merged_read.docx")
     try:
         text = "\n".join(c["text"] for c in parse_docx(str(p)))
-        assert "c1=材料与新能源学院" in text, text[:300]
+        assert "c1=示例学院" in text, text[:300]
         assert "[合并 c1-c4]" in text, text[:300]
         # 值只许出现一次（旧形状是 4 次）
-        assert text.count("材料与新能源学院") == 1, (
-            f"合并区的值被重复输出了：{text.count('材料与新能源学院')} 次")
+        assert text.count("示例学院") == 1, (
+            f"合并区的值被重复输出了：{text.count('示例学院')} 次")
         # 普通格子不许被标成合并
         assert "班级[合并" not in text, "没合并的格子被标成了合并区"
         assert "c0=学院" in text and "c5=班级" in text, text[:300]

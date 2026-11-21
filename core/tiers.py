@@ -67,7 +67,7 @@
 | 旋钮 | 值 | 出处 |
 |---|---|---|
 | `tool_concurrency` | 10 | 没有出处：沿用接入时的取值 |
-| `subagent_turns` | 8 | `core/subagent.py`（`SUBAGENT_MAX_TURNS`） |
+| `subagent_turns` | 180 | 本文件的常量（`SUBAGENT_TURNS`）—— 只当兜底上限，不按旧值掐活 |
 | `max_turns` | `None` = 不设限 | 转圈由重复/循环断路器管，不该由轮数上限兼职管"任务多大" |
 | `tool_result_max_chars` | 50000 | 唯一源就是本文件的常量（`config.yaml:162` 那个值已不生效，阶段会打一行出声）。对齐常见的 50k |
 | `command_timeout_ms` | 30000 | `core/shell.py::DEFAULT_TIMEOUT_MS` —— 实际中位 39ms，120 秒的默认值从没派上用场，撞上就是白等两分钟 |
@@ -218,12 +218,18 @@ class TierSpec:
 #: | 旋钮 | 值 | 生产里那个常量 |
 #: |---|---|---|
 #: | `tool_concurrency` | 10 | 没有出处：沿用接入时的取值 |
-#: | `subagent_turns` | 8 | `core/subagent.py`（`SUBAGENT_MAX_TURNS`） |
+#: | `subagent_turns` | 180 | 本文件的常量（`SUBAGENT_TURNS`）—— 只当兜底上限，不按旧值掐活 |
 #: | `max_turns` | `None` = 不设限 | 见下面 `TIERS` 之前那一段 |
 #: | `tool_result_max_chars` | 50000 | 唯一源是本文件的常量 —— `config.yaml:162` 那个值已不生效（阶段会打一行出声）。对齐常见的 50k |
 #: | `command_timeout_ms` | 30000 | `core/shell.py::DEFAULT_TIMEOUT_MS` —— 实际中位 39ms，120 秒的默认值从没派上用场 |
 TOOL_CONCURRENCY = 10
-SUBAGENT_TURNS = 8
+#: 子 agent 的轮次上限 —— 只当兜底：正常任务不该撞上它。
+#:
+#: 判据与主循环同一条：轮次不该兼职管"任务多大"。
+#: 子代理没有"下一条用户请求"来触发阶段那套压缩，所以防跑疯靠的是
+#: 循环内的上下文策略（80% 收缩 / 95% 压缩 / 溢出自救，见
+#: `core/subagent.py::run_child`），不是把轮次压低。
+SUBAGENT_TURNS = 180
 #: `max_turns` 的默认不设限 —— 值写在 `TIERS` 那六格里（都是 `None`）。
 #:
 #: ## 为什么

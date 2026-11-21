@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 import html as html_mod
+from pathlib import Path
 from typing import Any
 
 
@@ -418,10 +419,66 @@ def _have_curl_cffi() -> bool:
         return False
 
 
-def _http_get_once(url: str, timeout: int = 15):
+class _ResponseTooLarge(Exception):
+    """响应超过单次上限 —— 在读的过程中就抛，不把整包读进来。"""
+
+    def __init__(self, size, cap):
+        self.size = int(size or 0)
+        self.cap = int(cap or 0)
+        super().__init__(
+            "响应超过单次上限（上限 %d 字节，约 %.1f MB；本次 %d 字节）—— 没有保存。"
+            "换一个更小的来源，或确认这个地址是不是一份文档。"
+            % (self.cap, self.cap / 1048576.0, self.size))
+
+
+def _declared_length(headers):
+    """`Content-Length`（读不到或不是整数就 `None`）。"""
+    for k, v in (headers or {}).items():
+        if str(k).lower() == "content-length":
+            try:
+                return int(str(v))
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _check_declared_length(headers, max_bytes) -> None:
+    """声明就超了：连读都不读，直接抛。"""
+    n = _declared_length(headers)
+    if max_bytes and n is not None and n > max_bytes:
+        raise _ResponseTooLarge(n, max_bytes)
+
+
+def _read_capped(read_fn, max_bytes):
+    """读最多 `max_bytes` 字节，多出一个字节就抛。
+
+    `read_fn(n)` 与 `urllib` 的 `Response.read(n)` 同形；`max_bytes` 为空 = 不限。
+    """
+    if not max_bytes:
+        return read_fn()
+    data = read_fn(int(max_bytes) + 1)
+    if len(data) > max_bytes:
+        raise _ResponseTooLarge(len(data), max_bytes)
+    return data
+
+
+def _read_stream(chunks, max_bytes):
+    """把字节块累加到上限；超了立刻抛（后面的块不再读）。"""
+    buf = bytearray()
+    for chunk in chunks:
+        buf += chunk
+        if max_bytes and len(buf) > max_bytes:
+            raise _ResponseTooLarge(len(buf), max_bytes)
+    return bytes(buf)
+
+
+def _http_get_once(url: str, timeout: int = 15, max_bytes=None):
     """一次 GET，不跟随重定向。返回 `(status, headers, body_bytes)`。
 
     不跟随是刻意的 —— 跳转由 :func:`_web_fetch` 自己走，好让每一跳都过地板。
+
+    *max_bytes*：读的上限。给了就边读边判（声明先看一眼，读的过程中
+    累计超过立刻抛 `_ResponseTooLarge`）—— 读完再比保护不了内存。
     """
     from core import net_proxy as _np
     _curl_proxies = _np.curl_proxies()      # 同 `_http_json`：curl 用这张表
@@ -429,8 +486,17 @@ def _http_get_once(url: str, timeout: int = 15):
         from curl_cffi import requests as _cr
         kw = {"proxies": _curl_proxies} if _curl_proxies is not None else {}
         r = _cr.get(url, headers=_HEADERS, impersonate="chrome",
-                    timeout=timeout, allow_redirects=False, **kw)
-        return r.status_code, dict(r.headers), r.content
+                    timeout=timeout, allow_redirects=False, stream=True, **kw)
+        headers = dict(r.headers)
+        try:
+            _check_declared_length(headers, max_bytes)
+            body = _read_stream(r.iter_content(chunk_size=65536), max_bytes)
+        finally:
+            try:
+                r.close()
+            except Exception:                              # noqa: BLE001
+                pass
+        return r.status_code, headers, body
 
     # 退回 urllib：自己把重定向处理器关掉
     # 不能靠"捕获 HTTPError 3xx"来判断"这是个重定向" ——
@@ -455,10 +521,14 @@ def _http_get_once(url: str, timeout: int = 15):
     try:
         with opener.open(urllib.request.Request(url, headers=_HEADERS),
                          timeout=timeout) as resp:
-            return resp.status, dict(resp.headers), resp.read()
+            headers = dict(resp.headers)
+            _check_declared_length(headers, max_bytes)
+            return resp.status, headers, _read_capped(resp.read, max_bytes)
     except urllib.error.HTTPError as e:
         # 3xx 会走这里：处理器拒绝跟随后，HTTPErrorProcessor 把它当成未处理的错误
-        return e.code, dict(e.headers or {}), (e.read() or b"")
+        headers = dict(e.headers or {})
+        _check_declared_length(headers, max_bytes)
+        return e.code, headers, _read_capped(e.read, max_bytes)
     except urllib.error.URLError as e:
         raise RuntimeError(f"Network error: {e.reason}") from e
 
@@ -487,6 +557,226 @@ def _same_site(a: str, b: str) -> bool:
     return norm(pa) == norm(pb)
 
 
+#: 单次抓取的内容上限。年报这类文件常见几十 MB（英文版尤其大），
+#: 64 MB 覆盖得住；再大就不是"一次抓取"该干的事了。
+#: 判在读的过程中（`_http_get_once` 的 `max_bytes`），不是读完再比 ——
+#: 读完整包再判保护不了内存。
+_MAX_BINARY_BYTES = 64 * 1024 * 1024
+
+#: 一次抓取的超时。与常见抓取工具的取值一致（60 秒）；
+#: 这里的 60 秒是整次请求的，不是每块。
+_FETCH_TIMEOUT_S = 60
+
+#: 明确是文本的那些声明前缀（`+json` / `+xml` 后缀按文本处理）。
+_TEXTUAL_PREFIXES = ("text/", "application/json", "application/xml",
+                     "application/javascript", "application/xhtml")
+
+#: 魔数 -> 扩展名。只认强特征：`PK` 那类压缩容器分不出 docx / xlsx / zip，
+#: 不在这一格猜 —— 交给声明的子树名（见 :func:`_binary_ext_of`）。
+_MAGIC_EXT = ((b"%PDF-", "pdf"),)
+
+#: 精确 mime -> 扩展名。只收"从子类型推不出来"的那几族（Office 的
+#:   `vnd.openxmlformats-…` 现推出来是一串没意义的字母）。其余一律按
+#:   子类型现推 —— 枚举 mime 必然漏（同"分类，不枚举"那条判据）。
+_MIME_EXT = {
+    "application/zip": "zip",
+    "application/msword": "doc",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+}
+
+#: 子类型 -> 扩展名的别名（标准子类型与常见扩展名不同名的那几个）。
+#: 空串 = 类型本身没有信息，交给 URL 后缀。
+_SUB_ALIASES = {
+    "jpeg": "jpg", "pjpeg": "jpg",
+    "tiff": "tif",
+    "svg+xml": "svg",
+    "x-icon": "ico", "vnd.microsoft.icon": "ico", "x-ms-bmp": "bmp",
+    "x-photoshop": "psd", "vnd.adobe.photoshop": "psd",
+    "quicktime": "mov", "x-matroska": "mkv",
+    "x-rar-compressed": "rar", "vnd.rar": "rar",
+    "x-7z-compressed": "7z", "gzip": "gz", "x-gzip": "gz",
+    "x-tar": "tar", "x-bzip2": "bz2", "zstd": "zst", "x-xz": "xz",
+    "x-flac": "flac", "x-m4a": "m4a", "x-wav": "wav",
+    "msword": "doc", "vnd.ms-excel": "xls",
+    "octet-stream": "",
+}
+
+
+def _safe_ext(name: str) -> str:
+    """把任意字符串收成一个安全的扩展名（小写字母数字，最多 8 位）。"""
+    s = re.sub(r"\+.*$", "", str(name or ""))
+    s = re.sub(r"^(x-|vnd\.)", "", s)
+    return re.sub(r"[^a-z0-9]+", "", s)[:8]
+
+
+def _url_ext(url: str) -> str:
+    """URL 路径最后那段的后缀（没有就空串）。"""
+    from urllib.parse import urlsplit
+    try:
+        name = (urlsplit(url).path or "").rsplit("/", 1)[-1]
+    except Exception:                                          # noqa: BLE001
+        name = ""
+    m = re.search(r"\.([A-Za-z0-9]{1,8})$", name or "")
+    return m.group(1).lower() if m else ""
+
+
+def _ext_from_subtype(sub: str) -> str:
+    if sub in _SUB_ALIASES:
+        return _SUB_ALIASES[sub]
+    # 相机 RAW 常写成 x-厂商-扩展名（x-canon-cr2 / x-nikon-nef）：取最后一段。
+    if sub.startswith("x-") and sub.count("-") >= 2:
+        return _safe_ext(sub.rsplit("-", 1)[-1])
+    return _safe_ext(sub)
+
+
+def _binary_ext_of(content_type: str, raw: bytes, url: str = "") -> str | None:
+    """这份响应是不是二进制？是就回扩展名，不是回 `None`。
+
+    三层，前面的赢：
+      1. 魔数：PDF，以及 `core.artifacts.sniff` 认得出的图片 / 音视频；
+      2. `Content-Type`：先查精确表，再按子类型现推；
+      3. URL 后缀（声明成 `application/octet-stream` 的常是这一类）。
+    都推不出来才回 `bin` —— 不枚举 mime。
+    """
+    for magic, ext in _MAGIC_EXT:
+        if raw.startswith(magic):
+            return ext
+    try:
+        from core.artifacts import ext_for_mime, sniff
+        _sniffed = sniff(raw)
+        if _sniffed:
+            _ext = ext_for_mime(_sniffed)
+            if _ext:
+                return _ext
+    except Exception:                                          # noqa: BLE001
+        pass
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if not ct:
+        return None
+    if ct.startswith(_TEXTUAL_PREFIXES) or ct.endswith(("+json", "+xml")):
+        return None
+    if ct in _MIME_EXT:
+        return _MIME_EXT[ct]
+    ext = _ext_from_subtype(ct.split("/", 1)[-1])
+    if not ext:
+        ext = _url_ext(url)
+    return ext or "bin"
+
+
+def _url_stem(url: str) -> str:
+    """从 URL 最后一段取一个安全的文件名主干。取不到就叫 `download`。"""
+    from urllib.parse import urlsplit
+    try:
+        name = (urlsplit(url).path or "").rsplit("/", 1)[-1]
+    except Exception:                                          # noqa: BLE001
+        name = ""
+    name = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", name or "")
+    name = "".join(c if c.isalnum() or c in "_-" else "_" for c in name)
+    return (name[:40].strip("_") or "download")
+
+
+def _save_fetched_binary(url: str, raw: bytes, content_type: str,
+                         ext: str) -> dict:
+    """把二进制响应落盘，回一条"去读本地文件"的回执。
+
+    落点是 `data/workdata/tool_results/` —— 与超长文本那边同一处
+    （机器可读的那条指针就指向它）。目录的唯一来源是
+    `core.agent_loop._resolve_tool_output_dir`，这里不另写一个路径字面量。
+    """
+    if len(raw) > _MAX_BINARY_BYTES:
+        return {
+            "success": False,
+            "url": url,
+            "content_type": content_type,
+            "error": ("下载内容 %.1f MB，超过单次上限 %.0f MB —— 没有保存。"
+                      "换一个更小的来源，或确认这个地址是不是一份文档。"
+                      % (len(raw) / 1048576.0, _MAX_BINARY_BYTES / 1048576.0)),
+        }
+    from datetime import datetime
+
+    from core.agent_loop import _resolve_tool_output_dir
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = _resolve_tool_output_dir() / ("%s_%s.%s" % (ts, _url_stem(url), ext))
+    with open(out_path, "wb") as f:
+        f.write(raw)
+    shown = str(out_path).replace("\\", "/")
+    print(f"[web_fetch] 二进制响应已落盘：{shown}（{len(raw)} 字节，{content_type}）")
+    return {
+        "success": True,
+        "url": url,
+        "content_type": content_type,
+        "saved_path": shown,
+        "bytes": len(raw),
+        "note": ("这是一份二进制文件（不是网页文本），已经保存到本地。"
+                 "用对应的解析工具读它 —— PDF 用 `read_pdf_pages` 按页读，"
+                 "或 `parse_pdf` + `search_chunks`；不要把它当文本读。"),
+    }
+
+
+def _render_response(url: str, status: int, content_type: str, raw: bytes) -> dict:
+    """把一份成功响应变成回执：二进制落盘，文本抽正文。
+
+    抓取那一刻与缓存命中那一刻走的是同一段 —— 缓存里存的就是它的产物。
+    """
+    # 二进制（PDF 等）不按文本解码 —— 解出来是一墙替换字符，模型只能放弃。
+    # 落盘 + 回路径，由解析类工具接手（`parse_pdf` / `read_pdf_pages` 那一族）。
+    # 判据两条：声明不是文本族；或者魔数认得出（服务端常把 PDF 标成
+    #   `application/octet-stream`，光看声明会漏）。
+    _bin_ext = _binary_ext_of(content_type, raw, url)
+    if _bin_ext is not None:
+        return _save_fetched_binary(url, raw, content_type, _bin_ext)
+
+    encoding = "utf-8"
+    for part in content_type.split(";"):
+        if "charset=" in part.lower():
+            encoding = part.split("=")[-1].strip().strip('"').strip("'")
+            break
+
+    try:
+        html = raw.decode(encoding, errors="replace")
+    except LookupError:
+        html = raw.decode("utf-8", errors="replace")
+
+    # Extract text
+    text = _html_to_text(html)
+
+    # Truncate for context protection
+    truncated = text[:8000]
+    if len(text) > 8000:
+        truncated += f"\n\n... (truncated, original length: {len(text)} chars)"
+
+    return {
+        "success": True,
+        "url": url,
+        "content_type": content_type,
+        "text": truncated,
+        "length": len(truncated),
+        "original_length": len(text),
+    }
+
+
+def _cached_result(url: str, hit: dict) -> dict:
+    """缓存命中的回执：复用上次那份结果，加上"这是缓存"的两个字段。
+
+    二进制那份复用同一个 `saved_path`（不重复落盘）；那份文件若已被清掉
+    （留档清理），就从缓存的原始字节重新渲染一次。
+    """
+    out = hit.get("result")
+    saved = str((out or {}).get("saved_path") or "")
+    if not out or (saved and not Path(saved).is_file()):
+        out = _render_response(url, int(hit.get("status") or 200),
+                               hit.get("content_type") or "",
+                               hit.get("raw") or b"")
+    out = dict(out)
+    out["cached"] = True
+    out["cache_age_s"] = int(max(0.0, float(hit.get("age_s") or 0.0)))
+    return out
+
+
 def _web_fetch(url: str) -> dict:
     """
     Fetch a web page and extract its readable text content.
@@ -496,11 +786,15 @@ def _web_fetch(url: str) -> dict:
       2. 传输 —— `curl_cffi` 浏览器指纹（见本节开头那张表）
       3. 跳转 —— 同站跟随、跨站交回模型
 
+    同一个地址 30 分钟内再抓一次不出网，走 `core.web_cache`（命中时
+    回执带 `cached: true` 与 `cache_age_s`）。
+
     Strips HTML tags, scripts, and styles. Returns plain text
     limited to 8000 characters to protect LLM context.
     """
     from urllib.parse import urljoin
 
+    from core import web_cache as _web_cache
     from core.security import UrlEgressError, check_url_egress
     # 域名级审批闸 —— 与地板成对出现（地板管"能不能"，它管"该不该"）。
     from core.egress_gate import egress_gate
@@ -508,6 +802,9 @@ def _web_fetch(url: str) -> dict:
     current = (url or "").strip()
     if not current:
         return {"success": False, "error": "URL 为空"}
+    # 缓存键用模型给的这一个地址，不是跳转之后那一个 ——
+    # 模型下一次问的还是同一个地址，命中要发生在第一跳上。
+    requested = current
 
     hops: list[str] = []
     status = 0
@@ -539,6 +836,16 @@ def _web_fetch(url: str) -> dict:
             return {"success": False, "error": str(e),
                     "blocked": True, "url": current}
 
+        # ①.2 响应缓存 —— 命中就到此为止，这一次一个字节都不发。
+        #
+        # 位置承重：在审批闸之前。闸问的是"该不该把这次请求发出去"，
+        #   而没有发出去的就不该问（判据在 `core/web_cache.py`）。
+        #   地板与金丝雀排在它前面：那两条只看地址，不看网络，
+        #   缓存命中它们照样要过。
+        _hit = _web_cache.get(current)
+        if _hit is not None:
+            return _cached_result(current, _hit)
+
         # ①.5 域名级审批闸 —— 在发请求之前
         #
         # 位置承重：地板之后、`_http_get_once` 之前。
@@ -554,7 +861,11 @@ def _web_fetch(url: str) -> dict:
 
         # ② 传输
         try:
-            status, headers, raw = _http_get_once(current)
+            status, headers, raw = _http_get_once(
+                current, timeout=_FETCH_TIMEOUT_S,
+                max_bytes=_MAX_BINARY_BYTES)
+        except _ResponseTooLarge as e:
+            return {"success": False, "error": str(e), "url": current}
         except RuntimeError as e:
             return {"success": False, "error": str(e), "url": current}
         except Exception as e:
@@ -595,37 +906,14 @@ def _web_fetch(url: str) -> dict:
 
     content_type = headers.get("Content-Type", "") or headers.get("content-type", "")
 
-    encoding = "utf-8"
-    for part in content_type.split(";"):
-        if "charset=" in part.lower():
-            encoding = part.split("=")[-1].strip().strip('"').strip("'")
-            break
-
-    try:
-        html = raw.decode(encoding, errors="replace")
-    except LookupError:
-        html = raw.decode("utf-8", errors="replace")
-
-    # Extract text
-    text = _html_to_text(html)
-
-    # Truncate for context protection
-    truncated = text[:8000]
-    if len(text) > 8000:
-        truncated += f"\n\n... (truncated, original length: {len(text)} chars)"
-
-    out = {
-        "success": True,
-        "url": current,
-        "content_type": content_type,
-        "text": truncated,
-        "length": len(truncated),
-        "original_length": len(text),
-    }
+    out = _render_response(current, status, content_type, raw)
     # 只在真的跟过跳转时才带这一格 —— 免得给模型增加每轮都得读的噪声
     if len(hops) > 1:
         out["redirected_from"] = hops[0]
         out["hops"] = len(hops)
+    # 只缓存成功响应（判据见 `core/web_cache.py`）：走到这里已经是终态。
+    _web_cache.put(requested, status=status, content_type=content_type,
+                   raw=raw, result=out)
     return out
 
 

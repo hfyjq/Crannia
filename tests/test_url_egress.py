@@ -290,7 +290,7 @@ def test_cross_host_redirect_returns_to_model() -> None:
     real_check = SEC.check_url_egress
     calls: list[str] = []
 
-    def fake_get(url, timeout=15):
+    def fake_get(url, timeout=15, max_bytes=None):
         calls.append(url)
         return 302, {"Location": "https://elsewhere.example/landing"}, b""
 

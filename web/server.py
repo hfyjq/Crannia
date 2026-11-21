@@ -289,10 +289,20 @@ def _init_framework() -> None:
         #   它是一项附加能力，起不来只该是"定时任务不跑"，不是"框架起不来"。
         #   `configure()` 是幂等的：界面那个「重启框架」会在同一个进程里
         #     再走一遍这里 —— 重用时只换 scheduler，不新起第二条线程。
+        # 开关关着时连库都不碰：坏掉的定时配置不许拖累启动。
         try:
             from core.cron import runner as _cron_runner
-            _cr = _cron_runner.configure(_scheduler)
-            print("[cron] 周期任务调度器已启动（%d 条任务）" % _cr.job_count())
+            if not _background_services_enabled():
+                # 重启路径上"关掉开关"也要真停：`configure()` 是幂等的，
+                #   不在这里收旧线程的话，它会在同一个进程里继续跑。
+                _old = getattr(_cron_runner, "_runner", None)
+                if _old is not None and _old.running:
+                    _old.stop()
+                print("[cron] 后台服务开关关着 —— 定时任务不启动"
+                      "（设置里打开 background_services 后重启生效）")
+            else:
+                _cr = _cron_runner.configure(_scheduler)
+                print("[cron] 周期任务调度器已启动（%d 条任务）" % _cr.job_count())
         except Exception as _exc:  # noqa: BLE001
             print("[cron] 起调度器失败（不影响其他功能）：%s: %s"
                   % (type(_exc).__name__, _exc))
@@ -827,6 +837,16 @@ def api_status():
         #   与 `agent_busy` 分开两格：合成一个布尔的话，
         #   壳那边的确认框就说不出"在跑什么"（那是它 `reason` 的全部内容）。
         "approval_pending": _approval_pending_label(),
+        #: 后台服务（通道 + 定时任务）允不允许跑。关着时下面两格照样报 ——
+        #:   界面要说得出「定时 N 条，未启用」，而不是让那一格凭空消失。
+        "background_services": _background_services_enabled(),
+        "channels_running": sum(1 for v in _channel_running.values() if v),
+        #: 定时任务条数；读不到给 `None`（「没有任务」与「读不出来」分开）。
+        "cron_jobs": _cron_job_count(),
+        #: 这个前端自己那条会话的键（私聊 = `workspace:private`）。
+        #: TUI 拿它订阅 `/api/events`：订阅不带键 = 全部会话，IM 群聊的事件
+        #:   会画进这个界面。键只在这里推导一次。
+        "session": session_key_for(_web_session(request.args.get("group") or "")),
     }
     #: 轨迹开关的当前值 ——
     #:   右缘那一格按钮只在打开时才出现。
@@ -3181,8 +3201,19 @@ def api_channel_start():
     if not channel_id:
         return jsonify({"error": "missing channel_id"}), 400
 
+    #: CLI 通道用自己的 stdin/stdout 做对话，没有可投递的环回地址 ——
+    #:   后端代它起一条线程只会跟起它的那个终端抢输入。它由 `main.py`
+    #:   或无界面入口自己跑，不在这条 API 的能力范围内。
+    if channel_id == "cli_channel":
+        return jsonify({"error": tr(
+            "CLI 通道由终端自己读写，后端不代它启动")}), 400
+
     if _channel_running.get(channel_id):
         return jsonify({"ok": True, "status": "already_running"})
+
+    #: 手动启动是一次明确的"要后台服务"表示 —— 写进共享开关，
+    #:   这样下次重启时自动启动那一路不会把它当成"从没开过"。
+    _set_background_services(True)
 
     # Log if another channel is already active (multi-channel is supported)
     other_channels = [c for c in _channel_running if _channel_running[c] and c != channel_id]
@@ -3647,7 +3678,10 @@ def api_tasks():
 
     key = session_key_for(_web_session(request.args.get("group") or ""))
     running = jobs.running_for(key)
-    bg = [t for t in running if t["kind"] == jobs.KIND_COMMAND]
+    #: 定时任务的取回类跑在后台任务表里 —— 与命令同一格（「后台」+1），
+    #: 用户看到的是"有一条在跑"，不需要知道它是谁派出来的。
+    crons = [t for t in running if t["kind"] == jobs.KIND_CRON]
+    bg = [t for t in running if t["kind"] == jobs.KIND_COMMAND] + crons
     subs = [t for t in running if t["kind"] == jobs.KIND_SUBAGENT]
     # 技能的后台任务单独一组，不与命令或子 agent 合并。
     skills = [t for t in running if t["kind"] == jobs.KIND_SKILL]
@@ -3658,6 +3692,7 @@ def api_tasks():
         "background": bg,
         "subagents": subs,
         "skills": skills,
+        "cron": crons,
         "counts": {"background": len(bg), "subagents": len(subs),
                    "skills": len(skills)},
         # 服务器侧的同口径读数（排障用；界面那行提示走 `tool.start`）。
@@ -4208,6 +4243,16 @@ def api_approval_get():
         # 失败返回 `null` 而不是 500：前端把这个端点当轮询用，
         # 偶发失败不该在界面上弹一个错误。
         return jsonify({"pending": None, "error": f"{type(e).__name__}: {e}"})
+    if pending is None:
+        # 子代理的就地审批（它跑在父的一次工具调用里，父那一轮是挂着的）。
+        # 同一时刻只显示一条：父有挂起的就先显示父的。
+        try:
+            from core import child_approval
+            pending = child_approval.pending(
+                session_key_for(_web_session(group)))
+        except Exception as e:                               # noqa: BLE001
+            return jsonify({"pending": None,
+                            "error": f"{type(e).__name__}: {e}"})
     return jsonify({"pending": pending})
 
 
@@ -4270,6 +4315,25 @@ def api_approval_post():
     except Exception as e:
         return jsonify({"ok": False, "reason": "error",
                         "error": f"{type(e).__name__}: {e}"}), 500
+    _key = session_key_for(_web_session(group))
+    if not cur:
+        # 子代理的就地审批 —— 与父那条分开：回答直接交给那个等着的子线程，
+        # 不新开一轮（父那一轮还卡在它的工具调用里，开不了）。
+        try:
+            from core import child_approval as _ca
+        except Exception:                                    # noqa: BLE001
+            _ca = None
+        if _ca is not None:
+            try:
+                cur = _ca.pending(_key)
+            except Exception:                                # noqa: BLE001
+                cur = None
+        if cur:
+            verdict, why = _ca.answer(_key, request_id, choice)
+            if verdict != REPLY_OK:
+                return jsonify({"ok": False, "reason": REPLY_STALE,
+                                "error": why or tr("这条已经回答过了，不用再点。")}), 409
+            return jsonify({"ok": True, "reply": "", "sent": choice})
     if not cur:
         # 已经没有待审批了 —— 多半是双击的第二下，或者已经在别处答过
         return jsonify({"ok": False, "reason": REPLY_STALE,
@@ -4328,6 +4392,16 @@ def start_webui(port: int = 5000, open_browser: bool = True) -> None:
     print(f"{'=' * 60}\n", flush=True)
     if open_browser:
         webbrowser.open(url)
+    # 端点文件：一个数据根只许一个后端。写在这里、删在 finally ——
+    # 它是"别人怎么找到我"的唯一入口，写晚一步，别的前端就会各起一个后端。
+    from core import endpoint as _endpoint
+    _ep_root = _paths.data_root()
+    try:
+        _endpoint.write(_ep_root, port=port, token=_LAUNCH_TOKEN,
+                        version=__version__)
+    except OSError as exc:
+        print(f"[web] 端点文件写不进去（{exc}）—— 单后端保护失效，继续启动",
+              flush=True)
     from waitress import serve
     # threads 12，并显式设置 channel_timeout。
     #
@@ -4361,19 +4435,24 @@ def start_webui(port: int = 5000, open_browser: bool = True) -> None:
     # 那个 `1 thread` 通常是 SSE 连接（`/api/events`，开着一个聊天页就
     # 终身占一个线程）。它不是凶手，只是 5 秒内没停下来，所以被点名了。
     try:
-        serve(app, host="127.0.0.1", port=port,
-              threads=12, channel_timeout=300)
-    except KeyboardInterrupt:
-        # 只打控制台，不进 UI / 不落盘 —— 这是排障信息，不是功能。
-        # 干净退出（不 re-raise）：traceback 只会是 serve -> run -> asyncore.loop，
-        # 一条有用信息都没有，反而盖住上面那行结论。
-        print("\n[web] 收到 Ctrl+C -- WebUI 主动退出（不是崩溃）。", flush=True)
-        print("[web] 注：Ctrl+C 发给整个控制台进程组；"
-              "若别的程序也跑在这个窗口里，它会一起收到。", flush=True)
-        return
-    except Exception:
-        print("\n[web] WebUI 异常退出 -- 这次是真的崩了，原因见下：", flush=True)
-        raise
+        try:
+            serve(app, host="127.0.0.1", port=port,
+                  threads=12, channel_timeout=300)
+        except KeyboardInterrupt:
+            # 只打控制台，不进 UI / 不落盘 —— 这是排障信息，不是功能。
+            # 干净退出（不 re-raise）：traceback 只会是 serve -> run -> asyncore.loop，
+            # 一条有用信息都没有，反而盖住上面那行结论。
+            print("\n[web] 收到 Ctrl+C -- WebUI 主动退出（不是崩溃）。", flush=True)
+            print("[web] 注：Ctrl+C 发给整个控制台进程组；"
+                  "若别的程序也跑在这个窗口里，它会一起收到。", flush=True)
+            return
+        except Exception:
+            print("\n[web] WebUI 异常退出 -- 这次是真的崩了，原因见下：", flush=True)
+            raise
+    finally:
+        # 只删自己那份：退出期间别的后端已经接管的话（pid 变了），
+        # 删掉它等于把后者的地址抹了。
+        _endpoint.clear(_ep_root, pid=os.getpid())
 
 
 def _maybe_startup_update_check() -> None:
@@ -4401,6 +4480,10 @@ def _auto_start_channels_from_settings() -> list[str]:
     """If settings.auto_start_channel is true, start the currently selected
     channel (config.yaml channel.default).  Returns list of started channel IDs."""
     settings = _read_settings()
+    #: 开关关着就一条都不起，也不去碰通道配置。
+    if not _background_services_enabled():
+        _log("[web] background_services 关着 —— 通道不自动启动")
+        return []
     if not settings.get("auto_start_channel"):
         return []
     config = _read_config()
@@ -4509,9 +4592,14 @@ def api_wechat_qrcode():
     """
     if not _check_token():
         return jsonify({"error": "unauthorized"}), 403
-    from channels.wechat_channel.auth import get_web_login_state
+    from channels.wechat_channel.auth import (get_web_login_state,
+                                              render_qrcode_ascii)
     state = get_web_login_state()
     snap = state.snapshot()
+    # 命令行前端（`crannia channel login wechat`）在终端里印码，
+    #   拿不到那张 PNG 的 data URI；多回一份 ASCII，渲染仍只有一处。
+    if snap.get("img_url"):
+        snap["ascii"] = render_qrcode_ascii(snap["img_url"])
     return jsonify({"ok": True, **snap})
 
 
@@ -5011,6 +5099,52 @@ def _write_settings(data: dict) -> None:
     )
 
 
+def _background_services_enabled() -> bool:
+    """通道与定时任务是否允许随这个后端跑。
+
+    缺键 = 开：既有安装（GUI 侧不播种）升级后行为不变 —— 以前会起的通道
+    照旧会起。TUI 首启播种时显式写 false（`core.settings_baseline.heal`
+    的 `overrides`），那是"新装环境"的决定，不是给老用户的改判。
+    """
+    return bool(_read_settings().get("background_services", True))
+
+
+def _set_background_services(enabled: bool) -> None:
+    """写入开关。值没变就不落盘（设置文件是用户的，别为一次重复点击重写）。"""
+    settings = _read_settings()
+    if bool(settings.get("background_services", True)) == bool(enabled):
+        return
+    settings["background_services"] = bool(enabled)
+    _write_settings(settings)
+
+
+def _cron_job_count() -> int | None:
+    """定时任务的条数（启用 + 停用）。
+
+    读不到给 `None` —— 不是 0（「没有任务」与「读不出来」是两件事）。
+    调度器没起（开关关着）时只读库；库还没建过就是 0 条 ——
+    不为一次读数把库建出来。
+    """
+    try:
+        from core.cron import runner as _cr
+        runner = getattr(_cr, "_runner", None)
+        if runner is not None:
+            return int(runner.job_count())
+        from core.cron.store import DEFAULT_DB_PATH
+        db = Path(DEFAULT_DB_PATH)
+        if not db.exists():
+            return 0
+        import sqlite3
+        conn = sqlite3.connect(str(db), timeout=5)
+        try:
+            return int(conn.execute(
+                "SELECT COUNT(*) FROM cron_jobs").fetchone()[0])
+        finally:
+            conn.close()
+    except Exception:                                # noqa: BLE001
+        return None
+
+
 def _apply_settings_side_effects(settings: dict, written) -> None:
     """把刚落盘的设置推进那些活着的东西（环境变量 / 缓存 / 单例 / 注册表）。
 
@@ -5475,6 +5609,9 @@ def api_get_settings():
                    ("relax_command_tier", False), ("no_ask_readonly", False),
                    ("stream_output", False), ("context_sliding_window", True),
                    ("boot_on_startup", False), ("auto_start_channel", True),
+                   # 通道与定时任务的共享开关。缺键 = 开（既有安装行为不变）；
+                   #   TUI 首启播种会显式写成 false。
+                   ("background_services", True),
                    ("update_auto_check", True), ("recap_enabled", False),
                    # 「50 条存储提醒」那个不再提醒。
                    #   与 `SafetyNotice` 那条存 `localStorage` 的相反 ——
@@ -5946,6 +6083,7 @@ def api_save_settings():
             settings["interface_language"] = _want
 
     for key in ("auto_start_framework", "auto_start_channel", "boot_on_startup",
+                 "background_services",
                  "memory_continuity",
                  # `freenote_mode` 从这份白名单里摘掉了
                  # —— 它随 freenote 拦截层一起剥出，框架里再没有读者
@@ -6458,6 +6596,7 @@ def api_cron_create():
     out = create_job(title=body.get("title"), prompt=body.get("prompt"),
                      rule=body.get("rule"),
                      deliver=body.get("deliver") or "here",
+                     kind=body.get("kind") or "report",
                      channel=channel_key_of(_web_session()))
     return jsonify(out), (200 if out.get("success") else 400)
 
@@ -7867,10 +8006,18 @@ def _active_model_info() -> dict:
         pass
     # 模型名以实例为准（它是 wire 上真发的那个串）—— 实例在就盖过配置条目
     #   里那个名字（正常情况下两者相等；不等就是"装的不是你以为的那条"）。
-    live = getattr(_provider, "_model", "") if _provider is not None else ""
+    #: 读的是调度器手里的那个实例：`_apply_configured_model` 换掉的是它，
+    #:   本模块的 `_provider` 是启动那一刻按 `config.yaml` 造的老实例，之后不再更新
+    #:   （两个源会分叉 —— 那是"标签在说谎"：显示 deepseek-v4-flash，实际发
+    #:   deepseek-flash）。调度器还没建起来时（启动早期）才回落到老实例。
+    sched = globals().get("_scheduler")
+    prov = getattr(sched, "_provider", None) if sched is not None else None
+    if prov is None:
+        prov = _provider
+    live = getattr(prov, "_model", "") if prov is not None else ""
     if live:
         out["model"] = live
-        out["provider"] = getattr(_provider, "_provider_name", "") or out["provider"]
+        out["provider"] = getattr(prov, "_provider_name", "") or out["provider"]
     if not out["model"]:
         out["model"] = _config.get("model", {}).get("model_name", "")
         out["provider"] = out["provider"] or _config.get("model", {}).get("provider", "")
@@ -8142,6 +8289,8 @@ def _save_channel_config(data: dict) -> None:
         _cc.update(cid, fields=fields)
     else:
         _cc.create(platform, "默认", fields)
+    # 配置通道 = 要它跑（GUI 配置通道时打开共享开关）。
+    _set_background_services(True)
     # NOTE: channel.default 不在这里改 —— 保存凭据不该顺带换默认通道，
     #   那要走 /api/channel/set-default。
 

@@ -318,6 +318,7 @@ _VERBS: dict[str, str] = {
     #      描述里没有中文的那些工具，搜中文就永远搜不到 —— 就是这一形状。
     # 措辞就照各自注册表描述里本来就有的中文取词，不另造同义词。
     "pdf_info":                  "正在读取 PDF 信息 {arg}",
+    "read_pdf_pages":            "正在按页读 PDF {arg}",
     "split_pdf":                 "正在拆分 PDF {arg}",
     # PDF 页面操作族 + 图片族
     # 这 11 件一个前缀兜底都落不到（`pdf_` 不在 `_PREFIX_VERBS` 里，
@@ -545,6 +546,8 @@ _SEARCH_HINTS: dict[str, str] = {
     # 修好之后，这张表补的是露出来的真缺口 —— 它们能通过检索电池，
     # 靠的是单字噪声给的并列断，不是真信号。
     "parse_pdf":  "读一下这个 pdf、解析 pdf 里的文字和表格、看看 pdf 写了什么",
+    "read_pdf_pages": "按页读 pdf、读 pdf 的某几页、只看第 16 页、"
+                      "读第 10 到 20 页的原文、读报告里某一页的表格",
     "split_pdf":  "把这个 pdf 拆开、按页拆分、每几页切成一个文件",
     "merge_pdfs": "把几个 pdf 合成一个、合并 pdf、把 pdf 拼起来",
     "pdf_to_images": "把 pdf 的每一页导成图片文件、pdf 拆成一张张图",

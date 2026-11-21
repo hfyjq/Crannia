@@ -44,7 +44,7 @@ __all__ = [
     "ChannelConfigError", "PLATFORMS", "MAX_PER_PLATFORM", "MAX_NAME",
     "entries_for", "entry_of", "default_id", "credentials_for",
     "create", "update", "delete", "set_default", "seed_from_legacy",
-    "masked_fields", "load",
+    "masked_fields", "load", "notice_for",
 ]
 
 #: 每种平台的字段表。`secret` 里的那几格界面不打码回显、日志里也不打印。
@@ -54,6 +54,22 @@ PLATFORMS: dict[str, dict] = {
     "dingtalk": {"fields": ("app_key", "app_secret"), "secret": ("app_secret",)},
     "telegram": {"fields": ("bot_token",), "secret": ("bot_token",)},
     "qq_bot": {"fields": ("app_id", "app_secret"), "secret": ("app_secret",)},
+}
+
+#: 接入警告的文案。住在这里而不是界面里 —— 命令行与 TUI 都没有那份界面表，
+#: 而"接群聊有隐私风险"这件事与用哪个前端无关。
+NOTICES: dict[str, str] = {
+    "group_unfinished":
+        "当前通道的群聊模式还没做完：群里的内容会进模型，也会被群里的人看到，"
+        "请先不要接入群聊使用。",
+}
+
+#: 哪个平台挂哪条警告。微信走扫码、CLI 不需要配置，两者都不挂。
+PLATFORM_NOTICE: dict[str, str] = {
+    "feishu": "group_unfinished",
+    "dingtalk": "group_unfinished",
+    "telegram": "group_unfinished",
+    "qq_bot": "group_unfinished",
 }
 
 #: 每种平台最多几条。超了拒，不静默丢。
@@ -138,6 +154,17 @@ def _platform(data: dict, name: str) -> dict:
     return p
 
 
+def notice_for(platform: str) -> dict:
+    """这个平台的接入警告：`{"key": ..., "text": ...}`；没有就空 dict。
+
+    前端照 `text` 显示、照 `key` 做本地化，两样都不在该前端里另写一份。
+    """
+    key = PLATFORM_NOTICE.get(platform, "")
+    if not key:
+        return {}
+    return {"key": key, "text": NOTICES.get(key, "")}
+
+
 def masked_fields(platform: str, fields: dict) -> dict:
     """按字段表打码。密钥一律八颗点，其余留头尾各四位。"""
     spec = PLATFORMS.get(platform) or {}
@@ -171,6 +198,8 @@ def entries_for(platform: str) -> list[dict]:
             "is_default": cid == p.get("default"),
             "fields": masked_fields(platform, creds.get(cid) or {}),
             "created_at": entry.get("created_at") or 0,
+            # 账本里没写过的（老条目）按平台现推，免得列表少一个标记。
+            "notice": str(entry.get("notice") or PLATFORM_NOTICE.get(platform, "")),
         })
     rows.sort(key=lambda r: (not r["is_default"], r["created_at"], r["name"]))
     return rows
@@ -244,7 +273,8 @@ def create(platform: str, name: str, fields: dict) -> dict:
 
     cid = new_id()
     now = int(time.time())
-    p["entries"][cid] = {"name": name, "created_at": now, "updated_at": now}
+    p["entries"][cid] = {"name": name, "created_at": now, "updated_at": now,
+                         "notice": PLATFORM_NOTICE.get(platform, "")}
     if not p.get("default"):
         p["default"] = cid
     creds = _read(_CREDS)
@@ -287,6 +317,8 @@ def update(cid: str, *, name: str | None = None, fields: dict | None = None) -> 
             _write(_CREDS, creds)
 
     p["entries"][cid]["updated_at"] = int(time.time())
+    # 老条目在这里补上标记（写一次就够，读侧还有一层兜底）。
+    p["entries"][cid]["notice"] = PLATFORM_NOTICE.get(platform, "")
     _write(_LEDGER, data)
     return {"id": cid, "platform": platform, "name": p["entries"][cid]["name"]}
 

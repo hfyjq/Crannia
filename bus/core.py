@@ -94,7 +94,7 @@ def load_config(config_path: str | Path) -> dict:
 _DEFAULT_CONFIG: dict = {
     "model": {
         "provider": "deepseek",
-        "model_name": "deepseek-v4-flash",
+        "model_name": "deepseek-flash",
         "api_key": "${DEEPSEEK_API_KEY}",
         "base_url": "https://api.deepseek.com/v1",
         "temperature": 0.3,

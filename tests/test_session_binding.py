@@ -279,6 +279,30 @@ def test_the_projection_stamp_uses_the_channel_key():
           "实得 %r —— 拆键之后 `_projection_is_mine` 会恒为 False" % (stamped,))
 
 
+def test_new_session_announces_the_opened_thread():
+    """新线程登记的那一刻要发 `thread.opened`。
+
+    左栏名册靠这条事件刷新 —— 只靠 `task.end` 的话，新建任务在跑的过程中
+    整段都不在列表里（2026-11-20 用户反馈）。
+    """
+    from core.events import EVT_THREAD_OPENED, get_event_bus
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        mgr, pool = _make_pool(tmp)
+        bus = get_event_bus()
+        sub = bus.subscribe(session_key=KEY, types={EVT_THREAD_OPENED})
+        try:
+            sid, _msgs = pool.new_session(KEY)
+            ev = sub.q.get(timeout=2)
+            check("事件类型是 thread.opened", ev.type == EVT_THREAD_OPENED, ev.type)
+            check("带会话键", ev.session_key == KEY, ev.session_key)
+            check("带刚铸出来的线程 id", (ev.data or {}).get("storage_id") == sid,
+                  repr(ev.data))
+        finally:
+            bus.unsubscribe(sub)
+            mgr.close()
+
+
 # ------------------------------------------------------------------
 
 def main():

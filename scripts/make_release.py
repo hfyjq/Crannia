@@ -243,8 +243,10 @@ def build_manifest(*, version: str, channel: str, url: str, sha256: str,
                    minimum_client_version: str | None = None,
                    mandatory: bool = False, changelog: dict | None = None,
                    codepack: dict | None = None,
+                   tui: dict | None = None,
                    urls: list | None = None,
-                   codepack_urls: list | None = None) -> dict:
+                   codepack_urls: list | None = None,
+                   tui_urls: list | None = None) -> dict:
     """造 manifest —— 形状与 `UpdateManifest.from_json` 逐字对齐。
 
     [!] 谁改这里都要跑 `tests/test_release_manifest.py` 里那条回环断言：
@@ -259,6 +261,11 @@ def build_manifest(*, version: str, channel: str, url: str, sha256: str,
     if codepack:
         cp = {k: v for k, v in codepack.items() if k != "path"}
         artifacts["codepack"] = _with_urls(cp, codepack_urls)
+    #: TUI 的代码包（2026-11-21）：GUI 的更新器不认识这个键（它只读
+    #:   `windows-exe` / `codepack`），TUI 的 `crannia update` 只读它。
+    if tui:
+        artifacts["tui"] = _with_urls({k: v for k, v in tui.items() if k != "path"},
+                                      tui_urls)
     return {
         "latest": {
             "version": str(version),
@@ -293,6 +300,13 @@ def main(argv=None) -> int:
                     help="安装包的备用地址（可重复）。客户端主源失败时按序切。")
     ap.add_argument("--codepack-url-fallback", action="append", default=[],
                     help="代码包的备用地址（可重复）。")
+    ap.add_argument("--tui-url", default="",
+                    help="TUI 代码包（几 MB）的对外下载地址。给了才在 manifest "
+                         "里写 `artifacts.tui`。")
+    ap.add_argument("--tui-url-fallback", action="append", default=[],
+                    help="TUI 代码包的备用地址（可重复）。")
+    ap.add_argument("--tui-file", default="",
+                    help="本地 TUI 代码包（默认 dist-release/crannia-tui-<版本>-code.zip）")
     ap.add_argument("--notes-url", default="")
     ap.add_argument("--minimum-client-version", default=None)
     ap.add_argument("--mandatory", action="store_true")
@@ -363,14 +377,31 @@ def main(argv=None) -> int:
             print("[release] 目标是 npm tarball —— 哈希与大小发布后由 "
                   "`make_npm_package.py --stamp-manifest` 补进备源清单。")
 
+    tui = None
+    if args.tui_url:
+        tui_path = (Path(args.tui_file) if args.tui_file
+                    else Path(args.out_dir) / ("crannia-tui-%s-code.zip" % __version__))
+        if not tui_path.is_file():
+            print("[release] 给了 --tui-url，但找不到 TUI 代码包：%s" % tui_path)
+            print("[release] 先跑 scripts/make_tui_package.py，或用 --tui-file 指过去。")
+            return 1
+        tui = {"url": args.tui_url, "sha256": sha256_of(tui_path),
+               "size_bytes": tui_path.stat().st_size}
+        print("[release] TUI 代码包：%s（%d 字节）"
+              % (tui_path.name, tui["size_bytes"]))
+        print("[release] sha256 = %s" % tui["sha256"])
+        print("[release] 把它传到 --tui-url 那个地址上。")
+
     man = build_manifest(
         version=__version__, channel=channel, url=args.url,
         sha256=digest, size_bytes=size, release_notes_url=args.notes_url,
         minimum_client_version=args.minimum_client_version,
         mandatory=args.mandatory, published_at=published_at,
         codepack=codepack,
+        tui=tui,
         urls=args.url_fallback,
         codepack_urls=args.codepack_url_fallback,
+        tui_urls=args.tui_url_fallback,
     )
     out = (Path(args.out) if args.out
            else manifest_path(channel, Path(args.out_dir)))

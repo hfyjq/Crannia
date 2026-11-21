@@ -216,6 +216,11 @@ tools:
 # Web UI guided configuration
 # ==================================================================
 
+# 需要哪一份配置才能用：缺了 `crannia doctor` 报 WARN，工具失败时回执带
+# `/config mail_parser` 路线（判据在 `core/config_requirements.py`）。
+requires_config:
+  - mail_parser
+
 config:
   # 多账号：条目列表（名字 = 账号的 `label`，键 = 内部 id）。
   #   `entries_key` / `label_key` 让同一个浮窗也能画这一种结构

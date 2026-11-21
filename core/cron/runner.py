@@ -281,6 +281,10 @@ class CronRunner:
         self._test_segments: set = set()
         self._inflight_lock = threading.Lock()
         self._wake = threading.Event()       # `run_now` 要它立刻醒一次
+        #: 后台任务表里的那一行 -> 结算这次运行要用的东西（规则 / 起点 /
+        #: 会话键 / 段与台账）。完成钩子在另一条线程里醒来，只能从这里取。
+        self._task_meta: dict = {}
+        self._finish_hook_installed = False
 
     # ---- 生命周期 ----
 
@@ -422,7 +426,10 @@ class CronRunner:
 
     def _run_guarded(self, job: dict, trigger: str) -> None:
         try:
-            self._execute(job, trigger)
+            if (job.get("kind") or "report") == "alarm":
+                self._execute_alarm(job, trigger)
+            else:
+                self._execute_as_background(job, trigger)
         except Exception as exc:                     # noqa: BLE001
             # 兜底：任何没被下面接住的异常都要落账，否则这条任务会一直是
             # `running=1`（要等僵尸回收线才放出来）。
@@ -436,7 +443,108 @@ class CronRunner:
             with self._inflight_lock:
                 self._inflight.discard(job["id"])
 
-    # ---- 执行一条 ----
+    # ---- 按类别执行（定时那一半）----
+
+    def _parse_rule_or_settle(self, job: dict, trigger: str, started):
+        """规则读不出来就落账并停用它。返回 `None` 表示已经收尾。"""
+        try:
+            return expr.parse_rule(json.loads(job["rule_json"]))
+        except Exception as exc:                     # noqa: BLE001
+            self._store.finish(job["id"], status="error", trigger=trigger,
+                               reason=R_RULE_BROKEN, error=str(exc),
+                               enabled=0, started_at=started.isoformat())
+            self._emit(EVT_CRON_END, self._route_key(job), job, trigger,
+                       "error", R_RULE_BROKEN)
+            return None
+
+    def _execute_alarm(self, job: dict, trigger: str) -> None:
+        """闹钟：没有执行体，只有一句提醒 —— 直接排进会话的回报队列。"""
+        started = datetime.now().astimezone()
+        route_key = self._route_key(job)
+        rule = self._parse_rule_or_settle(job, trigger, started)
+        if rule is None:
+            return
+        self._emit(EVT_CRON_START, route_key, job, trigger, "running", "")
+        from core import tasks_notify as _notes
+        text = str(job.get("prompt") or "").strip()
+        _notes.enqueue_note(
+            route_key,
+            _notes.cron_note_text(title=job.get("title") or "",
+                                  kind="alarm", status="到点了", body=text),
+            origin="cron", task_id=job["id"])
+        self._settle_success(job, rule, trigger, started, route_key,
+                             empty=not text)
+
+    def _execute_as_background(self, job: dict, trigger: str) -> None:
+        """取回类：进后台任务表跑，完成时由钩子结算并回报给主 agent。
+
+        跑在隔离的一段里（`detach=True`）：这一轮不是用户说的话，不该写进
+        他正在看的这段对话；它的结论由回报那条消息带回来。
+        """
+        started = datetime.now().astimezone()
+        route_key = self._route_key(job)
+        rule = self._parse_rule_or_settle(job, trigger, started)
+        if rule is None:
+            return
+        self._emit(EVT_CRON_START, route_key, job, trigger, "running", "")
+
+        meta = {"job": job, "rule": rule, "trigger": trigger,
+                "started": started, "route_key": route_key,
+                "storage_id": "", "actions": "", "empty": False}
+
+        def run(task):
+            text, err, sid, acts = self._execute_prompt(
+                job, route_key, detach=True)
+            meta["storage_id"] = sid
+            meta["actions"] = acts
+            meta["empty"] = not (text or "").strip()
+            if err:
+                raise RuntimeError(err)
+            return text or ""
+
+        from core import jobs as _jobs
+        task = _jobs.start_thread(
+            run, kind=_jobs.KIND_CRON,
+            command=str(job.get("title") or job["id"]),
+            session_key=route_key,
+            description=str(job.get("title") or ""),
+            cron_kind="report")
+        with self._inflight_lock:
+            self._task_meta[task.id] = meta
+        self._install_finish_hook()
+
+    def _install_finish_hook(self) -> None:
+        """把"后台作业跑完了"这一件事接上一次（幂等）。"""
+        if self._finish_hook_installed:
+            return
+        from core import jobs as _jobs
+        _jobs.on_finish(self._on_job_finished)
+        self._finish_hook_installed = True
+
+    def _on_job_finished(self, task) -> None:
+        """后台任务表的完成钩子 —— 只认定时任务那几行。"""
+        from core import jobs as _jobs
+        if getattr(task, "kind", "") != _jobs.KIND_CRON:
+            return
+        with self._inflight_lock:
+            meta = self._task_meta.pop(task.id, None)
+        if meta is None:
+            return                       # 不是这一次进程发出去的（重启后）
+        job = meta["job"]
+        if task.status == "done":
+            self._settle_success(job, meta["rule"], meta["trigger"],
+                                 meta["started"], meta["route_key"],
+                                 storage_id=meta["storage_id"],
+                                 empty=meta["empty"], actions=meta["actions"])
+        else:
+            self._settle_failure(job, meta["rule"], meta["trigger"],
+                                 meta["started"], R_EXEC_FAILED,
+                                 task.result or task.status,
+                                 meta["route_key"],
+                                 actions=meta["actions"],
+                                 storage_id=meta["storage_id"])
+
+    # ---- 执行一条（手动试跑那条路）----
 
     def _execute(self, job: dict, trigger: str) -> dict:
         job_id = job["id"]
@@ -473,8 +581,11 @@ class CronRunner:
                              storage_id=sid, empty=not text.strip(), actions=acts)
         return {"ok": True, "text": text}
 
-    def _execute_prompt(self, job: dict, route_key: str):
+    def _execute_prompt(self, job: dict, route_key: str, detach: bool = False):
         """合成事件 -> 真管线。返回 `(回复文本, 错误文本, storage_id, actions)`。
+
+        *detach*：这一轮跑在框架自己铸的一段里（定时任务的取回类）——
+        它不是用户说的话，不该写进他正在看的那段对话。
 
         `storage_id` 由这一轮自己写回 `event.extras`（`pre_process` 那个装载点）
         —— 台账里记它，是为了回答"这一次落在哪一段"（`/clear` 之后尤其要看得出）。
@@ -488,7 +599,7 @@ class CronRunner:
         except Exception as exc:                     # noqa: BLE001
             return "", "投递目标记坏了：%r（%s）" % (job.get("channel"), exc), "", ""
 
-        event = self._build_event(job, session, route_key)
+        event = self._build_event(job, session, route_key, detach=detach)
         # 台账：跑之前先订上（`_ACTION_TYPES` 那两类），跑完再取。
         #   顺序反了就什么都收不到。
         sub = None
@@ -510,7 +621,8 @@ class CronRunner:
         sid = str((getattr(event, "extras", None) or {}).get("storage_id") or "")
         return (text or ""), "", sid, _collect_actions(sub)
 
-    def _build_event(self, job: dict, session: MessageSession, route_key: str) -> MessageEvent:
+    def _build_event(self, job: dict, session: MessageSession, route_key: str,
+                     detach: bool = False) -> MessageEvent:
         """手搓一个 `MessageEvent` —— 形状照 Web UI 那份现成的
         （`web/server.py::_run_chat_turn`，它不是通道调用者却照样能跑一轮）。
 
@@ -535,7 +647,7 @@ class CronRunner:
         test_seed = job.get("_test_seed")
         if test_seed:
             extras["segment"] = {"detached": True, "seed": str(test_seed)}
-        elif (job.get("deliver") or "here") == "new" or burst:
+        elif detach or (job.get("deliver") or "here") == "new" or burst:
             # 成批时一律另起一段（新开一个对话，结果给用户看）。
             #   同批各条带同一个 seed => 算出同一个段（它们并行，无法互相协商）。
             seg = {"detached": True}

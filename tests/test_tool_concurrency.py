@@ -19,6 +19,7 @@
   5. 异常照旧走原来那条路：并发的 handler 抛，`tool.end` 的 `ok=False` + 错误文本
   6. 单条不预取（`len < 2` 直接返回 —— 不白开线程池）
   7. 锁步：两条路各有一处预取（AST + 行为）
+  8. 预取过的工具用的是它自己的实测用时（不是记账那一瞬的 2~3 ms）
 
 用法：
     cd <仓库根>
@@ -226,6 +227,49 @@ def test_readonly_batch_really_overlaps():
         f"这批工具的跨度 {union:.2f}s 接近串行（{_SLEEP * 3:.2f}s）—— 并发没生效")
     print(f"  [ok] 三个只读重叠，跨度 {union:.2f}s（串行会是 {_SLEEP * 3:.2f}s）"
           f"；本轮循环总耗时 {elapsed:.2f}s（含与并发无关的开销，**不作判据**）")
+
+
+def test_prefetch_records_each_handler_duration():
+    """预取时在跑 handler 的那个线程里量用时（`_Prefetched.ms`）。"""
+    from core.agent_loop import _Prefetched, _prefetch_readonly
+
+    names = ["list_workspace_files", "get_document_info"]
+    sess = "probe:conc:ms"
+    _setup(names, sess=sess)
+    calls = [_call(n, cid="m%d" % i) for i, n in enumerate(names)]
+    pre = _prefetch_readonly(calls, sess, None)
+    assert isinstance(pre, _Prefetched), type(pre)
+    assert set(pre.ms) == {"m0", "m1"}, pre.ms
+    assert all(v >= 200 for v in pre.ms.values()), pre.ms
+    print("  [ok] 预取把每个 handler 的实测用时记下来了：%r" % (pre.ms,))
+
+
+def test_prefetched_tools_report_their_real_duration():
+    """工具事件里报的是它自己跑了多久，不是记账花了多久。
+
+    真机读数：并发预取过的那几条一律 2~3 ms，而它们明明各自跑了
+    一百多毫秒 —— 计时从记账那一刻才开始，预取在记账之前就跑完了。
+    """
+    from core.agent_loop import agent_loop
+
+    names = ["list_workspace_files", "get_document_info"]
+    sess = "probe:conc:dur"
+    _setup(names, sess=sess)
+    calls = [_call(n, cid="d%d" % i) for i, n in enumerate(names)]
+
+    events = []
+
+    def _emit(evt, **kw):
+        events.append((evt, kw))
+
+    agent_loop("hi", _Script(calls), session_id=sess, _emit=_emit)
+    ends = {kw.get("name"): int(kw.get("duration_ms") or 0)
+            for evt, kw in events if evt == "tool.end"}
+    assert set(ends) == set(names), ends
+    for name in names:
+        assert ends[name] >= 200, (
+            "预取过的工具被报成了记账的用时（真机是 2~3 ms 那种）：%r" % (ends,))
+    print("  [ok] tool.end 的用时是 handler 的实测值：%r" % (ends,))
 
 
 def test_write_tools_stay_serial():

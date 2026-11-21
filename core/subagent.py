@@ -59,7 +59,7 @@ FORK_PLACEHOLDER = "已派遣子代理，结果稍后返回"
 EMPTY_OUTPUT = "（子 agent 跑完了，但没有返回任何内容。）"
 
 #: 子 agent 的轮次预算在这里没有常量 —— 它由档位给
-#: （`TierSpec.subagent_turns`；档 3 是 8）。
+#: （`TierSpec.subagent_turns`，值在 `core/tiers.py::SUBAGENT_TURNS`）。
 #: 理由同 `_MAX_TOOL_CONCURRENCY`：某一档的值只能在一处定义。
 #:`run_child` 必须收到 `max_turns=`（没有默认值：有默认值就等于留了一条
 #: "忘了传、于是静默用旧值"的路）。
@@ -352,7 +352,10 @@ def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
               directive: str | None = None,
               cancel_check: Callable[[], bool] | None = None,
               workspace: str | None = None,
-              tool_allowlist: frozenset | None = None) -> dict:
+              tool_allowlist: frozenset | None = None,
+              on_tokens: Callable[[int, int], None] | None = None,
+              ask: Callable[[dict], str] | None = None,
+              origin: str = "") -> dict:
     """跑一个子 agent，只把最终文本交回父。
 
     返回 `{"success": bool, "output": str, ...}` —— 形状与别的工具一致（会被
@@ -414,6 +417,49 @@ def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
     if workspace:
         text_directive += ("\n\n★ 你的工作目录是 `%s`（独立的工作树）："
                            "读写都用这个目录下的路径。" % workspace)
+
+    # ---- 子 agent 的上下文策略 ----
+    #
+    # 阶段那套压缩是"每个用户请求一次"，子绕过了阶段；子只活在这一次循环里，
+    # 所以两档都在这里接：
+    #   · 80%：收缩旧工具输出，并且真改 `messages`（`_inplace_trim`）——
+    #     只改发出去的副本，下一条请求又原样涨回来；
+    #   · 95% / 溢出：摘要压缩。不落库 —— 子和父共用一个 `session_id`，
+    #     落库会改写父的历史；状态键也用子自己的，压缩器的熔断器按它记账。
+    import uuid as _uuid
+
+    from core.context_pressure import FORCE_RATIO as _FORCE_RATIO
+    from core.memory.compressor import Compressor as _Compressor
+    from core.memory.compressor import forget_breaker as _forget_breaker
+
+    _ctx_key = "child:%s" % _uuid.uuid4().hex[:8]
+    _child_comp = _Compressor(threshold=_FORCE_RATIO, keep_recent_turns=3)
+
+    def _compact_child(msgs: list, *, force: bool) -> list | None:
+        window = getattr(provider, "context_window", None)
+        if not window:
+            return None
+        try:
+            new, done = _child_comp.check_and_compress(
+                _ctx_key, msgs, provider, window,
+                session_note=None, mode="auto",
+                system=snapshot.system, tools=snapshot.tools,
+                force=force, threshold=_FORCE_RATIO)
+        except Exception as exc:  # noqa: BLE001 —— 压缩失败不该弄挂子这一趟
+            print(f"[subagent] 上下文压缩失败（{type(exc).__name__}: {exc}）")
+            return None
+        return new if done else None
+
+    def _compact_now() -> list | None:
+        return _compact_child(prefix, force=False)
+
+    def _rescue(msgs: list) -> bool:
+        new = _compact_child(msgs, force=True)
+        if not new:
+            return False
+        msgs[:] = new
+        return True
+
     with _DepthGuard(), guard, request_snapshot.preserved(), ws_ctx:
         try:
             content, _msgs, _chunks, tokens = agent_loop(
@@ -440,10 +486,25 @@ def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
                 cancel_check=cancel_check,
                 # 子 agent 定义声明的工具白名单；None 表示不限制。
                 _tool_allowlist=tool_allowlist,
+                # 上下文策略：95% 摘要压缩 + 溢出后压一次重发 + 80% 真裁剪。
+                compact_cb=_compact_now,
+                _on_overflow=_rescue,
+                _inplace_trim=True,
+                # 两个累计读数报给任务表（面板用）：计费量 + 输出量。
+                # 观测件，不参与判定。
+                _on_progress=on_tokens,
+                # 审批：子就地申请（`None` = 老行为，一律拒）。
+                _child_ask=ask,
+                # 定时任务那一轮不许开审批 —— 子要继承同一个来源。
+                _origin=origin,
             )
         except Exception as exc:  # noqa: BLE001 —— 判据：异常一律算失败
             return {"success": False,
                     "error": f"子 agent 失败：{type(exc).__name__}: {exc}"}
+        finally:
+            # 压缩器的熔断器是模块级的、按状态键记 —— 子这一趟结束就收掉，
+            # 不让它按子会话无限攒。
+            _forget_breaker(_ctx_key)
 
     text = (content or "").strip()
     if not text:
@@ -485,7 +546,7 @@ SUBAGENT_TOOL_SCHEMA: dict = {
             "background": {
                 "type": "boolean",
                 "description": ("true = 转到后台跑，你立刻拿回执、先做别的；"
-                                "结果回来时会收到一条后台任务回报。"),
+                                "结果会以一条后台回报送来（要等你这一轮结束后）。"),
             },
             "isolate": {
                 "type": "boolean",

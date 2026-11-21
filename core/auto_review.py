@@ -208,12 +208,30 @@ def outcome_of_tool_result(content) -> Optional[str]:
     # 头从 `core.approval` 取（全仓只有那一处拼得出来）。
     # 只有 `rejected` 算数：`cancelled`/`unavailable`/`recused` 都不是"被拒绝"
     #    （见 `APPROVAL_OUTCOMES` 那四条各自的语义）。
-    from core.approval import APPROVAL_HEAD
-    if body.startswith(APPROVAL_HEAD):
-        token = body[len(APPROVAL_HEAD):].strip().split("（", 1)[0].strip()
-        if token == "rejected":
-            return OUTCOME_REJECTED_BY_USER
+    if settlement_outcome_of(text) == "rejected":
+        return OUTCOME_REJECTED_BY_USER
     return None
+
+
+def settlement_outcome_of(content) -> str:
+    """回执是"结算过的审批"就返回它的语义 token；不是就回空串。
+
+    头由 `core.approval.outcome_line` 拼（全仓唯一一处），形状是
+    `APPROVAL_HEAD` + `<token>（<白话>）—— <路线>`，外面可能套一层信封或隔离包裹。
+
+    与 `outcome_of_tool_result` 分工：那个是审计口径（只认"用户拒绝"），
+    这一个给事件用 —— 四种语义都要，客户端才能分得开"未采纳 / 未执行 / 被拒绝"。
+    """
+    from core.approval import APPROVAL_HEAD, APPROVAL_OUTCOMES
+
+    text = content_text(content)
+    if not isinstance(text, str) or not text.strip():
+        return ""
+    body = _strip_wrappers(text)
+    if not body.startswith(APPROVAL_HEAD):
+        return ""
+    token = body[len(APPROVAL_HEAD):].strip().split("（", 1)[0].strip()
+    return token if token in APPROVAL_OUTCOMES else ""
 
 
 # 一、声明层（复用已有的声明形状，不新建机制）

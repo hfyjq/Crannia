@@ -13,7 +13,7 @@ review_input: none
 #: 措辞原则：新能力、最可能被找的东西放最前面，别按"先来后到"排。
 #: 原先这段是纯英文（"Parse PDF, TXT, CSV files…"），而模型的查询是中文，
 #: jieba 切出来的词永远匹配不上英文文本，于是工具在、搜不到，等于不在。
-description: "文件与图片处理：图片合成 PDF、PDF 页面操作（合并/拆分/提取/旋转/水印/压缩/加密/转图片）、图片压缩/缩放/转格式、解析 PDF/TXT/CSV 并检索、工作区文件与跨区搜索、交付文件给用户。"
+description: "文件与图片：PDF 按页读、页面操作（合并/拆分/提取/旋转/水印/压缩/加密/转图片）、图片合成 PDF/压缩/缩放/转格式、解析 PDF/TXT/CSV 并检索、工作区文件与跨区搜索、交付文件。"
 
 tools:
   - name: parse_pdf
@@ -22,6 +22,7 @@ tools:
     output_kind: prose
     description: >
       读取 PDF 文件内容：按页解析、分块建索引，正文用 search_chunks 检索。
+      已知页码、只想看那几页的原文时，改用 read_pdf_pages（不建索引，直接回文字）。
     inputSchema:
       $schema: "https://json-schema.org/draft/2020-12/schema"
       type: object
@@ -30,6 +31,26 @@ tools:
           type: string
           description: "Path to the PDF file. If relative, resolved under workspace/"
       required: ["file_path"]
+
+  - name: read_pdf_pages
+    permission: read
+    destructive: false
+    output_kind: prose
+    description: >
+      按页读 PDF 正文：直接返回那几页的文字，不建索引。
+      pages 是页码（支持 3 / 1-5 / 1,3,7-9）；单次最多 20 页、约 5000 字符。
+      已知页码、只想看那几页时用它；通读全文用 parse_pdf + search_chunks。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: "Path to the PDF file. If relative, resolved under workspace/"
+        pages:
+          type: string
+          description: "Page numbers (1-based): '3', '1-5', or '1,3,7-9'. Max 20 pages per call."
+      required: ["file_path", "pages"]
 
   - name: parse_txt
     permission: read

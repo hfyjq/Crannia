@@ -813,7 +813,8 @@ def build_payload(kind: str, ask_index: int = 1, *,
                   body: str = "", stage: str = "",
                   request_id: str = "", file_list: str = "",
                   rule: str = "", options=None, multi: bool = False,
-                  title: str = "", ask_question: str = "") -> dict:
+                  title: str = "", ask_question: str = "",
+                  requester: str = "") -> dict:
     """浮窗的渲染源。纯函数：同样的入参出同样的 dict。
 
     这里不拼字符串 —— 那是 :func:`render_prompt` 给文本通道的事。
@@ -823,8 +824,8 @@ def build_payload(kind: str, ask_index: int = 1, *,
     n = max(1, int(ask_index or 1))
     opts = options_for(kind, n, rule=rule, options=options)
     q = substate_question(kind, stage)
-    if kind == "delete" and not body:
-        body = render_delete_body(file_list)
+    if kind in ("delete", "delete_bulk") and not body:
+        body = render_delete_body(file_list, kind=kind)
     # 中间态不给选项：那一步用户该做的是"说一句话"，不是"选一项"。
     # 给了也是死数据（前端在 `expect === 'text'` 时根本不渲染选项），
     # 而"载荷里有一份谁也不读的选项表"正是本模块要消灭的那种副本。
@@ -833,11 +834,17 @@ def build_payload(kind: str, ask_index: int = 1, *,
     #: 动态表那一路把每项的说明也带上（浮窗要显示第二行）。
     _desc = {str(r.get("key")): str(r.get("description") or "")
              for r in (options or ()) if isinstance(r, dict)}
+    _body = tr(body or _DEFAULT_BODY.get(kind, ""))
+    if requester:
+        # 谁在申请要写在正文最前面 —— 用户在批一个他自己没有发起过的动作。
+        _body = tr("来自子代理的请求，") + _body
     return {
         "request_id": request_id or new_request_id(kind),
         "kind": kind,
         "ask_index": n,
-        "body": tr(body or _DEFAULT_BODY.get(kind, "")),
+        "body": _body,
+        #: 空 = 父代理自己发的；非空 = 子代理名（面板据此标注来源）。
+        "requester": str(requester or ""),
         #: 提问面板：允许多选（浮窗据此把单选改成多选）。
         "multi": bool(multi),
         # 选项按表里的顺序（升级项永远最后）
@@ -924,8 +931,12 @@ def compact_file_list(lines, *, total_note: str = "",
     return f"{head}\n  {more}{total_note}"
 
 
-def render_delete_body(file_list: str) -> str:
+def render_delete_body(file_list: str, kind: str = "delete") -> str:
     """删除那条的开场白 —— 带文件列表。
+
+    *kind* 决定抬头：`delete` 是"想删除以下文件"，`delete_bulk` 要顺带说清
+    这次为什么还要问（数量超过阈值）。抬头与列表必须由同一处拼出来 ——
+    同一份授权在两条通道上长得不一样，是这一族反复踩过的坑。
 
     单独一个函数是因为列表也是提示语的一部分：内容无界会把按钮顶出视口，
     而判据是"被审批的文本就是被同意的文本，藏掉尾巴等于让用户同意他读不到
@@ -936,7 +947,7 @@ def render_delete_body(file_list: str) -> str:
     换行，而排版是空一行再接选项（`...{file_list}\\n\\n1. 同意`）。
     补上它才能保持这个逐字形状（有断言钉着）。
     """
-    head = tr("Crannia 想删除以下文件：")
+    head = tr(_DEFAULT_BODY.get(kind) or _DEFAULT_BODY["delete"])
     return f"{head}\n{file_list}\n"
 
 

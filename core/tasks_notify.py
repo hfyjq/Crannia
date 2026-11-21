@@ -49,6 +49,10 @@ from core.session_key import group_id_of
 #: 单独一格是为了不让同一个前缀在两个文件里各写一遍。
 NOTIFICATION_PREFIX = "[后台任务回报"
 
+#: 定时任务的回报前缀 —— 与后台任务分开：那边是"你刚才派出去的活"，
+#: 这边是"用户早就设好的闹钟 / 取回"，模型看到的第一句话就不一样。混用一个前缀会让模型把定时任务当成刚发生的工具结果。
+CRON_NOTIFICATION_PREFIX = "[定时任务回报"
+
 #: 用户停止活动多久之后才允许起自动轮（秒）。
 #: 不是"优先级队列"，只是不抢正在发生的对话（判据见模块 docstring）。
 QUIET_SECONDS = 1.0
@@ -72,11 +76,45 @@ _KIND_LABELS = {
     jobs.KIND_COMMAND: "命令",
     jobs.KIND_SUBAGENT: "子 agent",
     jobs.KIND_SKILL: "技能任务",
+    jobs.KIND_CRON: "定时任务",
 }
 
 
 def _kind_label(job) -> str:
     return _KIND_LABELS.get(job.kind, "后台任务")
+
+
+def cron_note_text(*, title: str, kind: str, status: str = "已完成",
+                   body: str = "") -> str:
+    """给模型看的定时任务回报（第一行必须点明"这是用户的预设定时任务"）。
+
+    两支分开写：闹钟只要提一句，取回类要把内容转达。模型看到"这不是用户
+    刚说的话"就不会自己去查一遍，也不会把它当成一条新指令去做。
+    """
+    title = sanitize_text(str(title or ""))[:200] or "(未命名)"
+    kind = "alarm" if str(kind or "") == "alarm" else "report"
+    head = CRON_NOTIFICATION_PREFIX + " · 这是用户的预设定时任务，不是用户刚说的话]"
+    body = sanitize_text(str(body or ""))
+    if kind == "alarm":
+        line = "定时任务「%s」(kind: alarm · %s)：%s" % (
+            title, status, body[:1000])
+        tail = "到点了，提醒用户一句即可；不要自己再去查，也不要把这件事当成新任务去做。"
+        return "\n".join([head, line, tail])
+    line = "定时任务「%s」(kind: report · %s) 取回的内容如下。" % (title, status)
+    parts = [head, line]
+    if body:
+        parts.append("内容：\n" + body[:4000])
+    parts.append("把内容转达给用户；这是已经取回的结果，不要自己再查一遍。")
+    return "\n".join(parts)
+
+
+def cron_notification_text(job) -> str:
+    """一个跑完的 `KIND_CRON` 作业 -> 回报文案。"""
+    status = {"done": "已完成", "failed": "失败",
+              "timeout": "超时被收尾", "killed": "已取消"}.get(job.status, job.status)
+    return cron_note_text(title=job.description or job.command,
+                          kind=getattr(job, "cron_kind", "") or "report",
+                          status=str(status or ""), body=job.result or "")
 
 
 def notification_text(job) -> str:
@@ -122,12 +160,16 @@ def _session_for_key(key: str) -> MessageSession:
     )
 
 
-def build_event(session_key: str, text: str, task_id: str = "") -> MessageEvent:
+def build_event(session_key: str, text: str, task_id: str = "",
+                origin: str = "background") -> MessageEvent:
     """手搓一条 `MessageEvent`（形状照 `core/cron/runner.py::_build_event`）。
 
     `origin="background"` 让 `im_routing` 立刻放过（否则"≥2 条活跃，
     问编号"会把一条后台回报扣在一个到点不在场的人身上）；
     `routed_session_key` 指定它进哪条会话。
+
+    `origin="cron"` 时这一轮也不许开审批（到点没人能批）—— 定时任务的
+    回报轮按这一支走。
     """
     session = _session_for_key(session_key)
     msg = ChannelMessage(
@@ -142,7 +184,7 @@ def build_event(session_key: str, text: str, task_id: str = "") -> MessageEvent:
         message=msg,
         platform_meta=ChannelMetadata(
             name="background", description="后台任务", platform_type=session.platform),
-        extras={"origin": "background", "task_id": task_id,
+        extras={"origin": str(origin or "background"), "task_id": task_id,
                 "routed_session_key": session_key},
     )
 
@@ -185,10 +227,32 @@ def _on_finish(job) -> None:
         return
     if not jobs.mark_notified(job.id):
         return
-    item = {"task_id": job.id, "text": notification_text(job)}
+    if job.kind == jobs.KIND_CRON:
+        item = {"task_id": job.id, "text": cron_notification_text(job),
+                "origin": "cron"}
+    else:
+        item = {"task_id": job.id, "text": notification_text(job),
+                "origin": "background"}
     with _lock:
         _pending.setdefault(key, []).append(item)
     _wake.set()
+
+
+def enqueue_note(session_key: str, text: str, *, origin: str = "background",
+                 task_id: str = "") -> bool:
+    """把一条要给模型看的回报排进某个会话（不开线程、不等轮）。
+
+    定时任务的闹钟那类没有执行体 —— 它只有一句提醒，直接走这里排队，
+    下一轮与其它后台回报同一条路出去。
+    """
+    key = str(session_key or "")
+    if not key or not str(text or "").strip():
+        return False
+    with _lock:
+        _pending.setdefault(key, []).append(
+            {"task_id": task_id, "text": text, "origin": origin})
+    _wake.set()
+    return True
 
 
 def _ready_keys(scheduler, now: Optional[float] = None) -> list[str]:
@@ -217,7 +281,8 @@ def _ready_keys(scheduler, now: Optional[float] = None) -> list[str]:
 
 
 def _run_turn(key: str, item: dict, scheduler, deliver) -> None:
-    event = build_event(key, item["text"], item.get("task_id", ""))
+    event = build_event(key, item["text"], item.get("task_id", ""),
+                        origin=str(item.get("origin") or "background"))
     try:
         text = asyncio.run(scheduler.execute(event))
         try:

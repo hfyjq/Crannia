@@ -617,7 +617,7 @@ class PipelineScheduler:
             #   冒号就停。
             # 修法不是在这里重新拼 —— 那会变成第二个渲染源。
             body = str(pend.get("body") or "")
-            if kind == "delete" and not body:
+            if kind in ("delete", "delete_bulk") and not body:
                 # 使用工具拼好的列表，不要重新渲染。
                 #
                 # 在这里重新渲染会产生第二个渲染源，而且没有 >10 的
@@ -634,7 +634,7 @@ class PipelineScheduler:
                     names = [os.path.basename(str(p))
                              for p in (pend.get("file_paths") or [])]
                     file_list = compact_file_list(names)
-                body = render_delete_body(file_list)
+                body = render_delete_body(file_list, kind=kind)
             return build_payload(
                 kind,
                 int(pend.get("ask_index")

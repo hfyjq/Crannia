@@ -183,6 +183,13 @@ def sniff(data: bytes) -> Optional[str]:
     return _sniff_av(data)
 
 
+def ext_for_mime(mime: str) -> str:
+    """mime -> 扩展名（不带点）；认不出回空串。
+
+    唯一来源是 `_EXT_BY_MIME` —— 别在别处再写一张。"""
+    return _EXT_BY_MIME.get(str(mime or "").strip().lower(), "").lstrip(".")
+
+
 def kind_of(mime: str) -> str:
     """mime -> `image` / `audio` / `video` / `""`（认不出）。"""
     if not mime:

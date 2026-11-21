@@ -44,7 +44,8 @@ _WEEKDAY_NOTE = "weekdays 用 1=周一…7=周日（**不是** cron 的 0=周日
 CRON_CREATE_SCHEMA: dict = {
     "name": "cron_create",
     "description": (
-        "建一条定时任务：到点时你去跑 `prompt` 那段话，结果发回用户。"
+        "建一条定时任务：report（默认）到点时你去跑 `prompt` 那段话，结果告诉用户；"
+        "alarm 到点只提醒一句（`prompt` 就是那句提醒）。"
         "★ 时间不要自己算、不要转 UTC —— 把用户说的原样填成结构化字段。"
     ),
     "inputSchema": {
@@ -74,6 +75,12 @@ CRON_CREATE_SCHEMA: dict = {
                 "type": "string",
                 "enum": ["here", "new"],
                 "description": "here=接着这段对话（默认）；new=另起一段交付。",
+            },
+            "kind": {
+                "type": "string",
+                "enum": ["alarm", "report"],
+                "description": ("alarm=到点只提醒，不跑去取内容；"
+                                "report=到点真的去做（默认）。"),
             },
         },
         "required": ["title", "prompt", "rule"],
@@ -137,7 +144,8 @@ def preview_rule(rule: Any = None) -> dict:
 
 
 def create_job(title: Any = "", prompt: Any = "", rule: Any = None,
-               deliver: str = "here", channel: Optional[str] = None) -> dict:
+               deliver: str = "here", channel: Optional[str] = None,
+               kind: str = "report") -> dict:
     """建一条任务 —— 唯一的实现（工具与 HTTP 端点是两个入口，不是两套逻辑）。
 
     *channel* = 投给谁。`None`，从这一轮的请求快照上取（工具那条路）；
@@ -154,6 +162,10 @@ def create_job(title: Any = "", prompt: Any = "", rule: Any = None,
     if deliver not in ("here", "new"):
         return {"success": False,
                 "error": "deliver 只认 'here'（接着这条对话）或 'new'（另起一段）"}
+    if kind not in ("alarm", "report"):
+        return {"success": False,
+                "error": ("kind 只认 'alarm'（到点只提醒）或 'report'"
+                          "（到点真的去取内容，默认）")}
 
     channel = channel if channel is not None else _channel_of_this_turn()
     if not channel:
@@ -183,7 +195,7 @@ def create_job(title: Any = "", prompt: Any = "", rule: Any = None,
 
     jid = store.add(title=title, prompt=prompt,
                     rule_json=json.dumps(parsed.as_json(), ensure_ascii=False),
-                    channel=channel, deliver=deliver,
+                    channel=channel, deliver=deliver, kind=kind,
                     next_run=nxt.isoformat())
     return {
         "success": True,
@@ -196,13 +208,13 @@ def create_job(title: Any = "", prompt: Any = "", rule: Any = None,
 
 
 def cron_create(title: Any = "", prompt: Any = "", rule: Any = None,
-                deliver: str = "here") -> dict:
+                deliver: str = "here", kind: str = "report") -> dict:
     """`cron_create` 的 handler —— 只比 `create_job` 多一件事：自己找渠道。
 
     别在这里加第二份校验/话术：工具的入口与 HTTP 的入口必须是同一个实现
     （同一个概念两处实现 = 两套真相，而它们给出的答案看着都对）。
     """
-    return create_job(title, prompt, rule, deliver)
+    return create_job(title, prompt, rule, deliver, kind=kind)
 
 
 def _parse_actions(stats: dict) -> dict:

@@ -50,6 +50,7 @@ from core.cancellation import note_tool_interrupt
 #    而它反过来对本模块只在函数里按需 import，不构成环。
 from core import auto_review as AC
 # 逐条轨迹（默认关；关着时只是一次字典读，零成本）。
+from core import tool_outcome as _tool_outcome
 from core import trace as _trace
 from core.events import (
     EVT_COMPACT_PROGRESS, EVT_DELTA, EVT_SAY, EVT_STEER_DELIVERED, EVT_THINKING,
@@ -1875,6 +1876,8 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
     finally:
         _rs.set_current(_prev_snap)
 
+    if _err:
+        content = _config_route_note(tool_name, content)
     content = _format_tool_result(
         content, tool_name, max_chars=_result_budget(tool_name, max_chars))
 
@@ -1885,6 +1888,11 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
     _audit_tool_call(tool_name, tool_args, _denied, _err,
                      pending=_replay_pend is not None)
 
+    # 与循环那两处同一个映射（重放也可能再次挂起 / 被计划模式拒）。
+    _outcome, _reason = _tool_outcome.classify(
+        content, failed=bool(_err), refused=bool(_denied),
+        pending=_replay_pend is not None)
+
     # 读数走纯文本视图 —— 对块列表 `len()` 数的是"几个块"，
     # 而一个 5 MB 的图会被读成 2（看起来像一个正常的数）。
     _chars = len(_tool_result_text(content))
@@ -1892,7 +1900,8 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
         _emit(EVT_TOOL_END, call_id=call_id, name=tool_name, turn=turn,
               ok=_err is None,
               duration_ms=int((time.monotonic() - _t0) * 1000),
-              result_chars=_chars, error=(_err or ""))
+              result_chars=_chars, error=(_err or ""),
+              outcome=_outcome, reason=_reason)
 
     messages[idx]["content"] = content
     print(f"[approval] 已重放 '{tool_name}' 并把结果补回那次调用"
@@ -1995,6 +2004,98 @@ def _approval_in_child_message(tool_name: str) -> str:
     )
 
 
+#: 子代理可以就地申请的那几类审批。
+#: 计划批准 / 真值放行 / 应用接管不在此列 —— 它们改的是模式或整机授权，
+#: 由子代理发起会把"一个人的决定"变成"一个子任务的决定"。
+_CHILD_APPROVABLE_KINDS: frozenset[str] = frozenset({
+    "command", "egress", "cross_zone", "write_outside",
+    "delete", "delete_bulk", "destructive",
+})
+
+
+def _child_grant_once(kind: str, pend: dict, session_id: str) -> bool:
+    """用户批了之后，发这一次调用需要的那张一次性授权（本轮有效、带属主）。"""
+    try:
+        from bus.registry import get_workspace_manager
+        wm = get_workspace_manager()
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"[subagent] 取不到工作区管理器（{type(exc).__name__}: {exc}）")
+        return False
+    if wm is None:
+        return False
+    subject = str(pend.get("subject") or "")
+    try:
+        if kind == "cross_zone":
+            wm.grant_one_time_approval(session_id)
+        elif kind == "delete":
+            wm.grant_one_time_delete_approval(session_id, subject)
+        elif kind == "delete_bulk":
+            # 两张一起发（与父那条结算同形）：批量闸 + 普通免问。
+            wm.grant_one_time_bulk_delete_approval(session_id)
+            wm.grant_one_time_delete_approval(session_id, subject)
+        else:
+            wm.grant_target_once(kind, subject, session_id)
+        return True
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"[subagent] 授权失败（{kind}）：{type(exc).__name__}: {exc}")
+        return False
+
+
+def _child_settle_approval(pend: dict, tool_name: str, tc: dict, handler,
+                           tool_args: dict, artifacts, session_id: str,
+                           child_ask, result_max_chars: int):
+    """子在等审批：就地拿答案。返回 `(content, error, denied, result)`。
+
+    `allow` → 补一次性授权、就地重跑这次调用（工具在返回 `pending_*`
+    那一刻还没动手，所以重跑是安全的）；
+    其余 → 回一句框架的实话（拒绝 / 没有可问的通道），工具不跑。
+    """
+    kind = str(pend.get("kind") or "")
+    if kind not in _CHILD_APPROVABLE_KINDS or handler is None:
+        return (_approval_in_child_message(tool_name), "", True, None)
+    # 计划模式保持现状：子代理不发起审批（模式决定的是"谁来批"）。
+    try:
+        from core.modes import current_mode
+        if current_mode(session_id) == "plan":
+            return (_approval_in_child_message(tool_name), "", True, None)
+    except Exception:                                          # noqa: BLE001
+        pass
+
+    _decision = "allow" if _unlock_bypassing() else str(child_ask(pend) or "")
+    print(f"[subagent] 就地问审批 '{tool_name}'（{kind}）→ {_decision}")
+    if _decision != "allow":
+        from core.approval import outcome_line
+        if _decision == "deny":
+            _msg = outcome_line(
+                "rejected",
+                "用户拒绝了这次操作。不要重试，也不要换一个工具去达成同一件事。")
+        else:
+            _msg = outcome_line(
+                "unavailable",
+                "子代理的审批请求没有等到回答，这次调用没有执行。")
+        return ("Error: " + _msg, "", True, None)
+
+    if not _child_grant_once(kind, pend, session_id):
+        return (_approval_in_child_message(tool_name), "", True, None)
+    try:
+        _res, _content, _args = _dispatch_generic_tool(
+            tc, handler, tool_args, {}, artifacts, tool_name,
+            session_id=session_id)
+    except WriteNeedsApproval:
+        # 授权没覆盖到（例如写目标在别处）—— 不在这里开第二轮审批。
+        return (_approval_in_child_message(tool_name), "", True, None)
+    except Exception as exc:                                   # noqa: BLE001
+        _err = f"{type(exc).__name__}: {exc}"
+        return (f"Tool execution error: {_err}", _err, False, None)
+    _content = _format_tool_result(
+        _content, tool_name,
+        max_chars=_result_budget(tool_name, result_max_chars))
+    if _parse_approval_payload(_content) is not None:
+        # 授权没生效（工具又挂了同一张载荷）—— 这里不许转圈。
+        return (_approval_in_child_message(tool_name), "", True, None)
+    return (_content, _declared_failure(_res), False, _res)
+
+
 #: 并发跑 handler 的上限 —— 由档位给（`spec.tool_concurrency`），
 #: 这一格不再有第二个定义（两处定义必然漂移）。
 #: 上限 10 的判据：常见实现的默认并发都是 10。
@@ -2018,6 +2119,39 @@ _LOOP_SIDE_EFFECT_TOOLS: frozenset[str] = frozenset({
 #: 预取结果里的"没轮到它"哨兵 —— 不能用 `None`：handler 真的可能返回 `None`，
 #: 而那与"没预取"是两件事（同「读不到 ≠ 0」那条判据）。
 _NOT_PREFETCHED = object()
+
+
+class _Prefetched(dict):
+    """预取结果表 `{call_id: 结果}`，外加每个调用自己的实测用时 `ms`。
+
+    为什么要带着用时：预取在记账之前跑，而记账是串行、按原序的。
+    从记账那一刻往前量，量到的是"记账花了多久"（真机读数 2~3 ms），
+    不是那个工具真正跑了多久。用时在跑 handler 的那个线程里量，才作数。
+
+    它是 dict 的子类 —— 既有读者（`pre.get(...)`、`isinstance(..., _PrefetchFailed)`）
+    一个字节都不用改。
+    """
+
+    __slots__ = ("ms",)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.ms: dict[str, int] = {}
+
+
+def _tool_ms(pre, call_id, started) -> int:
+    """这次工具调用的用时（毫秒）。
+
+    预取过的调用用预取时量下的那个值；没预取的照旧从 `started` 量到此刻。
+    把这件事收在一处：四个发射点（两条路的轨迹与事件）用同一把尺子。
+    """
+    try:
+        ms = getattr(pre, "ms", {}).get(str(call_id or ""))
+    except Exception:                                      # noqa: BLE001
+        ms = None
+    if ms is not None:
+        return int(ms)
+    return int((time.monotonic() - started) * 1000)
 
 
 class _PrefetchFailed:
@@ -2340,7 +2474,8 @@ def _prune_tool_results(messages: list, session_id: str = "") -> tuple:
 def _prefetch_readonly(tool_calls: list, session_id: str,
                        tool_allowlist: frozenset | None = None, *,
                        provider=None, assistant_msg: dict | None = None,
-                       slots: "_SubagentSlots | None" = None) -> dict:
+                       slots: "_SubagentSlots | None" = None,
+                       origin: str = "") -> dict:
     """把这一批里能安全并发的 handler 调用先跑掉，`{call_id: 结果|_PrefetchFailed}`。
 
     判据全部复用循环里那套同一个函数（`get_tool_handler` / `is_tool_active` /
@@ -2364,13 +2499,15 @@ def _prefetch_readonly(tool_calls: list, session_id: str,
 
     并发的只有 handler 本身；记账（事件 / 审计 / 回填 / chunk 索引）
     全程串行、按原序 —— 那些是共享状态，串行才对得上，也才不用给它们加锁。
+    用时也在 handler 那个线程里量（`_Prefetched.ms`）：记账那一刻再量，
+    量到的是"记账花了多久"，预取过的工具会显示成 2~3 ms（真机）。
     收益只在同一批里的多个只读调用上（真实例：一次 `web_fetch` + 一次
     `list_workspace_files`）；写类与审批类照旧串行。
 
     `run_subagent` 也进这个计划（两个子互不相干，没必要一个一个跑）。
-    为此多了三个只给那一支用的关键字参数（`provider` / `assistant_msg` /
-    `slots`）—— 它们是 `_dispatch_subagent` 的入参，而 handler 拿不到。
-    拿不到这三样时它退回串行（fail-closed），不是"猜一个"。
+    为此多了几个只给那一支用的关键字参数（`provider` / `assistant_msg` /
+    `slots` / `origin`）—— 它们是 `_dispatch_subagent` 的入参，而 handler
+    拿不到。拿不到前三个时它退回串行（fail-closed），不是"猜一个"。
     """
     if len(tool_calls) < 2:
         return {}
@@ -2427,13 +2564,21 @@ def _prefetch_readonly(tool_calls: list, session_id: str,
                 return {}     # 拿不到接线就退回串行（fail-closed）
             plan[tc["id"]] = functools.partial(
                 _dispatch_subagent, name, tool_args, provider,
-                session_id, assistant_msg, slots)
+                session_id, assistant_msg, slots, origin=origin)
             continue
         plan[tc["id"]] = functools.partial(handler, **tool_args)
 
-    out: dict[str, object] = {}
+    out = _Prefetched()
     import contextvars
     from concurrent.futures import ThreadPoolExecutor
+
+    def _run_timed(cid: str, fn):
+        """跑一个 handler，并在同一个线程里量它自己的用时。"""
+        t0 = time.monotonic()
+        try:
+            return fn()
+        finally:
+            out.ms[cid] = int((time.monotonic() - t0) * 1000)
 
     # 线程池不继承 contextvars —— 而只读 handler（`read_file`）要读
     # `request_snapshot` 取会话号（`_note_read`）。不传播的话那边拿到空串，
@@ -2442,7 +2587,8 @@ def _prefetch_readonly(tool_calls: list, session_id: str,
     #   读 `request_snapshot.get_current()` 拿 fork 的素材 —— 不传播它，
     #   子 agent 会拿不到快照而拒绝派发（那也是一句会让人找半天的日志）。
     with ThreadPoolExecutor(max_workers=min(limit, len(plan))) as pool:
-        futures = {cid: pool.submit(contextvars.copy_context().run, fn)
+        futures = {cid: pool.submit(contextvars.copy_context().run,
+                                    _run_timed, cid, fn)
                    for cid, fn in plan.items()}
         for cid, fut in futures.items():
             try:
@@ -2914,7 +3060,7 @@ def _worktree_receipt(fin: dict) -> str:
 
 def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
                        session_id: str, assistant_msg: dict,
-                       slots: "_SubagentSlots") -> str:
+                       slots: "_SubagentSlots", *, origin: str = "") -> str:
     """派一个子 agent，回执是它的最终文本。
 
     为什么是循环里特判而不是普通 handler：`handler(**tool_args)` 拿不到
@@ -3079,17 +3225,9 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
         return _bad_args_message(
             tool_name, "`isolate` 只认 true / false（收到 %r）" % (_iso,), tool_args)
 
-    # 后台配额：必须排在"建工作树"之前
-    # 建工作树会真的创建分支 + 临时目录，而它的收口写在 `_work()` 的
-    #   `finally` 里 —— 提前 `return` 那一次 `_work` 压根不会跑
-    #   所以工作树与 `crannia/<slug>` 分支就留在盘上了（一处失败路径上的泄漏）。
+    # 后台派发不设条数配额：要限就限"一次请求派几个"（档位的子代理位），
+    #   不在这里按固定条数拒。
     from core import jobs as _jobs
-    if background:
-        #: 配额（设计 §6.4）：每会话后台子 agent ≤ 3 —— 拒，并给路线。
-        if _jobs.running_count_for(session_id, _jobs.KIND_SUBAGENT) >= 3:
-            return ("[subagent] 这一条**没派**：本会话已经在跑 3 个后台子 agent 了"
-                    "（配额上限）。等其中一个回来，或者把这件事拆到自己做；"
-                    "用 `task(action=\"status\")` 看谁还在跑。")
 
     #: 这一句放在 `if` 外面：下面那条"起线程失败要收口"的路径也要用它，
     #:   而它只在 `isolate` 分支里绑定的话，静态读者会（正确地）报"可能没绑定"。
@@ -3114,7 +3252,28 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
     #   否则子里 `current_session_id()` 拿到空串（工具门禁 / 取消都失效）。
     _ctx = contextvars.copy_context()
 
+    def _child_ask(pend: dict) -> str:
+        """子的审批：就地等用户回答（不占父那一轮）。"""
+        from core import child_approval
+        return child_approval.ask(session_id, pend, requester=_label)
+
+    # 审批浮窗只在 Web/GUI 上存在。IM 通道没有地方回答（IM 的回答是一轮，
+    #   而父那一轮正卡着）—— 那里的子保持老行为：拒绝 + 给路线，
+    #   别白等一轮超时。渠道读不到（测试/直调）就按有浮窗处理。
+    _ch = ""
+    try:
+        from core import request_snapshot as _rs
+        _ch = _rs.current_channel() or ""
+    except Exception:                                          # noqa: BLE001
+        _ch = ""
+    _ask_for_child = _child_ask if (not _ch or _ch.startswith("web")) else None
+
     def _work(job) -> str:
+        def _on_tokens(billed, output) -> None:
+            """面板的两格：累计计费量与累计输出（每轮报一次）。"""
+            job.tokens = int(billed or 0)
+            job.output_tokens = int(output or 0)
+
         try:
             res = subagent.run_child(
                 snapshot=snap, assistant_msg=assistant_msg,
@@ -3130,6 +3289,11 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
                 workspace=(wt["path"] if wt else None),
                 directive=_directive,
                 tool_allowlist=(_agent_def.tools if _agent_def is not None else None),
+                on_tokens=_on_tokens,
+                # 审批：子可以就地申请（见 `_child_settle_approval`）；
+                # 定时任务那一轮由 `_origin` 在派发前挡住。
+                ask=_ask_for_child,
+                origin=origin,
             )
         finally:
             if wt:
@@ -3190,9 +3354,12 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
         except Exception:                        # noqa: BLE001
             pass
         print(f"[subagent] 转后台：{job.id}（{_label}）")
+        # 时间的真话：回报要等这一轮结束才送得到（投递判据是会话空闲）。
+        #   不写清这一句，模型会一边等一条到不了的回报、一边接着干活。
         return ("[subagent] 已转到后台跑，任务 ID：%s（%s）。"
-                "它跑完会有一条后台任务回报；用 `task(task_id=\"%s\", action=\"wait\")` "
-                "等它、`action=\"cancel\"` 取消。**别在结果回来之前编造它的结论。**"
+                "它跑完的回报要等你这一轮结束之后才送得到；这一轮里就要结论，"
+                "就用 `task(task_id=\"%s\", action=\"wait\")` 去取"
+                "（`action=\"cancel\"` 取消）。**别在结果回来之前编造它的结论。**"
                 % (job.id, _label, job.id))
 
     def _hand_off(why: str) -> str:
@@ -3209,16 +3376,16 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
             pass
         print(f"[subagent] {why}：{job.id}（{_label}）")
         return ("[subagent] %s，任务 ID：%s（%s）。"
-                "它跑完会有一条后台任务回报；用 `task(task_id=\"%s\", "
-                "action=\"wait\")` 等它、`action=\"cancel\"` 取消。"
-                "**别在结果回来之前假定它做完了。**"
+                "它跑完的回报要等你这一轮结束之后才送得到；这一轮里就要结论，"
+                "就用 `task(task_id=\"%s\", action=\"wait\")` 去取"
+                "（`action=\"cancel\"` 取消）。**别在结果回来之前假定它做完了。**"
                 % (why, job.id, _label, job.id))
 
     # 前台：父等它，但每 0.2 秒看一眼 Ctrl+B
     # 判据与 `core/shell._run` 的前台等待逐字同形（两处必须一样，
     # 否则"命令转得走、子 agent 转不走"）。
     _fg = _jobs.note_foreground(session_id, job)
-    #: wall-clock 兜底（设计 §8 那一格）—— 超过预算，自动转后台，
+    #: wall-clock 兜底 —— 超过预算，自动转后台，
     #: 不取消（它还在跑，只是父不再等）。判据不是"多快算正常"，
     #: 是别让一次卡住的子 agent 冻住整轮；想更早转走就按 Ctrl+B。
     _budget = max(1.0, subagent.SUBAGENT_FOREGROUND_BUDGET_MS / 1000.0)
@@ -3309,6 +3476,23 @@ def _is_context_overflow(exc: object) -> bool:
         return False
 
 
+def _note_progress(cb, tokens: int, output_tokens: int = 0) -> None:
+    """把两个 token 读数报给调用方（子 agent 的任务面板用）。
+
+    *tokens* 是累计计费量（输入 + 输出，每步重发历史都算）；
+    *output_tokens* 是累计输出（只有 completion）—— 与主线状态条同一个口径，
+    面板显示的是它。
+
+    观测件：回调坏了只出声，不改循环里的任何判定。
+    """
+    if cb is None:
+        return
+    try:
+        cb(int(tokens or 0), int(output_tokens or 0))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[progress] 进度回调失败（{type(exc).__name__}: {exc}）")
+
+
 def agent_loop(
     user_message: str | MessageChain | None,
     provider,  # Provider client with .chat(messages, tools) method
@@ -3343,6 +3527,18 @@ def agent_loop(
     # `None` = 不接线，既有夹具逐字不变。
     # 返回新的 messages（成功）或 `None`（没压成/不需要）。
     compact_cb: Callable[[], list | None] | None = None,
+    #: 压力收缩是否同时改写 `messages` 本身。
+    #: 默认 `False`：只改这一次发出去的副本（持久化的历史必须原样留着，
+    #:   下一次请求由真正的压缩来处理）。
+    #: 子 agent 用 `True` —— 它的消息表只活在这条循环里，没有"下一次请求
+    #:   由谁压缩"这回事；只改副本等于白缩（下一条请求又涨回来）。
+    _inplace_trim: bool = False,
+    #: 每轮报一次累计 token 用量（子 agent 的任务面板用）。
+    #: 只读观测：回调抛异常不弄挂循环，也不改任何判定。
+    _on_progress: Callable[[int, int], None] | None = None,
+    #: 子代理的"就地审批"：给了它，悬起的审批会走去问用户（阻塞等答案），
+    #: 而不是回一句"子代理没有可提问的那一轮"。`None` = 老行为（一律拒）。
+    _child_ask: Callable[[dict], str] | None = None,
     # ---- 这一轮的图片 ----
     # 由 `PreProcessStage` 从 `message_chain` 现做（`image_input.prepare_turn`），
     # 形状是 OpenAI 的 content part（`{"type": "image_url", …}`）。
@@ -3651,8 +3847,7 @@ def agent_loop(
             # 消费即清除：这一轮到此为止，标志没有留下的理由。
             # （调度器在轮末还会再清一次 —— 覆盖"设得太晚、没被读到"的情况。）
             _consume_cancel(session_id)
-            content = ("（已按你的要求中断本轮。已完成的工具调用结果都保留在会话里，"
-                       "可以接着让我做。）")
+            content = tr("已打断，请告诉Crannia应该怎么做")
             messages.append({"role": "assistant", "content": content})
             return (content, messages, session_chunks, tokens_used)
 
@@ -3759,6 +3954,18 @@ def agent_loop(
                 _emit(EVT_TOOL_RESULTS_PRUNED, kind="pressure",
                       cleared=_pressure["trimmed"], saved_chars=_pressure["freed"],
                       kept=0, wire_only=True,
+                      ratio_before=round(_pressure["ratio_before"], 4),
+                      ratio_after=round(_pressure["ratio_after"], 4))
+
+        if _inplace_trim and _pressure.get("trimmed"):
+            # 只给"整条循环自己就是全部历史"的调用方（子 agent）：
+            #   子没有下一次请求可等，收缩必须落到 `messages` 上，
+            #   否则下一条请求又原样涨回来。
+            messages[:] = _messages_for_wire
+            if _emit:
+                _emit(EVT_TOOL_RESULTS_PRUNED, kind="child",
+                      cleared=_pressure["trimmed"], saved_chars=_pressure["freed"],
+                      kept=0, wire_only=False,
                       ratio_before=round(_pressure["ratio_before"], 4),
                       ratio_after=round(_pressure["ratio_after"], 4))
 
@@ -3948,6 +4155,7 @@ def agent_loop(
         # 只带 `content` / `total_tokens` 的 `SimpleNamespace` —— 直接取属性会把
         # 一整批"两条路锁步"的读者当场打红。
         output_tokens += getattr(response, "completion_tokens", 0)
+        _note_progress(_on_progress, tokens_used, output_tokens)
 
         if _emit:
             # reasoning_content 只在 provider.chat 返回之后才拿得到 —— 它本身
@@ -4118,7 +4326,7 @@ def agent_loop(
         #    就等于"拒绝之外还有一条先执行的缝"（见 `_prefetch_readonly` docstring）。
         _pre = _prefetch_readonly(tool_calls, session_id, _tool_allowlist,
                                   provider=provider, assistant_msg=assistant_msg,
-                                  slots=_sub_slots)
+                                  slots=_sub_slots, origin=_origin)
 
         # 这一批里有没有"挂起等审批"。
         # 置位在下面每条工具结果格式化之后（判据与检测器同一个函数
@@ -4135,8 +4343,7 @@ def agent_loop(
             if is_cancelled(session_id):
                 _consume_cancel(session_id)
                 _fill_skipped_tool_calls(messages, tool_calls[_tc_idx:])
-                content = ("（已按你的要求中断本轮。已完成的工具调用结果都保留在会话里，"
-                           "可以接着让我做。）")
+                content = tr("已打断，请告诉Crannia应该怎么做")
                 messages.append({"role": "assistant", "content": content})
                 _attach_artifacts(messages, _artifacts)
                 # 这一轮已经开始过（turn.start 发过了），收尾事件必须发。
@@ -4339,16 +4546,17 @@ def agent_loop(
                     print(f"[cron] 拒绝 '{tool_name}'：定时任务那一轮没有人可以回答审批"
                           f"（模式不是自动 —— 见 _cron_may_use_auto）")
 
-                # 子 agent 里不许开启审批
-                # 判据：审批靠"用户的回答变成新的一轮"兑现，而子没有那一轮。
-                # 所以拒绝 + 给路线（不是挂起 —— 挂起会让父整轮卡死，那才是真死锁）。
-                # 兜底闸要问的那些同属这一条 —— 它也是"要开一次审批"。
+                # 子 agent 的提问：仍然是拒 + 给路线。
+                # 提问是"再开一轮"（`ask_user` 的回答本身就是新的一轮），
+                # 而子跑在父的一次工具调用里，那一轮不存在。
+                # 动作审批不走这里 —— 给了 `_child_ask` 时它在工具返回载荷
+                # 之后就地解决（`_child_settle_approval`），不需要"新的一轮"；
+                # 没给（群成员、记忆抽取 fork）时保持老行为：一律拒。
                 elif subagent.depth() > 0 and (
-                        tool_name in _APPROVAL_CAPABLE_TOOLS
-                        # 提问也是"要开一轮"，而子没有那一轮
-                        #   所以一律拒 + 给路线（永不挂起）。
-                        or tool_name == "ask_user"
-                        or _destructive_gate_needed(session_id, tool_name)):
+                        tool_name == "ask_user"
+                        or (_child_ask is None and (
+                            tool_name in _APPROVAL_CAPABLE_TOOLS
+                            or _destructive_gate_needed(session_id, tool_name)))):
                     tool_result_content = _approval_in_child_message(tool_name)
                     _denied = True
                     print(f"[subagent] 拒绝 '{tool_name}'：子 agent 没有可提问的那一轮"
@@ -4356,11 +4564,9 @@ def agent_loop(
 
                 # 自动模式：分类器代答
                 #
-                # 位置是判据的一部分：在计划模式与子 agent 那两支之后、
-                #   在审批那几支之前。三条理由，缺一条位置就错：
-                #   ① 在子 agent 之后，子里的 `run_command` 照旧被
-                #      子 agent 那条拒（那一条判的是"要开审批"，与授权表无关），
-                #      而子也不用白付一次分类器调用；
+                # 位置是判据的一部分：在计划模式之后、在审批那几支之前。
+                #   ① 子代理也走这里 —— 自动模式下分类器能代答的，子的调用
+                #      一样不用弹窗（子的审批在工具返回载荷之后才弹）；
                 #   ② 在审批之前，它的作用正是"让下面那条审批不弹"；
                 #   ③ 在 `_args_err` 之后，它要把参数发给分类器。
                 # 判据用海象表达式：`None` = 照常往下走（可能已经预授权），
@@ -4566,6 +4772,10 @@ def agent_loop(
             else:
                 _tool_error = _declared_failure(result)
 
+            if _tool_error:
+                tool_result_content = _config_route_note(tool_name,
+                                                         tool_result_content)
+
             # Apply output budget: offload oversized results to disk
             # 闸口逐工具查一次（`read_file` 有更大的预算）。
             # 与流式那条逐字同一个 helper（必须锁步）。
@@ -4588,6 +4798,20 @@ def agent_loop(
                     tool_result_content = _approval_in_cron_replacement(_pend)
                     print(f"[cron] 中和 '{tool_name}' 的待审批（{_pend.get('kind')}）："
                           f"定时任务那一轮没有人可以回答")
+                elif subagent.depth() > 0 and _child_ask is not None:
+                    # 子的审批：就地等用户回答（不挂起父那一轮）。
+                    # 同意之后补一次性授权、重跑这次调用 —— 工具在返回
+                    # `pending_*` 那一刻还没动手，所以重跑是安全的。
+                    (tool_result_content, _child_err,
+                     _child_denied, _child_res) = _child_settle_approval(
+                        _pend, tool_name, tc, handler, tool_args, _artifacts,
+                        session_id, _child_ask, tool_result_max_chars)
+                    if _child_err:
+                        _tool_error = _child_err
+                    _denied = _denied or _child_denied
+                    if _child_res is not None:
+                        result = _child_res
+                    _pend = None
                 else:
                     # 弹窗之前先问 `PermissionRequest` —— 钩子可以替人
                     #   答应（工具还没动过，就地补跑）或替人拒绝。
@@ -4611,6 +4835,15 @@ def agent_loop(
                              _tool_error,
                              pending=(_pend is not None and not _cron_neutralized))
 
+            # 这次调用对客户端是什么结局 —— 与审计同一组判据，口径不同：
+            # 审计只记"没跑成"的四种，事件要给全（客户端靠它决定圆点与文案）。
+            _outcome, _reason = _tool_outcome.classify(
+                tool_result_content,
+                failed=bool(_tool_error),
+                refused=bool(_denied or _cron_neutralized),
+                pending=bool(_pend is not None and not _cron_neutralized),
+            )
+
             # 编程纪律：记本回合写过代码 / 跑过命令。第一次写代码文件成功时，
             # 在回执末尾附一条该项目的验证路线（探测不到就什么都不加）。
             _tip = _prog.observe(tool_name, result)
@@ -4625,14 +4858,15 @@ def agent_loop(
                                args=(tc.get("function") or {}).get("arguments", ""),
                                result=tool_result_content,
                                ok=_tool_error is None,
-                               duration_ms=int((time.monotonic() - _t_tool) * 1000))
+                               duration_ms=_tool_ms(_pre, call_id, _t_tool))
 
             if _emit:
                 _emit(EVT_TOOL_END, call_id=call_id, name=tool_name,
                       turn=_turn_no, ok=_tool_error is None,
-                      duration_ms=int((time.monotonic() - _t_tool) * 1000),
+                      duration_ms=_tool_ms(_pre, call_id, _t_tool),
                       result_chars=len(_tool_result_text(tool_result_content)),
-                      error=(_tool_error or ""))
+                      error=(_tool_error or ""),
+                      outcome=_outcome, reason=_reason)
 
             # Append tool result message
             messages.append({
@@ -4782,6 +5016,18 @@ async def agent_loop_stream(
     _tool_allowlist: frozenset | None = None,
     # ---- 与 sync 逐字同名/同义（锁步；见那边的注释）----
     compact_cb: Callable[[], list | None] | None = None,
+    #: 压力收缩是否同时改写 `messages` 本身。
+    #: 默认 `False`：只改这一次发出去的副本（持久化的历史必须原样留着，
+    #:   下一次请求由真正的压缩来处理）。
+    #: 子 agent 用 `True` —— 它的消息表只活在这条循环里，没有"下一次请求
+    #:   由谁压缩"这回事；只改副本等于白缩（下一条请求又涨回来）。
+    _inplace_trim: bool = False,
+    #: 每轮报一次累计 token 用量（子 agent 的任务面板用）。
+    #: 只读观测：回调抛异常不弄挂循环，也不改任何判定。
+    _on_progress: Callable[[int, int], None] | None = None,
+    #: 子代理的"就地审批"：给了它，悬起的审批会走去问用户（阻塞等答案），
+    #: 而不是回一句"子代理没有可提问的那一轮"。`None` = 老行为（一律拒）。
+    _child_ask: Callable[[dict], str] | None = None,
     images: list[dict] | None = None,
     # ---- 与 sync 逐字同名/同义（锁步）----
     thinking=None,
@@ -5007,8 +5253,7 @@ async def agent_loop_stream(
         # 刹车 1：用户中断（检查点在每次迭代开头，与 sync 同位置）
         if is_cancelled(session_id):
             _consume_cancel(session_id)
-            content = ("（已按你的要求中断本轮。已完成的工具调用结果都保留在会话里，"
-                       "可以接着让我做。）")
+            content = tr("已打断，请告诉Crannia应该怎么做")
             messages.append({"role": "assistant", "content": content})
             _attach_artifacts(messages, _artifacts)
             # 这一轮没有发过 `turn.start`（闸在它上面），刻意不发 `turn.end`
@@ -5113,6 +5358,18 @@ async def agent_loop_stream(
                 _emit(EVT_TOOL_RESULTS_PRUNED, kind="pressure",
                       cleared=_pressure["trimmed"], saved_chars=_pressure["freed"],
                       kept=0, wire_only=True,
+                      ratio_before=round(_pressure["ratio_before"], 4),
+                      ratio_after=round(_pressure["ratio_after"], 4))
+
+        if _inplace_trim and _pressure.get("trimmed"):
+            # 只给"整条循环自己就是全部历史"的调用方（子 agent）：
+            #   子没有下一次请求可等，收缩必须落到 `messages` 上，
+            #   否则下一条请求又原样涨回来。
+            messages[:] = _messages_for_wire
+            if _emit:
+                _emit(EVT_TOOL_RESULTS_PRUNED, kind="child",
+                      cleared=_pressure["trimmed"], saved_chars=_pressure["freed"],
+                      kept=0, wire_only=False,
                       ratio_before=round(_pressure["ratio_before"], 4),
                       ratio_after=round(_pressure["ratio_after"], 4))
 
@@ -5279,6 +5536,7 @@ async def agent_loop_stream(
                 tokens_used += final_usage.get("prompt_tokens", 0)
                 output_tokens += final_usage.get("completion_tokens", 0)
                 tokens_used += final_usage.get("completion_tokens", 0)
+                _note_progress(_on_progress, tokens_used, output_tokens)
 
             if chunk.content:
                 accumulated_content += chunk.content
@@ -5420,7 +5678,7 @@ async def agent_loop_stream(
             # 与 sync 逐字同位置（只读并发，其余串行；白名单一并传，同上）
             _pre = _prefetch_readonly(tool_calls_list, session_id, _tool_allowlist,
                                       provider=provider, assistant_msg=_assistant_msg,
-                                      slots=_sub_slots)
+                                      slots=_sub_slots, origin=_origin)
 
             # 与 sync 逐字同一条（锁步）
             _saw_pending = False
@@ -5434,8 +5692,7 @@ async def agent_loop_stream(
                 if is_cancelled(session_id):
                     _consume_cancel(session_id)
                     _fill_skipped_tool_calls(messages, tool_calls_list[_tc_idx:])
-                    content = ("（已按你的要求中断本轮。已完成的工具调用结果都保留在会话里，"
-                               "可以接着让我做。）")
+                    content = tr("已打断，请告诉Crannia应该怎么做")
                     messages.append({"role": "assistant", "content": content})
                     # 这一轮已经开始过（`turn.start` 发过了），收尾事件必须发
                     _end_turn(_turn_no, _t_turn, _tool_count)
@@ -5734,6 +5991,10 @@ async def agent_loop_stream(
                 else:
                     _tool_error = _declared_failure(result)
 
+                if _tool_error:
+                    tool_result_content = _config_route_note(
+                        tool_name, tool_result_content)
+
                 tool_result_content = _format_tool_result(
                     tool_result_content, tool_name,
                     max_chars=_result_budget(tool_name, tool_result_max_chars),
@@ -5748,6 +6009,18 @@ async def agent_loop_stream(
                         tool_result_content = _approval_in_cron_replacement(_pend)
                         print(f"[cron] 中和 '{tool_name}' 的待审批（{_pend.get('kind')}）："
                               f"定时任务那一轮没有人可以回答")
+                    elif subagent.depth() > 0 and _child_ask is not None:
+                        # 与 sync 逐字同一条（锁步）：子的审批就地解决。
+                        (tool_result_content, _child_err,
+                         _child_denied, _child_res) = _child_settle_approval(
+                            _pend, tool_name, tc, handler, tool_args, _artifacts,
+                            session_id, _child_ask, tool_result_max_chars)
+                        if _child_err:
+                            _tool_error = _child_err
+                        _denied = _denied or _child_denied
+                        if _child_res is not None:
+                            result = _child_res
+                        _pend = None
                     else:
                         # 与 sync 逐字同一条（锁步）—— 见那边的注释。
                         _ph_content, _pend, _ph_result = _permission_hook_apply(
@@ -5767,6 +6040,14 @@ async def agent_loop_stream(
                                  _tool_error,
                                  pending=(_pend is not None and not _cron_neutralized))
 
+                # 与 sync 锁步：同一组判据、同一份映射。
+                _outcome, _reason = _tool_outcome.classify(
+                    tool_result_content,
+                    failed=bool(_tool_error),
+                    refused=bool(_denied or _cron_neutralized),
+                    pending=bool(_pend is not None and not _cron_neutralized),
+                )
+
                 # 编程纪律（与 sync 锁步）：回执末尾可能附一条验证路线。
                 _tip = _prog.observe(tool_name, result)
                 if _tip:
@@ -5777,14 +6058,15 @@ async def agent_loop_stream(
                                    args=(tc.get("function") or {}).get("arguments", ""),
                                    result=tool_result_content,
                                    ok=_tool_error is None,
-                                   duration_ms=int((time.monotonic() - _t_tool) * 1000))
+                                   duration_ms=_tool_ms(_pre, call_id, _t_tool))
 
                 if _emit:
                     _emit(EVT_TOOL_END, call_id=call_id, name=tool_name,
                           turn=_turn_no, ok=_tool_error is None,
-                          duration_ms=int((time.monotonic() - _t_tool) * 1000),
+                          duration_ms=_tool_ms(_pre, call_id, _t_tool),
                           result_chars=len(_tool_result_text(tool_result_content)),
-                          error=(_tool_error or ""))
+                          error=(_tool_error or ""),
+                          outcome=_outcome, reason=_reason)
 
                 messages.append({
                     "role": "tool",
@@ -6161,6 +6443,58 @@ def _hook_failure_note(session_id, tool_name, tool_args, exc, call_id, text):
     return text
 
 
+def _config_route_note(tool_name: str, content):
+    """工具失败时补一句「缺哪份配置、去哪看」。
+
+    只对声明了 `requires_config` 的技能生效；判据在
+    `core/config_requirements.py`。捕获一切异常：给错误回执加路线，
+    绝不许让规划这个路线本身把错误路径弄坏。
+    """
+    if not isinstance(content, str):
+        return content
+    try:
+        from bus.registry import get_tool_owner
+        owner = str(get_tool_owner(tool_name) or "")
+        if not owner.startswith("skill:"):
+            return content
+        from core import config_requirements as _cr
+        missing = _cr.missing_for(owner.split(":", 1)[1])
+        if not missing:
+            return content
+        line = ("缺少 %s 的配置；运行 `/config %s` 查看配置入口。"
+                % ("、".join(missing), missing[0]))
+        return "%s\n\n[framework] %s" % (content, line)
+    except Exception:                                  # noqa: BLE001
+        return content
+
+
+def _secret_fill_note(tool_name: str, tool_args, content, session_id: str) -> str:
+    """第一次把凭据写进配置文件：补一句"会进历史"的提醒（每会话一次）。
+
+    代填不设闸：不拦、不反复劝；只在真的写到那份文件时提醒一次。
+    判"是不是那份文件"靠路径（`is_secret_target`），不猜内容 ——
+    猜内容会误报，而误报的代价是一次多余提醒。
+    """
+    if not isinstance(content, str):
+        return content
+    try:
+        if tool_name not in ("write_file", "edit_file"):
+            return content
+        if not isinstance(tool_args, dict):
+            return content
+        path = tool_args.get("path") or tool_args.get("file_path") or ""
+        from core import config_requirements as _cr
+        if not _cr.is_secret_target(str(path)):
+            return content
+        if not _cr.note_fill_once(str(session_id or "")):
+            return content
+        return ("%s\n\n[framework] 凭据已写进配置。请提醒用户一次："
+                "刚才那条消息会进会话历史，并随每轮发给上游模型。"
+                "（本会话不再重复）" % content)
+    except Exception:                                  # noqa: BLE001
+        return content
+
+
 def _dispatch_generic_tool(tc, handler, tool_args, pre, artifacts, tool_name: str,
                            session_id: str = ""):
     """通用派发：预取命中就直接用，否则现调；产物收进 `artifacts`。
@@ -6190,6 +6524,7 @@ def _dispatch_generic_tool(tc, handler, tool_args, pre, artifacts, tool_name: st
     content = _tool_result_of(result, tool_name)
     content = _post_hook_content(session_id, tool_name, tool_args, content,
                                  str(tc.get("id") or ""))
+    content = _secret_fill_note(tool_name, tool_args, content, session_id)
     return result, content, tool_args
 
 

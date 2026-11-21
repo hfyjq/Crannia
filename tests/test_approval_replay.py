@@ -723,6 +723,77 @@ def test_w68_the_stage_persists_a_neutralized_stale_pending():
     assert not ctx.pending_command.get("active"), "陈旧那条不该被武装"
 
 
+# 7. 结算类结局要发 `tool.end`（否则客户端的"待审批"卡永远不结束）
+
+class _Bus:
+    def __init__(self):
+        self.sent = []
+
+    def emit(self, type_, session_key="", **data):
+        self.sent.append((type_, session_key, data))
+
+
+def _run_stage_with_replay(replay):
+    """跑一段只有"结算"的 AgentLoopStage。"""
+    import asyncio
+    _boot()
+    from core.pipeline.stage import StageContext
+    from core.pipeline.stages.agent_loop import AgentLoopStage
+
+    mm = _temp_memory_manager()
+    sid = "t:private:w67settle"
+    mm.short_term.init_session(sid)
+    pending = json.dumps(_pending_payload_dict(), ensure_ascii=False)
+    msgs = _history(name="probe_ok", content=pending)
+    mm.short_term.save_messages(sid, msgs, [0] * len(msgs))
+
+    class _Pool:
+        def maybe_trim_cold_window(self, _sid, m):
+            return m
+
+    ctx = StageContext(session=_S(key=sid), user_message="")
+    ctx.config = {}
+    ctx.session_id = sid
+    ctx.storage_id = sid
+    ctx.messages = msgs
+    ctx.memory_context = ""
+    ctx.session_pool = _Pool()
+    ctx.provider = _Provider(lambda i, m: _Resp(content="ok"))
+    ctx.memory_manager = mm
+    ctx.approval_replay = replay
+    bus = _Bus()
+    ctx.events = bus
+    asyncio.run(AgentLoopStage().process(ctx))
+    return ctx, bus
+
+
+def test_a_denial_emits_a_settled_tool_end():
+    """拒绝：客户端那张"待审批"卡必须收到结束信号（rejected / user）。
+
+    修前只有"同意"那条路发 `tool.end`（`replay_pending_call` 带 `_emit`），
+    拒绝 / 提问回答 / 打断一条都不发 —— 卡片会永远停在黄点。
+    """
+    from core.approval import outcome_line
+    deny = "[系统] " + outcome_line("rejected", "route")
+    ctx, bus = _run_stage_with_replay(
+        {"call_id": "c1", "deny": deny, "fallback": deny})
+    ends = [d for t, _, d in bus.sent if t == "tool.end"]
+    assert len(ends) == 1, ends
+    assert ends[0]["call_id"] == "c1", ends[0]
+    assert ends[0]["outcome"] == "rejected", ends[0]
+    assert ends[0]["reason"] == "user", ends[0]
+
+
+def test_an_answered_question_emits_completed():
+    """提问被回答：结局是 completed（不是"待审批"，也不是"被拒绝"）。"""
+    ctx, bus = _run_stage_with_replay(
+        {"call_id": "c1", "result": "ANSWER", "fallback": "ANSWER"})
+    ends = [d for t, _, d in bus.sent if t == "tool.end"]
+    assert len(ends) == 1, ends
+    assert ends[0]["outcome"] == "completed", ends[0]
+    assert ends[0]["reason"] == "", ends[0]
+
+
 # ------------------------------------------------------------------
 
 def main():

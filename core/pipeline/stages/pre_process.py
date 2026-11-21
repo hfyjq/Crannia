@@ -631,6 +631,15 @@ class PreProcessStage(Stage):
             )
         return ctx
 
+    def _cmd_config(self, ctx: StageContext, user_input: str) -> StageContext:
+        # ---- /config [名字] ----
+        # 技能的配置要求与入口（`manifest.yaml` 的 `requires_config`）。
+        # 只回话，不派发 —— 与 `/context` 同一条：这是"看一眼"的命令。
+        parts = user_input.split(maxsplit=1)
+        ctx.metadata["stop"] = True
+        ctx.response = _handle_config_command(parts)
+        return ctx
+
     def _cmd_compact(self, ctx: StageContext, user_input: str) -> StageContext:
         # ---- /compact ----
         pool = ctx.session_pool
@@ -1244,12 +1253,9 @@ def _handle_effort(parts: list, session_key: str) -> str:
     from core import tiers
     from core.tiers import TIERS, TierUnsupported, level_of
 
-    def _table(current: int | None) -> str:
-        rows = []
-        for lvl in sorted(TIERS):
-            spec = TIERS[lvl]
-            rows.append(f"{lvl} {spec.name}")
-        return "\n".join(rows)
+    def _table() -> str:
+        # 六档一行排开：这条回执要说的只是"现在是哪档"，一档一行会把回复拉成七行。
+        return " - ".join(f"{lvl} {TIERS[lvl].name}" for lvl in sorted(TIERS))
 
     # 读现状（可能读不出来 —— 而上一条 docstring 的 ④ 就是这个意思）
     current: int | None = None
@@ -1262,7 +1268,7 @@ def _handle_effort(parts: list, session_key: str) -> str:
         _cur = (f"{current} {TIERS[current].name}" if current is not None
                 else tr("无法识别"))
         return (tr("当前档位：%s\n%s\n用 /effort <名称或数字> 切换档位，/effort thinking on|off 开关思考")
-                % (_cur, _table(current)))
+                % (_cur, _table()))
 
     want = parts[1].strip()
 
@@ -1723,6 +1729,40 @@ def _handle_context_command(pool, session_key: str, messages) -> str:
     return "\n".join(lines)
 
 
+def _handle_config_command(parts: list) -> str:
+    """`/config [名字]`：列出 / 查看技能的配置要求与入口。
+
+    判据只有一份（`core/config_requirements.py`）：这里不猜"配没配"。
+    末尾那句提醒是代填（用户明确要求、agent 照办）唯一的固定提示点 ——
+    不拦、不重复，只在用户来查入口时说一次。
+    """
+    from core import config_requirements as _cr
+
+    tip = tr("填好后提醒：明文凭据会进会话历史，并随每轮发给上游模型。")
+    scope = parts[1].strip() if len(parts) > 1 else ""
+    if not scope:
+        rows = []
+        for skill in _cr.all_skills():
+            for decl in _cr.declared(skill):
+                rows.append((skill, decl, _cr.configured(decl), _cr.where(decl)))
+        if not rows:
+            return tr("没有技能声明需要配置。")
+        lines = [tr("技能配置：")]
+        for skill, decl, ok, place in rows:
+            lines.append("- %s → %s：%s（%s）"
+                         % (skill, decl, tr("已配置") if ok else tr("未配置"),
+                            place))
+        lines.append(tip)
+        return "\n".join(lines)
+    owners = [s for s in _cr.all_skills() if scope in _cr.declared(s)]
+    if not owners:
+        return trf("没有技能声明需要「{name}」的配置。", scope)
+    ok = _cr.configured(scope)
+    return (trf("「{name}」：{state}（{where}）", scope,
+                tr("已配置") if ok else tr("未配置"), _cr.where(scope))
+            + "\n" + tip)
+
+
 def _handle_skill_command(parts: list) -> str:
     """处理 /skill list|check|approve|reject|reload。
 
@@ -1970,6 +2010,7 @@ _COMMANDS: tuple = (
     _CommandSpec("/stop", "停止当前这一轮", "_cmd_stop"),
     _CommandSpec("/clear", "清空当前上下文，开始新对话", "_cmd_clear"),
     _CommandSpec("/compact", "压缩对话记录，释放上下文空间", "_cmd_compact"),
+    _CommandSpec("/config", "查看技能的配置要求与入口", "_cmd_config", MATCH_PREFIX),
     _CommandSpec("/context", "查看当前上下文的构成与占用", "_cmd_context"),
     _CommandSpec("/skill", "检查与启用技能", "_cmd_skill", MATCH_PREFIX),
     # 这一条必须排在 `/mode` 前面（见本表抬头）
@@ -2505,11 +2546,21 @@ def _answer_ask(kind: str, pend: dict, user_input: str, ctx):
         # 这是第二种语义（`cancelled`）。不做区分时它看起来与
         #   "rejected"一模一样（都只是框架说的一句中文），而模型该做的事
         #   正好相反：拒绝，停；打断，带着补充重做。
+        _replay = _replay_of(pend)          # `_drop_pending` 会清空 pend
         _drop_pending(pend)
         ctx.user_message = "[系统] " + outcome_line(
             "cancelled",
             f"用户**打断**了本次审批，并补充：{text}。"
             f"请根据这条补充重新判断。**不要**当成已获得授权。")
+        # 这一支不经过 `approval_replay`，所以结算结论要在这里自己发 ——
+        # 否则客户端那张"待审批"卡没有结束信号。
+        from core import tool_outcome as _to
+        from core.events import emit_settled_tool
+        _so, _sr = _to.of_settlement("cancelled")
+        emit_settled_tool(getattr(ctx, "events", None), session_key_of_ctx(ctx),
+                          call_id=str(_replay.get("call_id") or ""),
+                          name=str(_replay.get("name") or ""),
+                          outcome=_so, reason=_sr)
         return None
 
     # 非 Web：回一句纠正，挂起状态保持不变

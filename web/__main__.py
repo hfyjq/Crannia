@@ -8,6 +8,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core import paths
 
+# 一个数据根只许一个后端：先问端点文件，有人应答就让位。
+# 放在 `prepare()` 之前 —— 数据迁移与播种不该在第二个进程里再跑一遍，
+# 而"已经有后端在跑"这件事与迁移无关，越早判越省事。
+from core import endpoint as _endpoint
+
+_live = _endpoint.probe(paths.data_root())
+if _live is not None:
+    _st = _live.get("status") or {}
+    print("[web] 已有服务在跑：http://127.0.0.1:%s（pid=%s，版本=%s）"
+          " —— 本次启动退出。" %
+          (_live["port"], _live["pid"],
+           _st.get("version") or _live.get("version") or "未知"), flush=True)
+    print("[web] 要用这个数据根就接上它；要自己起，先停掉那一个。", flush=True)
+    sys.exit(2)
+
 _rep = paths.prepare()
 
 # 数据格式比本程序新时，`prepare()` 已经备份过整个数据根
