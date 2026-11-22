@@ -113,7 +113,7 @@ def _run_one(p: Path) -> tuple:
        `export`）—— 这样"忘了 export"不再是这个脚本的失败模式。
     """
     env = dict(os.environ, PYTHONIOENCODING="utf-8",
-               CRANNIA_INTERFACE_LANGUAGE="zh")
+               CRANNIA_INTERFACE_LANGUAGE="zh", CRANNIA_TESTING="1")
     t0 = time.monotonic()
     try:
         r = subprocess.run(
@@ -172,7 +172,7 @@ def _run_tui_suite() -> int:
     if py is None:
         print("\n[tui] 未跑：找不到 TUI 的解释器（tui/.venv 或 CRANNIA_TUI_PYTHON）")
         return 0
-    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", CRANNIA_TESTING="1")
     try:
         r = subprocess.run([str(py), str(script)], cwd=str(_ROOT), env=env,
                            stdin=subprocess.DEVNULL, capture_output=True,

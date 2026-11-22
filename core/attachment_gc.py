@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import time
 from pathlib import Path
 from typing import Iterable, Optional, Set
@@ -211,12 +212,32 @@ def prune(days: Optional[int] = None, *, now: Optional[float] = None,
     return stats
 
 
+def _is_test_process() -> bool:
+    """这个进程是不是测试 —— 是就别动真目录。
+
+    为什么要这一条：回收挂在 `scheduler.initialize()` 的启动钩子上，而不少
+    测试会起真调度器、又没进 `sandbox()`。那时 `data/attachments/` 是**真的**
+    用户目录，一天一次的闸一旦过期，跑一遍测试就删掉一批真附件
+    （2026-11-22 全量跑里 `test_chat_segment` 的污染哨兵就是这样响的）。
+
+    两条判据：
+      · `CRANNIA_TESTING=1` —— `scripts/run_tests.py` 给每个子进程设的；
+      · 入口文件名是 `test_*.py` —— 单跑某个测试文件时没有那个环境变量。
+    """
+    if os.environ.get("CRANNIA_TESTING") == "1":
+        return True
+    entry = os.path.basename(sys.argv[0] if sys.argv else "")
+    return entry.startswith("test_") and entry.endswith(".py")
+
+
 def maybe_prune_daily(now: Optional[float] = None,
                       stamp_path: Optional[Path] = None) -> Optional[dict]:
     """启动钩子用：一天最多一次。没到点返回 `None`（不出声）。
 
     只记"跑过没有"，不记读数 —— 读数留给调用方打日志。
     """
+    if _is_test_process():
+        return None
     stamp = Path(stamp_path) if stamp_path else _STAMP
     ts = now if now is not None else time.time()
     last = 0.0
