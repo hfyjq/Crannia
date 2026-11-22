@@ -216,7 +216,7 @@ def _is_test_process() -> bool:
     """这个进程是不是测试 —— 是就别动真目录。
 
     为什么要这一条：回收挂在 `scheduler.initialize()` 的启动钩子上，而不少
-    测试会起真调度器、又没进 `sandbox()`。那时 `data/attachments/` 是**真的**
+    测试会起真调度器、又没进 `sandbox()`。那时 `data/attachments/` 是真的
     用户目录，一天一次的闸一旦过期，跑一遍测试就删掉一批真附件
     （2026-11-22 全量跑里 `test_chat_segment` 的污染哨兵就是这样响的）。
 
