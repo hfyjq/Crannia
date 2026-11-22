@@ -71,8 +71,8 @@ export function AskUser({ data, answer }) {
         {/* 这里没有关闭 / 停靠 —— 与审批不同：提问是"这一轮张不开嘴"
             的唯一出路，收起来之后用户就没有地方回答它了（而审批还能去
             设置页 / 换个操作）。逃生口是下面那个输入框：不选、直接说。 */}
-        <h2>{data.header || t("Crannia 想问你")}</h2>
-        <p>{data.question || data.body || t("需要你定一下。")}</p>
+        <h2>{data.header || t("Crannia 想问您")}</h2>
+        <p>{data.question || data.body || t("需要您定一下。")}</p>
 
         <div className="approval-options ask-options">
           {opts.map((o, i) => {
@@ -95,7 +95,7 @@ export function AskUser({ data, answer }) {
 
         <input className="approval-input" ref={inputRef} value={text}
                onChange={(e) => setText(e.target.value)}
-               placeholder={t("或者：直接说你的想法（不用选）")} />
+               placeholder={t("或者：直接说您的想法（不用选）")} />
 
         <footer className="approval-foot">
           <span className="approval-hint">{t(hintText(data))}</span>

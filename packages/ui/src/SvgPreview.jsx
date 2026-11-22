@@ -31,7 +31,7 @@ export default function SvgPreview({ code, label = "SVG" }) {
       return { url: "", error: t("此SVG过大，此处只显示源码") };
     }
     if (!isSvgSource(text)) {
-      return { url: "", error: t("这段内容不是 SVG 文件。") };
+      return { url: "", error: t("此内容不是 SVG 文件。") };
     }
     let clean = "";
     try {

@@ -57,7 +57,7 @@ export function TestRunModal({ job, client, onClose }) {
         if (cancelled.current) { await discard(storageId.current); return; }
         if (out && out.text) setText(out.text);
         setPhase(out && out.ok === false ? "failed" : "done");
-        if (out && out.ok === false) setErr(out.error || out.reason || t("这次没跑成"));
+        if (out && out.ok === false) setErr(out.error || out.reason || t("未成功运行"));
       } catch (e) {
         if (cancelled.current) return;
         setPhase("failed");
@@ -94,7 +94,7 @@ export function TestRunModal({ job, client, onClose }) {
         </div>
 
         <p className="cron-run-note">
-          {t("这是一次")}<b>{t("试跑")}</b>{t("：它在一段")}<b>{t("临时对话")}</b>{t("里跑，")}<b>{t("不会影响你正在进行的对话")}</b>{t("， 关掉就清掉。它")}<b>{t("不带上下文")}</b>{t("，所以效果与到点那天可能不完全一样。")}
+          {t("本次运行为试跑，与现有对话无关，关闭即清理。请注意本次运行效果并不完全代表实际运行效果")}
         </p>
 
         <div className="cron-run-steps">
@@ -102,23 +102,23 @@ export function TestRunModal({ job, client, onClose }) {
             <div className="cron-run-step" key={i}><i />{s}</div>
           )) : (
             <div className="cron-run-step muted">
-              {phase === "running" ? t("正在运行…（尚未产生第一步操作）") : t("这一轮没有产生步骤")}
+              {phase === "running" ? t("正在运行…（尚未产生第一步操作）") : t("此轮没有产生步骤")}
             </div>
           )}
         </div>
 
         <div className="cron-run-out">
           {phase === "running" && (
-            <div className="cron-run-wait"><Loader2 size={15} className="spin" />{t("正在跑，跑完会出现在这里")}</div>
+            <div className="cron-run-wait"><Loader2 size={15} className="spin" />{t("等待结果刷新")}</div>
           )}
           {phase === "failed" && <div className="preview bad">{err}</div>}
           {phase === "done" && (
-            text ? <Markdown text={text} /> : <p className="muted">{t("跑完了，但没有产出文字。")}</p>
+            text ? <Markdown text={text} /> : <p className="muted">{t("已完成，未产出文字")}</p>
           )}
         </div>
 
         <footer>
-          <span>{phase === "running" ? t("还在跑；现在关掉，这一轮会继续跑完但结果不留。") : t("关掉即清掉这次试跑的对话。")}</span>
+          <span>{phase === "running" ? t("仍在运行中，此时关闭会导致结果丢失，且不会终止此次运行") : t("关掉即清掉这次试跑的对话。")}</span>
           <button onClick={close}>{phase === "running" ? t("关掉") : t("知道了")}</button>
         </footer>
       </section>

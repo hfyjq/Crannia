@@ -272,7 +272,7 @@ export function MemoryLibrary({ client, notify, onBack, settings, onReload }) {
               <div className="mem-field">
                 <label>{t("一句话描述")}</label>
                 <input value={draft.description} disabled={busy}
-                       placeholder={t("这句会显示在索引里")}
+                       placeholder={t("本句会在索引内展示")}
                        onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
               </div>
               <div className="mem-field grow">

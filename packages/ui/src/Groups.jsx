@@ -311,7 +311,7 @@ export function Groups({ client, notify, connected, onEnter, onGroupsChanged }) 
       <div className="group-body" onClick={(e) => e.stopPropagation()}>
         {!hasHost && missing.length > 0 && (
           <p className="group-form-hint">
-            {t("这个群没有主理人：还有 {n} 位成员的职责没填 （{names}）—— 保存群设置前必须补齐，点下面的成员逐个填写。",
+            {t("本群无主理人：还有 {n} 位成员的职责没填 （{names}）",
                { n: missing.length, names: missing.map((m) => m.name).join("、") })}
           </p>
         )}
@@ -415,7 +415,7 @@ export function Groups({ client, notify, connected, onEnter, onGroupsChanged }) 
         {data === null && <p className="muted">{t("读取中…")}</p>}
         {err && <p className="muted">{err}</p>}
         {data !== null && !err && !groups.length && (
-          <p className="muted">{t("还没有群聊 —— 在下面建一个。")}</p>
+          <p className="muted">{t("还没有群聊")}</p>
         )}
         <div className="group-cards">
           {groups.map((g) => {
@@ -511,7 +511,7 @@ export function Groups({ client, notify, connected, onEnter, onGroupsChanged }) 
                        setHostConfirmed(false);
                        setOpenPicker("");
                      }} />
-              <span>{t("是（主理人会成为你和团队沟通的桥梁）")}</span>
+              <span>{t("是（主理人会成为您和团队沟通的桥梁）")}</span>
             </label>
           </div>
           {/* 群级 brief —— 整群一段共同背景。
@@ -554,14 +554,14 @@ export function Groups({ client, notify, connected, onEnter, onGroupsChanged }) 
         {staffVisible && (
           <div className="group-staff-sec">
             <h3 className="group-sub-title">
-              {t("员工配置")} <span className="muted">{t("（在这里配置你的员工属性）")}</span>
+              {t("员工配置")} <span className="muted">{t("（在这里配置您的员工属性）")}</span>
             </h3>
             {staffIndices.length ? (
               <div className="group-staff-grid">
                 {staffIndices.map((i) => personCard(i))}
               </div>
             ) : (
-              <p className="muted">{t("这次没有员工 —— 只有主理人一个人。")}</p>
+              <p className="muted">{t("本群仅存在主理人，未配置员工。")}</p>
             )}
             {/* 禁用按钮的原因必须写在脸上 —— 禁用的按钮不显示 title。 */}
             {!verdict.ok && <p className="group-form-hint">{verdict.error}</p>}
@@ -625,7 +625,7 @@ export function Groups({ client, notify, connected, onEnter, onGroupsChanged }) 
         <Confirm
           title={t("解散这个群聊？")}
           body={<>
-            <b>{confirming.name || t("这个群聊")}</b>
+            <b>{confirming.name || t("此群聊")}</b>
             <br />
             {t("群成员、主理人与群配置都会删掉；它说过的话仍留在历史库里。")}
           </>}

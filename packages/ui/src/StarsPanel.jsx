@@ -86,7 +86,7 @@ export function StarsPanel({ client, onOpen }) {
           ) : null}
           {items.map((s) => (
             <button className="stars-item" key={s.message_id}
-                    title={t("跳到这条对话")}
+                    title={t("跳转至此对话")}
                     onClick={() => onOpen && onOpen(s.storage_id, s.message_id)}>
               <div className="stars-line q">{line(s.question) || t("（这条提问已不在库里）")}</div>
               {/* `answer === null` 与 `answer === ""` 不是一回事：

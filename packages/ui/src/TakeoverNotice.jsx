@@ -44,7 +44,7 @@ export function TakeoverNotice({ audioUrl, onConfirm, onCancel, onAcknowledge, o
           <h2 className="safety-title" id="takeover-title">{t("安全警告")}</h2>
         </div>
         <p className="safety-body">
-          {t("你正在启用Agent的")} <b>{t("接管模式")}</b>{t("，此模式下agent可以直接控制您的输入器以完成操作。")}
+          {t("您正在启用Agent的")} <b>{t("接管模式")}</b>{t("，此模式下agent可以直接控制您的输入器以完成操作。")}
           <br />
           {/* 措辞的关键：检测不是从"启用"开始，而是从
               agent 真正开始操作那一刻开始 —— 启用之后用户仍要打字下指令、

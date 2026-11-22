@@ -64,11 +64,11 @@ export function SafetyNotice({ audioUrl, onConfirm, onCancel, kind = "auto", onO
         <p className="safety-body">
           {kind === "full_access" ? (
             <>
-              {t("你正在将框架运行模式切换至")} <b>{t("完全权限")}</b>{t("，此模式下 agent 将获得最大权限能力。 agent 的行动将不再询问您，仅有部分硬性边界生效。 请注意，您仍然是您的生产安全第一负责人。")}
+              {t("您正在将框架运行模式切换至")} <b>{t("完全权限")}</b>{t("，此模式下 agent 将获得最大权限能力。 agent 的行动将不再询问您，仅有部分硬性边界生效。 请注意，您仍然是您的生产安全第一负责人。")}
             </>
           ) : (
             <>
-              {t("你正在将框架运行模式切换至自动模式，此模式下 agent 的请求将移交自动审查。 绝大多数情况下，agent 的行动将不再询问您。请注意，您仍然是您的生产安全第一负责人。 有关自动模式的详细介绍，详见")}
+              {t("您正在将框架运行模式切换至自动模式，此模式下 agent 的请求将移交自动审查。 绝大多数情况下，agent 的行动将不再询问您。请注意，您仍然是您的生产安全第一负责人。 有关自动模式的详细介绍，详见")}
               {/* 说明页已存在（`HelpPanel.jsx` + `docs/help/auto.md`）
                   这里是一颗真按钮：点开同一张卡片变大，左上角返回。 */}
               <button type="button" className="safety-link"

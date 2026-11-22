@@ -209,7 +209,7 @@ export default function SkillConfig({ skill, client, notify, connected }) {
     <div className="set-row col" key={skill}>
       <div>
         <b>{t("生图与视频")}</b>
-        <span>{t("这些条目由生图 skill 使用")}</span>
+        <span>{t("此类条目由生图 skill 使用")}</span>
       </div>
       <div className="skill-cfg">
         {names.length === 0 && newName === null

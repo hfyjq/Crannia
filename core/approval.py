@@ -569,7 +569,7 @@ _DEFAULT_BODY: dict[str, str] = {
     # （那是好结果），而是 `build_payload` 走到 `_DEFAULT_BODY.get(kind, "")`
     #空正文的浮窗（"冒号后面啥也没有"）。
     # 措辞刻意与 `delete` 不同：要说清这次为什么还要问。
-    "delete_bulk": "Crannia 想**批量**删除以下文件（数量超过了你设的阈值）：",
+    "delete_bulk": "Crannia 想**批量**删除以下文件（数量超过了您设的阈值）：",
     "egress": "Crannia 想访问以下目标 ——",
     "command": "Crannia 想执行以下命令：",
     "destructive": "Crannia 想执行一个**不可逆**的操作：",
@@ -577,7 +577,7 @@ _DEFAULT_BODY: dict[str, str] = {
     # （计划正文），而 `body` 非空时 `render_prompt` / `build_payload` 都不看默认值。
     # 仍然写上：缺一格的默认值会让 `pending_payload` / `build_payload`
     # 悄悄产出一个空正文的浮窗。
-    "plan": "Crannia 写好了计划，请你过目：",
+    "plan": "Crannia 写好了计划，请您过目：",
     # 这一格只在极端情况下会被用到 —— 生产那条路自带 `body`
     # （"想写到 <目录>，它在工作区之外"）。仍然写上：缺一格的默认值会让
     # 浮窗冒号后面啥也没有（`delete_bulk` 那条同款）。

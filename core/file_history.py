@@ -831,19 +831,19 @@ def diff_for(session_id: str, path, version: int,
         if parser_hint_for(Path(str(path)).suffix)[0]:
             return {"ok": False, "kind": "binary", "diff": "", "before": "",
                     "after": "", "text": "",
-                    "note": "这是二进制文件，不按文本比较它的改动"}
+                    "note": "二进制文件，不支持文本类比较"}
     except Exception:                                    # noqa: BLE001
         pass
     if not sid or latest_version(sid, path) == 0:
         return {"ok": False, "kind": "missing", "diff": "", "before": "",
                 "after": "", "text": "",
-                "note": "这个文件没有留档（留档从本会话开始；旧会话不会补）"}
+                "note": "此文件没有留档"}
 
     kind_before, before = read_version(sid, path, version)
     if kind_before == "":
         return {"ok": False, "kind": "missing", "diff": "", "before": "",
                 "after": "", "text": "",
-                "note": "这一版的留档不在了（可能已被保留期清掉）"}
+                "note": "无法找到此版本留档（可能已被保留期清掉）"}
     if kind_before == "big":
         return {"ok": False, "kind": "big", "diff": "", "before": "",
                 "after": "", "text": "",
@@ -875,7 +875,7 @@ def diff_for(session_id: str, path, version: int,
         return {"ok": True, "kind": "new", "diff": "", "before": "",
                 "after": after, "text": after,
                 "added": len(after.splitlines()), "removed": 0,
-                "note": "这个文件是这一轮新建的（改前不存在）"}
+                "note": "此文件为本轮新建的"}
 
     src = str(path)
     diff_lines = list(difflib.unified_diff(
@@ -899,7 +899,7 @@ def diff_for(session_id: str, path, version: int,
         return {"ok": True, "kind": "gone", "diff": "\n".join(diff_lines),
                 "before": before, "after": "", "text": "",
                 "added": 0, "removed": removed,
-                "note": "这个文件现在不在了（改前的内容留在这里）"}
+                "note": "此文件已消失"}
 
     return {"ok": True, "kind": "diff", "diff": "\n".join(diff_lines),
             "before": before, "after": after, "text": after,

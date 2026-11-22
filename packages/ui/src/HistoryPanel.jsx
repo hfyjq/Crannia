@@ -45,7 +45,7 @@ function when(s) {
 /** 一条消息怎么称呼它。按 `kind` 认摘要，不按 role（摘要的 role 是 `user`）。 */
 function who(m) {
   if (m.kind === "history_summary") return t("摘要");
-  return { user: t("你"), assistant: t("助手"), tool: t("工具") }[m.role] || m.role;
+  return { user: t("您"), assistant: t("助手"), tool: t("工具") }[m.role] || m.role;
 }
 
 /** `jump` = `{storage_id, message_id}`（收藏夹点条目跳过来的落点）。
@@ -224,7 +224,7 @@ export function HistoryPanel({ client, jump, onJumped }) {
               <small>{when(th.started_at)} · {t("{n} 轮", { n: th.turn_count })}{th.is_current ? " " + t("· 当前") : ""}</small>
             </button>
           ))}
-          {!threads.length ? <p className="drawer-stub">{t("这个通道还没有会话。")}</p> : null}
+          {!threads.length ? <p className="drawer-stub">{t("此通道还没有会话。")}</p> : null}
         </div>
       ) : null}
 
@@ -283,7 +283,7 @@ export function HistoryPanel({ client, jump, onJumped }) {
               </div>
             ))}
             {!loading && !rows.length ? (
-              <p className="hist-note">{t("这条会话在库里没有历史。")}</p>
+              <p className="hist-note">{t("此会话无法查询到历史")}</p>
             ) : null}
           </>
         )}

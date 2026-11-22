@@ -33,14 +33,14 @@ export const BADGE_WORKBUDDY = { text: "WorkBuddy 目录", cls: "external" };
 // 不要再把它抽成常量：`i18n_scan.py` 只认 `t("…")` 里的字面量，
 //   走常量那一层它扫不到，英文界面里这句一直是中文。
 //   这句话现在直接写在 `Skills.jsx` 的 `t("…")` 里。
-export const EXTERNAL_SCOPE_NOTE = "这些技能只能用 `/` 调用，不会进入模型的上下文";
+export const EXTERNAL_SCOPE_NOTE = "此类技能只能用 `/` 调用，不会进入模型的上下文";
 
 /** 外部来源点「卸载」时那句（后面拼上路径）。
  *
  *  键里不许带首尾空格：扫描器按行归一后落表，而运行时的 `t()` 用原串
  *  查，带着那个尾巴空格就永远查不到，界面上一直是中文
  *  （英文界面里这句原样是中文）。空格放在拼接处。 */
-export const EXTERNAL_UNINSTALL_MSG = "这是外部应用的组件，暂不提供卸载。路径";
+export const EXTERNAL_UNINSTALL_MSG = "外部应用的组件，暂不提供卸载。路径";
 
 /** 这一条上不上技能页。
  *

@@ -210,7 +210,7 @@ export function canAdd(card, maxPerCard) {
   const n = ((card && card.configs) || []).length;
   const cap = Number(maxPerCard) || 10;
   return { ok: n < cap,
-           error: n < cap ? "" : t("这张卡最多 {cap} 条配置，先删一条。", { cap }) };
+           error: n < cap ? "" : t("卡片最多 {cap} 条配置，请尝试删除一些条目", { cap }) };
 }
 
 /** 联通测试的结果怎么显示成一句话（`data` 是端点回的载荷）。 */

@@ -39,7 +39,7 @@ export function takeoverAvailability({ mode, connected, enabled, desktop }) {
   if (mode !== "full_access") {
     return { ok: false, reason: t("需要更高权限，请先把模式切到「完全权限」。") };
   }
-  return { ok: true, reason: t("启用接管：Agent 可以直接控制你的鼠标键盘") };
+  return { ok: true, reason: t("启用接管：Agent 可以直接控制您的鼠标键盘") };
 }
 
 /** 按钮上的字。 */
@@ -52,8 +52,8 @@ export function takeoverLabel(status) {
 export function stopReasonText(reason) {
   const r = String(reason || "");
   if (r === "esc") return t("已退出接管（Esc）");
-  if (r === "physical_key") return t("已退出接管：检测到你的键盘输入");
-  if (r === "physical_mouse") return t("已退出接管：检测到你的鼠标操作");
+  if (r === "physical_key") return t("已退出接管：检测到您的键盘输入");
+  if (r === "physical_mouse") return t("已退出接管：检测到您的鼠标操作");
   if (r === "tray") return t("已退出接管（托盘）");
   if (r.startsWith("mode=")) return t("已退出接管：模式已切换");
   return "";

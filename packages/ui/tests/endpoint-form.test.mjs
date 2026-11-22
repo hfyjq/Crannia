@@ -98,7 +98,7 @@ check("没填过就是「未填」", apiHint({ has_api: false }) === "未填");
 check("卡片副标题是 n / 上限", cardSubtitle({ configs: [1, 2] }, 10) === "2 / 10");
 check("★ 满了就灰，且**说得出为什么**",
       canAdd({ configs: new Array(10).fill(0) }, 10).ok === false &&
-      /先删一条/.test(canAdd({ configs: new Array(10).fill(0) }, 10).error));
+      /删除一些条目/.test(canAdd({ configs: new Array(10).fill(0) }, 10).error));
 check("没满 -> 可以建", canAdd({ configs: [1] }, 10).ok === true);
 
 // ── 7. 联通测试的结论怎么说 ──────────────────────────────────────────

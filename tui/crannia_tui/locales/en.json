@@ -25,7 +25,6 @@
   "%s 字符": "%s chars",
   "未知错误": "Unknown error",
   "正在初始化…": "Starting…",
-  "我可以怎么帮助您？": "How can I help you?",
   "后端未就绪，输入不会生效": "Backend not ready — input is ignored",
   "步骤流已断开，正在重连...": "Step stream disconnected, reconnecting…",
   "提交审批失败：%s": "Could not submit the approval: %s",
@@ -259,5 +258,6 @@
   "[warn] 技能配置：检查失败（%s）—— 跳过": "[warn] Skill config: check failed (%s) — skipped",
   "提示：这个窗口用不了 ANSI，颜色退到 16 色、底部实时区关掉（功能都在）。": "Note: this window cannot render ANSI. Colors fall back to 16, and the live area at the bottom is disabled (everything still works).",
   "想恢复：换 Windows Terminal 跑，或设 CRANNIA_TUI_ANSI=1 强制开启。": "To restore them, run in Windows Terminal, or set CRANNIA_TUI_ANSI=1.",
-  "无法确定会话（/api/status 没有 session），不再订阅全部会话；请改用交互界面。": "Could not determine the session (/api/status returned no session); refusing to subscribe to all sessions. Use the interactive UI instead."
+  "无法确定会话（/api/status 没有 session），不再订阅全部会话；请改用交互界面。": "Could not determine the session (/api/status returned no session); refusing to subscribe to all sessions. Use the interactive UI instead.",
+  "转后台失败": "Could not move it to the background"
 }

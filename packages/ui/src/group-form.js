@@ -371,7 +371,7 @@ export function validateMemberDraft(draft, { hasHost = true, maxRole = 500, maxM
     return { ok: false, error: t("模型名最长 {max} 个字符", { max: maxModel }) };
   }
   if (!hasHost && !role) {
-    return { ok: false, error: t("这个群没有主理人 —— 职责不能空，写一句它负责什么。") };
+    return { ok: false, error: t("本群无主理人 —— 需要您手动明确各自职责") };
   }
   return { ok: true, error: "" };
 }

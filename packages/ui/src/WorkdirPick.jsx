@@ -38,7 +38,7 @@ export function WorkdirPick({ client, value, onPick, notify, disabled }) {
       if (r && r.ok && r.path) onPick(String(r.path));
       else if (r && r.error && r.error !== "未选择目录") notify && notify(r.error);
     } catch (e) {
-      notify && notify(t("选目录没成功：") + (e && e.message ? e.message : e));
+      notify && notify(t("选取失败：") + (e && e.message ? e.message : e));
     } finally {
       setBusy(false);
     }
@@ -51,7 +51,7 @@ export function WorkdirPick({ client, value, onPick, notify, disabled }) {
         className={"ws-pick-btn" + (has ? " on" : "")}
         onClick={pick}
         disabled={busy || disabled}
-        title={has ? value : t("选一个目录：这一段对话的产出落在那里")}
+        title={has ? value : t("选取一个目录")}
       >
         {has ? <FolderOpen size={14} /> : <Folder size={14} />}
         {has ? tailName(value) : t("选择工作区")}

@@ -16,6 +16,9 @@ const guard = require("./ipc-guard.cjs");
 // 「渲染进程没了」时在窗口里出声的文案与判据。不 import electron ——
 // 文案与判定逻辑可以由纯 Node 测试直接钉住。
 const gone = require("./renderer-gone.cjs");
+// 换装脚本的生成与安装目录判据。不 import electron —— 纯函数，node 直接测。
+// 现场：路径含空格时 `$Dir` 被截断，装到了盘根，还触发 NSIS 按路径前缀误杀。
+const updateApply = require("./update-apply.cjs");
 let mainWindow; let tray; let quitting = false; let backend;
 let backendStopped = false;  // 子进程收过尾了（`will-quit` 只许走一次）
 let quitChecked = false;     // "现在退会打断什么"问过了（`before-quit` 只许走一次）
@@ -166,7 +169,9 @@ else {
         _codePackApplied = applyCodePack(cp);
       } else {
         const pend = pendingUpdate();
-        if (pend) { applyPendingUpdate(pend); return; }
+        //: 只有"确实要把自己退掉去装"才中断启动；判据不安全 / 次数到顶时
+        //:   它返回 false，我们照常起后端（用户还能手动装）。
+        if (pend && applyPendingUpdate(pend)) return;
       }
     }
     try {
@@ -537,11 +542,32 @@ function codePackMarker() {
     const appDir = String(raw.app_dir || "").trim();
     const backupDir = String(raw.backup_dir || "").trim();
     if (!version || !newDir || !appDir || !backupDir) return null;
+    //: 三个目录都必须是 `<安装目录>\resources` 的直接子目录 ——
+    //:   它们随后会被 `rmSync(recursive)` / `renameSync` 动到，判据必须比
+    //:   "字符串可信"更硬（同族：那次把应用装进盘根的事故）。
+    for (const [name, val] of [["new_dir", newDir], ["app_dir", appDir],
+                               ["backup_dir", backupDir]]) {
+      if (!isDirectChildOfResources(val)) {
+        logUpdate(`code pack marker rejected: ${name} is not under resources`);
+        return null;
+      }
+    }
     if (!fs.existsSync(path.join(newDir, "core", "version.py"))) return null;
     if (!versionIsNewer(version, app.getVersion())) return null;
     return { marker: file, version, newDir, appDir, backupDir };
   } catch (e) {
     return null;
+  }
+}
+
+/** `p` 是不是 `<安装目录>\resources` 的直接子目录（大小写不敏感）。 */
+function isDirectChildOfResources(p) {
+  try {
+    const resources = path.resolve(path.dirname(process.execPath), "resources");
+    const parent = path.resolve(path.dirname(String(p)));
+    return parent.toLowerCase() === resources.toLowerCase();
+  } catch (e) {
+    return false;
   }
 }
 
@@ -630,6 +656,7 @@ function recoverInterruptedSwap() {
  *  为什么由壳读磁盘、而不是问后端：装更新必须在起后端之前
  *  （那些文件正被后端占着），那一刻还没有任何接口可问。
  *  三条都要真的成立才认：文件在、安装包在、版本比当前新。
+ *  `attempts` 由壳自己记（写回这份 JSON）：失败要能重试，但不能无限重试。
  */
 function pendingUpdate() {
   const file = path.join(dataRoot(), "data", "updates", "pending.json");
@@ -639,19 +666,37 @@ function pendingUpdate() {
     const installer = String(raw.path || "").trim();
     if (!version || !installer || !fs.existsSync(installer)) return null;
     if (!versionIsNewer(version, app.getVersion())) return null;
-    return { marker: file, version, installer };
+    return {
+      marker: file,
+      version,
+      installer,
+      attempts: Number(raw.attempts) || 0,
+    };
   } catch (e) {
     return null;
   }
 }
 
+//: 失败重试的上限。到顶就只写日志、不再尝试（标记留着，用户仍可手动装）。
+const MAX_UPDATE_ATTEMPTS = 3;
+
+/** 记一次尝试（写回 marker）。写不进去不拦更新。 */
+function bumpUpdateAttempts(p) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(p.marker, "utf8"));
+    raw.attempts = (Number(raw.attempts) || 0) + 1;
+    fs.writeFileSync(p.marker, JSON.stringify(raw), "utf8");
+  } catch (e) { /* 写不了也不拦 */ }
+}
+
 /** 静默装上那一份，然后把自己重新拉起来。
  *
- *  顺序是有意的：小窗先换成「正在更新」并停 1.6 秒（用户要知道发生了什么），
- *  再退出本进程 —— 装的时候我们的文件不能还被占着 —— 交给一个脱离的
- *  PowerShell 等两秒、`/S` 装、装完 `Start-Process` 拉起新版本。
- *  `/D=` 必须放在参数串最后且不加引号（NSIS 的规矩）；所以整串交给
- *  `-ArgumentList` 一个字符串，不让 PowerShell 再替我们加引号。
+ *  返回 `true` = 本进程准备退出（调用方据此中断启动）；`false` = 这次不装，
+ *  照常起后端（标记留着，下次再试或用户手动装）。
+ *
+ *  顺序是有意的：脚本先甩出去，再让小窗显示「正在更新」，然后退出本进程 ——
+ *  装的时候我们的文件不能还被占着。`/D=` 必须放在参数串最后且不加引号
+ *  （NSIS 的规矩，见 `update-apply.cjs`）。
  *
  *  为什么要一个"中转" PowerShell（`relay`）而不是直接 spawn 脚本：
  *    真机实测（2026-11-13）—— 直接 `spawn(powershell -File …)` 然后立刻
@@ -663,65 +708,53 @@ function pendingUpdate() {
 const UPDATE_HOLD_MS = 1600;
 
 function applyPendingUpdate(p) {
-  console.log(`[update] 待安装 v${p.version}：${p.installer}`);
-  tellSplash({ updating: true });
   const dir = path.dirname(process.execPath);
-  //: 日志落数据根（`data/updates/update.log`），不落 `%TEMP%` ——
-  //:   设置页「更新日志」读的就是这一份；`%TEMP%` 里那份用户找不到。
-  const logFile = path.join(dataRoot(), "data", "updates", "update.log");
-  const stamp = () => new Date().toISOString();
-  try {
-    fs.appendFileSync(logFile,
-      `${stamp()} shell: pending v${p.version} -> ${p.installer}\n`, "utf8");
-  } catch (e) { /* 写不了日志不拦更新 */ }
-  const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";
-  const script = [
-    "param($Installer, $Dir, $Exe, $Log)",
-    "$log = $Log",
-    'if (-not (Test-Path (Split-Path $log))) { New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null }',
-    'Add-Content $log "$(Get-Date -Format o) start: $Installer -> $Dir"',
-    "Start-Sleep -Seconds 2",
-    "try {",
-    "  $p = Start-Process -FilePath $Installer -ArgumentList ('/S /D=' + $Dir) -Wait -PassThru",
-    '  Add-Content $log "$(Get-Date -Format o) installer exit $($p.ExitCode)"',
-    "  if ($p.ExitCode -eq 0) {",
-    "    Start-Process -FilePath $Exe",
-    "    Remove-Item -LiteralPath $Installer -Force -ErrorAction SilentlyContinue",
-    "  } else {",
-    //: 非零退出也要把人拉回来：修前是"窗口消失、什么都没发生"。
-    '    Add-Content $log "$(Get-Date -Format o) install failed (exit $($p.ExitCode)) -- relaunching current version"',
-    "    Start-Process -FilePath $Exe",
-    "  }",
-    "} catch {",
-    '  Add-Content $log "$(Get-Date -Format o) failed: $($_.Exception.Message) -- relaunching current version"',
-    "  Start-Process -FilePath $Exe",
-    "}",
-  ].join("\r\n");
+  //: 安装目录判据：里面没有 Crannia.exe / 目录名是同级目录名的前缀
+  //:   就不装。这次现场：`$Dir` 被截成 `C:\Program`，装到盘根，还触发了
+  //:   NSIS「按路径前缀杀进程」把 `C:\Program Files\*` 下全部进程杀了一遍。
+  //:   只写日志 —— 不产出面向用户的文案（容易误解）。
+  const check = updateApply.checkInstallDir(dir);
+  if (!check.ok) {
+    bumpUpdateAttempts(p);
+    logUpdate(`skip pending v${p.version}: ${check.reason}`);
+    return false;
+  }
+  if (p.attempts >= MAX_UPDATE_ATTEMPTS) {
+    logUpdate(`skip pending v${p.version}: attempts=${p.attempts} `
+      + `reached ${MAX_UPDATE_ATTEMPTS}`);
+    return false;
+  }
+  console.log(`[update] 待安装 v${p.version}：${p.installer}`);
+  const logFile = updateLogFile();
+  logUpdate(`pending v${p.version} -> ${p.installer}`);
+  bumpUpdateAttempts(p);
+
+  //: 脚本每次现生成，路径以字面量嵌进去 —— 不再经 `-ArgumentList` 传参。
+  const script = updateApply.buildApplyScript({
+    installer: p.installer,
+    dir,
+    exe: updateApply.relaunchExePath(dir),
+    fallbackExe: process.execPath,
+    logFile,
+    markerFile: p.marker,
+  });
   const ps = path.join(app.getPath("temp"), "crannia_apply_update.ps1");
-  setTimeout(() => {
-    try { fs.unlinkSync(p.marker); } catch (e) { /* 清不掉也别拦住重启 */ }
-    try {
-      // BOM：Windows PowerShell 5.1 读不带 BOM 的 UTF-8 会按本地代码页解，
-      //   路径里的中文会解坏 —— 那正是"装完打不开"的一种。
-      fs.writeFileSync(ps, "﻿" + script, "utf8");
-      const relay = "Start-Process powershell.exe -ArgumentList @(" + [
-        "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass",
-        "-File", ps, "-Installer", p.installer, "-Dir", dir,
-        "-Exe", process.execPath, "-Log", logFile,
-      ].map(psq).join(",") + ") -WindowStyle Hidden";
-      spawn("powershell.exe", ["-NoProfile", "-WindowStyle", "Hidden", "-Command", relay],
-            { stdio: "ignore", windowsHide: true }).unref();
-    } catch (e) {
-      console.error(`[update] 起安装脚本失败：${e && e.message ? e.message : e}`);
-      try {
-        fs.appendFileSync(logFile,
-          `${stamp()} shell: failed to start installer: ${e && e.message ? e.message : e}\n`,
-          "utf8");
-      } catch (_) { /* 同上 */ }
-    }
-    // 给中转 PowerShell 两秒交接（它自己马上就退，真正干活的是被 甩出去 的那个）。
-    setTimeout(() => app.exit(0), 2000);
-  }, UPDATE_HOLD_MS);
+  try {
+    // BOM：Windows PowerShell 5.1 读不带 BOM 的 UTF-8 会按本地代码页解，
+    //   路径里的中文会解坏 —— 那正是"装完打不开"的一种。
+    fs.writeFileSync(ps, "\ufeff" + script, "utf8");
+    const relay = updateApply.buildRelayCommand(ps);
+    spawn("powershell.exe", ["-NoProfile", "-WindowStyle", "Hidden", "-Command", relay],
+          { stdio: "ignore", windowsHide: true }).unref();
+  } catch (e) {
+    console.error(`[update] 起安装脚本失败：${e && e.message ? e.message : e}`);
+    logUpdate(`failed to start installer: ${e && e.message ? e.message : e}`);
+    return false;
+  }
+  tellSplash({ updating: true });
+  //: 给中转 PowerShell 交接时间（它自己马上退，真正干活的是被甩出去的那个）。
+  setTimeout(() => app.exit(0), UPDATE_HOLD_MS + 2000);
+  return true;
 }
 
 //: 随机句的文件 —— 桌面壳的内容，跟着版本走。

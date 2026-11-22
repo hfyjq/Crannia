@@ -1536,9 +1536,9 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
         # 落一格给审批载荷 —— "自动档还是弹窗"里，熔断是最可能的那个原因，
         #    不写就只有用户能看到结果，事后查不出因。
         _set_auto_gate_note(
-            tr("自动模式这次没替你答：**连续/累计被拦超限**（熔断）——"
-               "按设计**退回问你**，并且计数器已清零（下一次它会重新开始判）。"
-               "最近一次被拦的是：%s")
+            tr("自动审查失效：**连续/累计被拦超限**（熔断触发）——"
+               "本次需要人工审查。计数器已清零。"
+               "最近一次拦截条目：%s")
             % (st.last_blocked or tr("（没记）")))
         return None
 
@@ -1567,9 +1567,8 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
         #    所以手动档：退回问人（什么都不做）；自动档：维持现状（拒）。
         if not mode_is_auto:
             _set_auto_gate_note(
-                tr("这次没替你答：**分类器没给出结论**（%s）—— 你开着的那个"
-                   "「全部放行」开关**不再等于放行**，所以退回问你。")
-                % (verdict.reason or tr("没有原因可报")))
+                tr("自动审查失效，需要人工审查")
+                + ("（%s）" % (verdict.reason or tr("没有原因可报"))))
             print("[auto] 手动档 ⇒ 退回问人（让那个工具自己去问）")
             return None
         # 这一支有意不调 `record_denial`（「设施故障不计入熔断」）：
@@ -1594,8 +1593,8 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
             return None
         print(f"[auto] 判为安全，但**不知道怎么放行** {tool_name} —— 退回问人")
         _set_auto_gate_note(
-            tr("自动模式这次没替你答：**它判了「安全」，但不知道用哪种方式放行**"
-               "`%s` —— 于是退回问你（不是它判你危险）。") % tool_name)
+            tr("自动审查失效"
+               "`%s` 需要您手动审批") % tool_name)
         return None
 
     AC.note_stat("blocked")

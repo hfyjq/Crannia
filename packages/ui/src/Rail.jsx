@@ -102,7 +102,7 @@ export function Drawer({ panel, onClose, client, jump, onJumped, onOpenStar }) {
                   //    都有对应面板，正常走不到）。
                   //    所以兜底话术只描述事实，不要提排期或计划 ——
                   //    留着就是一句会说谎的文案（界面在说谎那一族）。
-                  : <p className="drawer-stub">{t("这一格没有面板。")}</p>}
+                  : <p className="drawer-stub">{t("此处没有面板。")}</p>}
           </div>
         </>
       ) : null}

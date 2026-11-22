@@ -181,7 +181,7 @@ function Schedules({ client, connected, onToast }) {
                   ? t(" · 下次 {at}", { at: j.next_run.slice(0, 16).replace("T", " ") })
                   : ""}</span>
                 <span className="cron-stat">
-                  {j.run_count ? t("跑过 {j.run_count} 次", { "j.run_count": j.run_count }) : t("还没跑过")}
+                  {j.run_count ? t("跑过 {j.run_count} 次", { "j.run_count": j.run_count }) : t("尚未有任何运行")}
                   {j.last_status
                     ? t(" · 上次 {r}", { r: j.last_status === "ok" ? t("成功") : t("失败") })
                     : ""}
@@ -236,7 +236,7 @@ function Schedules({ client, connected, onToast }) {
             </div>
           ))}
           {!jobs.length && (
-            <p className="muted">{t("还没有定时任务。点右上角「新建任务」，或直接在对话里说。")}</p>
+            <p className="muted">{t("还没有定时任务")}</p>
           )}
         </div>
       )}

@@ -79,6 +79,9 @@ const SHELL_FILES = [
   "apps/desktop/ipc-guard.cjs",
   "apps/desktop/backend-lifecycle.cjs",
   "apps/desktop/web-document.cjs",
+  //: 换装脚本的生成与安装目录判据。同一个坑的第五条：
+  //:   加了文件不加白名单，打出来的 exe 双击就弹 `Cannot find module`。
+  "apps/desktop/update-apply.cjs",
   "apps/desktop/splash.html",
   "apps/desktop/splash-preload.cjs",
   "apps/desktop/splash-data.js",

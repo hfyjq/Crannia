@@ -103,7 +103,7 @@ export function ActivityBlock({ data, onCancel, open = false, onToggle }) {
         <header className="activity-head as-row" onClick={() => onToggle && onToggle()}>
           <span className="activity-bad"><TriangleAlert size={13} /></span>
           <b>{t("未完成")}</b>
-          <span className="activity-sum">{t("这一轮没有完成 —— 详情见下面的说明")}</span>
+          <span className="activity-sum">{t("本轮没有完成")}</span>
           <span className="activity-toggle">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
         </header>
         {open ? body : null}

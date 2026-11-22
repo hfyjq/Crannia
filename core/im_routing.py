@@ -201,7 +201,7 @@ def _render_question(numbering: Dict[int, str],
 def _tips() -> str:
     #: 这是给用户看的一句话：不用 Markdown（`**`）、不用内部词
     #: （"接入"/"换默认"），说清两个动作各自会发生什么。
-    return ("提示：临时切到其他会话，发 `/c<编号> 你的话`；设为默认，发 `/change <编号>`。")
+    return ("提示：临时切到其他会话，发 `/c<编号> 您的话`；设为默认，发 `/change <编号>`。")
 
 
 def route(event, activity: Dict[str, float],

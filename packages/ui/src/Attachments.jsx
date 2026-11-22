@@ -106,13 +106,13 @@ export function AttachmentPanel({ item, onClose }) {
         {item.kind === "text" ? (
           body
             ? <pre className="attach-panel-text">{body}</pre>
-            : <p className="skill-panel-note">{t("这条附件没有正文。")}</p>
+            : <p className="skill-panel-note">{t("这条附件没有正文")}</p>
         ) : (
           <div className="skill-panel-body">
             {item.size ? <p className="attach-panel-meta">{fmtSize(item.size)}</p> : null}
             <pre className="attach-panel-text">{item.path || ""}</pre>
             <p className="skill-panel-note">
-              {t("内容在下面这个路径的文件里，需要时由文件工具去读。")}
+              {t("内容下附于文件，需要时由文件工具读取。")}
             </p>
           </div>
         )}
@@ -149,7 +149,7 @@ export function MessageAttachments({ items, client }) {
             const size = f.kind === "text" ? "" : fmtSize(f.size);
             return (
               <button type="button" className="att-file" key={(f.name || "") + i}
-                      title={t("点开看全文")} onClick={() => setOpenFile(f)}>
+                      title={t("点击查看全文")} onClick={() => setOpenFile(f)}>
                 <Icon size={14} />
                 <span className="att-file-name">{f.name || t("（未命名）")}</span>
                 {size ? <span className="att-file-size">{size}</span> : null}

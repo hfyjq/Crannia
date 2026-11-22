@@ -806,7 +806,7 @@ class PreProcessStage(Stage):
                 threads = _visible_threads(
                     pool.list_threads(session_key, limit=_RESUME_LIMIT))
                 if not threads:
-                    ctx.response = tr("这条通道还没有对话可以切换。")
+                    ctx.response = tr("此通道还没有对话可以切换。")
                 else:
                     ctx.response = (_render_thread_list(threads)
                                     + tr("\n（用 `/change <编号>` 切过去；"
@@ -1053,7 +1053,7 @@ def _validate_input(text: str) -> str | None:
     )
     if len(text) >= 20 and emoji_count / len(text) > _MAX_EMOJI_RATIO:
         return (
-            tr("⚠️ 你的消息主要是表情符号。请用文字描述你的需求，我会尽力帮助你。")
+            tr("⚠️ 您的消息主要是表情符号。请用文字描述您的需求，我会尽力帮助您。")
         )
 
     # --- 3. Gibberish / binary detection ---
@@ -1067,7 +1067,7 @@ def _validate_input(text: str) -> str | None:
     ratio = printable / max(len(text), 1)
     if ratio < _MIN_PRINTABLE_RATIO:
         return (
-            tr("⚠️ 你的输入似乎包含大量非文本内容。如果你想解析文件，请使用对应的解析指令。")
+            tr("⚠️ 您的输入似乎包含大量非文本内容。如果您想解析文件，请使用对应的解析指令。")
         )
 
     return None
@@ -1112,7 +1112,7 @@ def _handle_mcp_command() -> str:
                 #    把"你没装 Node"说成"连不上"，用户会去查服务器、而不是装东西。
                 missing = missing_runtime(cfg)
                 if missing:
-                    status = trf("运行环境缺失：找不到 {cmd}", missing)
+                    status = trf("运行环境缺失：无法找到 {cmd}", missing)
                 else:
                     status = tr("❌ 未连接（重启后自动连接）")
             lines.append(f"   {status}  {name} ({transport}: {cmd})")
@@ -1496,7 +1496,7 @@ def _handle_resume(parts, ctx, session_key: str, pool) -> str:
     """
     threads = _visible_threads(pool.list_threads(session_key, limit=_RESUME_LIMIT))
     if not threads:
-        return (tr("这条通道还没有归档的对话。使用 `/clear` 之后，上一段会出现在这里。"))
+        return (tr("此通道还没有归档的对话。使用 `/clear` 之后，上一段会出现在这里。"))
 
     arg = parts[1].strip() if len(parts) > 1 else ""
     if not arg:
@@ -2028,7 +2028,7 @@ _COMMANDS: tuple = (
     _CommandSpec("/resume", "切换回以前的对话（/resume 查看列表）",
                  "_cmd_resume", MATCH_BOTH),
     _CommandSpec("/fork", "复制当前对话为新线程", "_cmd_fork"),
-    _CommandSpec("/rewind", "退回到第 N 轮之前（对话与工作区文件一起回退）",
+    _CommandSpec("/rewind", "退回至第 N 轮之前（对话与工作区文件一起回退）",
                  "_cmd_rewind", MATCH_BOTH),
     _CommandSpec("/remember", "把一句话展开为完整提示词后执行",
                  "_cmd_remember", MATCH_PREFIX, CMD_REWRITE),
@@ -2357,7 +2357,7 @@ def _answer_ask_user(pend: dict, user_input: str, ctx):
             # 对上了一部分、另一些不在表里 —— 不猜，也不结算。
             return _ask_keep_pending(
                 pend, ctx,
-                tr("「%s」不在这次的选项里。回数字，或者直接说你自己的想法。")
+                tr("「%s」不在这次的选项里。回数字，或者直接说您自己的想法。")
                 % "、".join(unknown))
         if not multi and len(chosen) > 1:
             return _ask_keep_pending(
@@ -2369,7 +2369,7 @@ def _answer_ask_user(pend: dict, user_input: str, ctx):
     # 其余 = 用户想先聊（这正是那段回传文案定义的场景）。
     if unknown and all(t.isdigit() for t in unknown):
         return _ask_keep_pending(
-            pend, ctx, tr("「%s」不在这次的选项里。回数字，或者直接说你自己的想法。")
+            pend, ctx, tr("「%s」不在这次的选项里。回数字，或者直接说您自己的想法。")
             % "、".join(unknown))
     pend["_free_text"] = text or tr("（用户没有作答）")
     return _SETTLERS["ask_user"]("", pend, ctx)
@@ -3062,7 +3062,7 @@ def _settle_write_outside(key: str, pend: dict, ctx):
         #    —— 所以正常情况下模型不需要再发一次；这句话是退路。
         approve_msg=("[系统] 用户已同意把文件写到工作区之外的 `%s`。"
                      "请**继续刚才那一步**。"
-                     % (str(pend.get("subject") or "") or tr("那个目录"))),
+                     % (str(pend.get("subject") or "") or tr("该目录"))),
         deny_msg=(tr("本次没有写入任何文件。要写入该目录，可以：① 把产物放进工作区；② 在设置页把该目录加入工作区列表（长期有效）；③ 在对话中同意这一次。")),
         all_msg=("[系统] 用户已同意：**本次对话内**往工作区之外写文件不再询问。"
                  "请**继续刚才那一步**。"),

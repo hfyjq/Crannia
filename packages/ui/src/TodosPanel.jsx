@@ -54,7 +54,7 @@ export function TodosPanel({ client }) {
       {items === null && <p className="muted">{t("读取中…")}</p>}
       {items !== null && !err && !items.length && (
         <p className="muted">
-          {t("这一段还没有任务清单 —— 模型在做多步任务时会用")} <code>todo_write</code> {t("建一份。")}
+          {t("此处未存在清单")}
         </p>
       )}
       {(items || []).map((it, i) => (
@@ -65,8 +65,7 @@ export function TodosPanel({ client }) {
       ))}
       {!!(items || []).length && (
         <p className="todos-note">
-          <ListChecks size={12} /> {t("这一栏")}<b>{t("只读")}</b> {t("—— 改它的是模型自己那个")}{" "}
-          <code>todo_write</code> {t("工具。")}
+          <ListChecks size={12} /> {t("此栏只读，仅由模型更改")}
         </p>
       )}
     </div>

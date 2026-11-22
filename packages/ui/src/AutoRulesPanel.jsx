@@ -12,18 +12,18 @@
 //   写：`POST /api/settings`；读：父组件传进来的 `settings`（改完 `onReload` 刷新）。
 // 只验形状（后端 `normalize_rules`）：这一层负责增 / 删 / 改，
 //   不做内容审查 —— 规则写什么是用户自己的授权决定。
-// 三段都管不到限位闸（出网命令族 / 受保护路径）—— 那句写在页面顶部。
+// 三段都管不到限位闸（出网命令族 / 受保护路径）—— 那句话挂在设置页那张卡的说明里。
 import React, { useState } from "react";
 import { jsonRequest } from "./api.js";
 import { t } from "./i18n.js";
 
 const SECTIONS = [
   { id: "allow", label: "允许",
-    hint: "命中这里的动作即使撞上危险规则，也放行。" },
+    hint: "命中此处的行为会无视规则放行" },
   { id: "deny", label: "禁止",
-    hint: "命中这里的动作即使看起来无害，也拦下，并把出路告诉 Agent。" },
+    hint: "命中此处的行为会无视条件一律拦截" },
   { id: "environment", label: "环境",
-    hint: "你对环境的说明（信任的域名 / 仓库、数据在哪）—— 它只是背景，不直接放行或拦截。" },
+    hint: "此处仅放置对环境的说明，例如您的工作数据位置、信任的域名等" },
 ];
 
 export function AutoRulesPanel({ client, notify, settings, onReload, onBack }) {
@@ -96,9 +96,6 @@ export function AutoRulesPanel({ client, notify, settings, onReload, onBack }) {
         ))}
       </div>
       <p className="auto-rules-hint">{t(cur.hint)}</p>
-      <p className="auto-rules-note">
-        {t("这些规则不会移除限位闸：出网命令族与受保护路径照旧先被拦下。")}
-      </p>
 
       <div className="auto-rules-list">
         {items.map((s, i) => {

@@ -249,7 +249,7 @@ export function Skills({ skills, connected, client, notify, onRefresh }) {
     if (named && !entryName) return notify(t("先给这个条目起个名字"));
     const missing = fields.filter((f) => f.required && !String(cfgForm[f.key] || "").trim());
     if (missing.length) {
-      return notify(t("还差：{names}", { names: missing.map((f) => t(f.label)).join("、") }));
+      return notify(t("仍然缺失：{names}", { names: missing.map((f) => t(f.label)).join("、") }));
     }
 
     if (!named) {
@@ -356,7 +356,7 @@ export function Skills({ skills, connected, client, notify, onRefresh }) {
                       /* 外部来源要写明它只在这里可用 —— 用户有权知道
                          为什么模型从没提起过这些技能。 */
                       <span className="skill-desc skill-scope-note">
-                        {t("这些技能只能用 `/` 调用，不会进入模型的上下文")}</span>
+                        {t("此类技能只能用 `/` 调用，不会进入模型的上下文")}</span>
                     )}
                     <span className="skill-meta">
                       <i className={"skill-badge skill-badge-" + sourceBadge(s).cls}>
@@ -455,8 +455,8 @@ export function Skills({ skills, connected, client, notify, onRefresh }) {
           })}
           {!rows.length && (
             <p className="muted">
-              {t("还没有你自己装的技能 —— 把一个带")} <code>SKILL.md</code>{t("（或带")}
-              <code> manifest.yaml</code>{t("）的目录放进")} <code>skills/</code> {t("就能用。 （框架自带的那些不在这里列。）")}
+              {t("还没有您装载的技能 —— 把一个带")} <code>SKILL.md</code>{t("（或带")}
+              <code> manifest.yaml</code>{t("）的目录放进")} <code>skills/</code> {t("以尝试体验。")}
             </p>
           )}
         </div>
@@ -511,7 +511,7 @@ export function Skills({ skills, connected, client, notify, onRefresh }) {
                 {!!cfg.named && (
                   <div className="cfg-list">
                     {Object.keys(cfgItems).length === 0 && (
-                      <p className="muted">{t("还没有条目。在下面新建一个。")}</p>
+                      <p className="muted">{t("还没有条目。尝试新建一个。")}</p>
                     )}
                     {Object.keys(cfgItems).map((name) => (
                       <div className={"cfg-item" + (cfgActive === name ? " active" : "")}

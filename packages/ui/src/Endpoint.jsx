@@ -177,7 +177,7 @@ export function Endpoint({ client, notify, connected }) {
       </div>
 
       <p className="muted">
-        {t("在此处配置你的模型：")}<b>{t("配置名称 / 模型名 / 请求地址 / api")}</b>
+        {t("在此处配置您的模型：")}<b>{t("配置名称 / 模型名 / 请求地址 / api")}</b>
         {t("，每张卡至多 {limits.maxPerCard} 条可用配置。", { "limits.maxPerCard": limits.maxPerCard })}
       </p>
 
@@ -192,7 +192,7 @@ export function Endpoint({ client, notify, connected }) {
                     style={{ animationDelay: (i * 0.05) + "s" }}
                     key={c.id} onClick={() => open_(c)}>
               {/* 右上角那个深绿圆点 = 这张卡下有「默认启用」的那条 */}
-              {c.is_default_card && <i className="ep-dot" title={t("这张卡下有默认启用的配置")} />}
+              {c.is_default_card && <i className="ep-dot" title={t("此卡存在默认启用的配置")} />}
               {/* 厂商图标：`web/static/img/provider-*.svg`（第三方素材的出处与许可
                   见 `THIRD-PARTY.md`）。
                   「其他」故意没有图标 —— 它是中转站的兜底，拿任何一家的 logo
@@ -325,7 +325,7 @@ export function Endpoint({ client, notify, connected }) {
               {form.advanced && (
                 <>
                   <p className="ep-danger">
-                    {t("如果你不清楚你的模型上下文容量，请不要更改此项，留空")}
+                    {t("如果您不清楚您的模型上下文容量，请不要更改此项，留空")}
                   </p>
                   <label className="field"><span>{t("模型上下文容量")}</span>
                     <input value={form.window} inputMode="numeric" placeholder={t("留空")}

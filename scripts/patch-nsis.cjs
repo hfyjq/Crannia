@@ -47,6 +47,25 @@ const TARGET =
 /** 打过补丁的标记 —— 幂等的判据。 */
 const MARKER = "# CRANNIA_NSIS_PATCH";
 
+/* ── 第二处补丁：「应用在不在运行」按路径前缀判，`C:\Program` 会命中全盘 ──
+ *
+ * `allowOnlyOneInstallerInstance.nsh` 的 `FIND_PROCESS` / `KILL_PROCESS` 用
+ *   `$_.Path.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase')`
+ * 找「这个安装目录下的进程」。`StartsWith` 是字符串比较：
+ * `$INSTDIR = C:\Program` 时它会命中 `C:\Program Files\*`、`C:\ProgramData\*`
+ * —— 于是卸载器的「关闭」把全机进程杀一遍（2026-11-22 真机：UU远程被杀、
+ * 远程断线）。
+ *
+ * 修法只加一个路径分隔符：`'$INSTDIR\'`。语义不变（后端进程仍在
+ * `<安装目录>\resources\...` 下、照样命中），去掉的只是"别人的目录碰巧同前缀"。
+ * `TrimEnd('\')` 顺手把"$INSTDIR 末尾带不带反斜杠"归一。
+ */
+const PREFIX_TARGET =
+  "$$_.Path.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase')";
+const PREFIX_REPLACEMENT =
+  "$$_.Path.StartsWith(('$INSTDIR'.TrimEnd('\\') + '\\'), 'CurrentCultureIgnoreCase')";
+const PREFIX_MARKER = "; CRANNIA_NSIS_PREFIX_BOUNDARY";
+
 const REPLACEMENT = [
   MARKER + " —— 没有自动更新，安装器自拷贝（约 370 MB）没有读者，跳过。",
   "# 恢复办法：删掉这两行并重跑 `npm ci`；补丁本体在 scripts/patch-nsis.cjs。",
@@ -83,6 +102,39 @@ function patchText(text) {
   return { text: text.replace(TARGET, body), changed: true, error: null };
 }
 
+/**
+ * 纯函数：把「按路径前缀判运行进程」那两处改成带路径分隔符的前缀。
+ *
+ * 两处必须同时改（一处查、一处杀）；出现次数不是恰好 2 就拒 —— 上游改了
+ * 形状还照着改，会把提示写成"已打补丁"而实际没打。
+ */
+function patchPrefixText(text) {
+  if (text.includes(PREFIX_MARKER)) {
+    return { text, changed: false, error: null };
+  }
+  const hits = text.split(PREFIX_TARGET).length - 1;
+  if (hits === 0) {
+    return {
+      text,
+      changed: false,
+      error: "模板里找不到前缀判据（" + PREFIX_TARGET + "）—— 上游可能改了形状。",
+    };
+  }
+  if (hits !== 2) {
+    return {
+      text,
+      changed: false,
+      error: "前缀判据出现 " + hits + " 次（应当恰好 2 次：查一处、杀一处）。",
+    };
+  }
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const markerLine = PREFIX_MARKER + eol
+    + "; 补上路径分隔符：`C:\\Program` 不该命中 `C:\\Program Files\\*`"
+    + "（scripts/patch-nsis.cjs）" + eol;
+  const body = text.split(PREFIX_TARGET).join(PREFIX_REPLACEMENT);
+  return { text: markerLine + body, changed: true, error: null };
+}
+
 /** 找到本仓库 node_modules 里那份模板（跟着 electron-builder 自己的解析走）。 */
 function defaultTemplate() {
   const pkg = require.resolve("app-builder-lib/package.json");
@@ -90,36 +142,81 @@ function defaultTemplate() {
     path.dirname(pkg), "templates", "nsis", "include", "installer.nsh");
 }
 
-function main(argv) {
-  const check = argv.includes("--check");
-  const i = argv.indexOf("--file");
-  const file = i >= 0 ? argv[i + 1] : defaultTemplate();
+/** 「应用在不在运行」那两处所在的模板。 */
+function runningCheckTemplate() {
+  const pkg = require.resolve("app-builder-lib/package.json");
+  return path.join(
+    path.dirname(pkg), "templates", "nsis", "include",
+    "allowOnlyOneInstallerInstance.nsh");
+}
+
+/** 对一个文件跑一次补丁（`--check` 只看状态）。 */
+function runOne(file, patchFn, marker, label, check) {
   if (!file || !fs.existsSync(file)) {
     console.error("[nsis-patch] 找不到模板：" + file);
     return 2;
   }
   const text = fs.readFileSync(file, "utf8");
-  const res = patchText(text);
+  const res = patchFn(text);
   if (res.error) {
-    console.error("[nsis-patch] **拒**：" + res.error);
+    console.error("[nsis-patch] **拒**（" + label + "）：" + res.error);
     return 1;
   }
   if (check) {
-    const ok = text.includes(MARKER);
-    console.log("[nsis-patch] " + (ok ? "已打过补丁" : "**还没打**") + "：" + file);
+    const ok = text.includes(marker);
+    console.log("[nsis-patch] " + label + "："
+      + (ok ? "已打过补丁" : "**还没打**") + "：" + file);
     return ok ? 0 : 1;
   }
   if (!res.changed) {
-    console.log("[nsis-patch] 已打过补丁，跳过：" + file);
+    console.log("[nsis-patch] " + label + "：已打过补丁，跳过：" + file);
     return 0;
   }
   fs.writeFileSync(file, res.text, "utf8");
-  console.log("[nsis-patch] 已去掉安装器自拷贝（约 370 MB）：" + file);
+  console.log("[nsis-patch] " + label + "：已打补丁：" + file);
   return 0;
+}
+
+function main(argv) {
+  const check = argv.includes("--check");
+  const i = argv.indexOf("--file");
+  const j = argv.indexOf("--only");
+  const only = j >= 0 ? argv[j + 1] : "";
+  const file = i >= 0 ? argv[i + 1] : "";
+
+  //: `--file` 是测试入口：按内容挑补丁（也认 `--only prefix`）。
+  if (file) {
+    const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    const usePrefix = only === "prefix"
+      || (!only && text.includes(PREFIX_TARGET));
+    return usePrefix
+      ? runOne(file, patchPrefixText, PREFIX_MARKER, "进程前缀匹配", check)
+      : runOne(file, patchText, MARKER, "安装器自拷贝", check);
+  }
+
+  const jobs = [
+    ["selfcopy", defaultTemplate(), patchText, MARKER, "安装器自拷贝"],
+    ["prefix", runningCheckTemplate(), patchPrefixText, PREFIX_MARKER, "进程前缀匹配"],
+  ];
+  let rc = 0;
+  for (const [key, f, fn, mk, label] of jobs) {
+    if (only && only !== key) continue;
+    const r = runOne(f, fn, mk, label, check);
+    if (r !== 0) rc = r;
+  }
+  return rc;
 }
 
 if (require.main === module) {
   process.exit(main(process.argv.slice(2)));
 }
 
-module.exports = { patchText, TARGET, MARKER };
+module.exports = {
+  patchText,
+  TARGET,
+  MARKER,
+  patchPrefixText,
+  PREFIX_TARGET,
+  PREFIX_REPLACEMENT,
+  PREFIX_MARKER,
+};

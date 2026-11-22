@@ -78,7 +78,7 @@ export function McpPanel({ client, notify, onClose }) {
       <section className="skill-panel" role="dialog" aria-modal="true">
         {head}
         <p className="skill-panel-note">
-          {t("在此处管理你的MCP插件")}
+          {t("在此处管理您的MCP插件")}
         </p>
         <div className="skill-panel-body">
           {servers === null && <p className="muted">{t("读取中…")}</p>}

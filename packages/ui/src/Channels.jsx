@@ -232,10 +232,10 @@ export function Channels({ client, notify, connected }) {
       const r = await client.call("/api/channel/stop",
                                   jsonRequest("POST", startBody(cid)));
       if (r && r.ok === false) {
-        setErr(r.error || t("这条通道停不下来，请重启应用。"));
+        setErr(r.error || t("此通道无法停止，请尝试重启应用。"));
       } else {
         const st = (r && r.status) || "";
-        setNotice(st === "not_running" ? t("这条通道本来就没在运行。")
+        setNotice(st === "not_running" ? t("此通道未运行")
                  : st === "forced" ? t("通道已停止（强制）。")
                  : t("通道已停止。"));
       }
@@ -482,7 +482,7 @@ export function Channels({ client, notify, connected }) {
 
             {!def && (
               <p className="ch-note">
-                {t("这个通道类型本界面还不认识（id: {openId}）。可以到设置里看它的状态， 但这里不提供配置表单。",
+                {t("此通道类型未知（id: {openId}）。尝试在设置里查看其状态，此处不提供配置表单。",
                    { openId })}
               </p>
             )}

@@ -219,7 +219,7 @@ export function Composer({
     //: 标记被删掉的那些附件不再随这条出去；删了几个要说出来，不许静默。
     const live = splitByMark(draft, images, files);
     setAttachWarn(live.dropped.length
-      ? t("有 {n} 个附件在正文里找不到标记，没有随这条发出：{marks}",
+      ? t("有 {n} 个附件在正文里找不到标记，未发出：{marks}",
           { n: live.dropped.length, marks: live.dropped.map((a) => a.mark).join(" ") })
       : "");
     //: 全都被拦下、又没有正文 —— 这一条什么都不剩了：不发，输入框也别清空。
@@ -528,7 +528,7 @@ export function Composer({
               <span className={`attach-chip ${a.kind}`} key={a.kind + i} title={a.path || a.name}>
                 {/* 正文里那枚标记的副本 —— 用户据此把它与正文对上号。 */}
                 {a.mark ? <span className="attach-mark">{a.mark}</span> : null}
-                <button type="button" className="attach-open" title={t("点开看全文")}
+                <button type="button" className="attach-open" title={t("点击查看全文")}
                         onClick={() => setViewAtt(a)}>
                   <FileText size={12} /><span className="attach-name">{a.name}</span>
                 </button>
@@ -612,7 +612,7 @@ export function Composer({
           onSelect={(e) => setCaret(e.target.selectionStart == null ? 0 : e.target.selectionStart)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder={t("我可以怎么帮助你？")}
+          placeholder={t("我可以怎么帮助您？")}
           rows="3"
         />
 

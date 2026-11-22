@@ -77,7 +77,7 @@ export const ROWS = [
     label: "跨区搜索", note: "允许 Agent 离开工作区做只读操作" },
   { id: "auto_approve", section: "work", kind: "toggle", key: "auto_approve",
     needs: "cross_zone_enabled", label: "自动放行跨区搜索",
-    note: "开启后，Agent 将不再就此询问你" },
+    note: "开启后，Agent 将不再就此询问您" },
   // 规避目录是一个真编辑器：它不是一个独立端点 —— 就是把 `settings.json`
   //   里的那一格（一个字符串数组）读出来、写回去（`POST /api/settings`）。
   //   空列表不等于没有规避目录 —— `GET /api/settings` 会把默认那一批
@@ -85,7 +85,7 @@ export const ROWS = [
   { id: "forbidden", section: "work", kind: "list", key: "forbidden_directories",
     needs: "cross_zone_enabled",
     label: "规避目录",
-    note: "这些目录不会被搜索",
+    note: "此类目录不会被搜索",
     ph: "完整路径，例如 D:\\Games\\saves",
     empty: "（列表为空：系统默认目录仍然生效）" },
   // 没有「工作组」开关：工作区列表恒生效
@@ -256,7 +256,7 @@ export const ROWS = [
     note: "恢复弹窗提醒（下次会重新提醒；只影响提示，完全权限仍每次询问）" },
   { id: "net_all", section: "safe", kind: "toggle", key: "allowlist_egress_all",
     allowlist: "egress", label: "网络策略 · 全部放行",
-    note: "开启后，出网审批会移交自动审查，绝大部分情况下，Agent 将不再就此询问你" },
+    note: "开启后，出网审批会移交自动审查，绝大部分情况下，Agent 将不再就此询问您" },
   // 访问白名单是一个真编辑器。
   //    审批弹窗里点「信任此站点，以后不再询问」会写进 `data/allowlist.json`
   //    —— 而看得见、撤得掉是那条破例的代价（界面必须一直看得见授权被改过）。
@@ -291,7 +291,7 @@ export const ROWS = [
     ph: "127.0.0.1:7890" },
   { id: "cmd_all", section: "safe", kind: "toggle", key: "allowlist_command_all",
     allowlist: "command", label: "命令策略 · 全部放行",
-    note: "开启后，命令审批会移交自动审查，绝大部分情况下，Agent 将不再就此询问你；但首次执行仍会询问。" },
+    note: "开启后，命令审批会移交自动审查，绝大部分情况下，Agent 将不再就此询问您；但首次执行仍会询问。" },
   { id: "cmd_relax", section: "safe", kind: "toggle", key: "relax_command_tier",
     label: "危险命令降级", note: "危险档的指令保护降级，归为普通命令防护" },
   { id: "cmd_noask_readonly", section: "safe", kind: "toggle", key: "no_ask_readonly",
@@ -324,7 +324,7 @@ export const ROWS = [
   //   改完当场生效（`core/hooks._project_allowed()` 每次现读），不用重启。
   { id: "hooks_project", section: "safe", kind: "toggle",
     key: "hooks_allow_project", label: "工作区钩子",
-    note: "允许工作区里的 hooks 配置执行命令（仓库自带的脚本会在你的机器上运行）" },
+    note: "允许工作区里的 hooks 配置执行命令（仓库自带的脚本会在您的机器上运行）" },
   // 工作区 LSP 配置的信任门。
   //   判据与上面那条逐字同一条：`lsp.json` 里写的是 `command` / `args` / `env`,
   //   而那份文件跟着仓库走（clone / 解压 / 同事发来的目录都会带一份）
@@ -343,7 +343,7 @@ export const ROWS = [
   //   改完当场生效（`core/plugin_packages.workspace_plugins_allowed()` 每次现读）。
   { id: "plugins_workspace", section: "safe", kind: "toggle",
     key: "plugins_allow_workspace", label: "工作区插件",
-    note: "允许工作区里的插件包加载钩子与 MCP 服务器（它们会在你的机器上执行命令）" },
+    note: "允许工作区里的插件包加载钩子与 MCP 服务器（它们会在您的机器上执行命令）" },
   { id: "backup_space", section: "safe", kind: "number", key: "file_history_max_mb",
     label: "自动备份 · 空间上限", unit: "MB", min: 16, max: 4096,
     note: "自动备份空间大小" },
@@ -388,7 +388,7 @@ export const ROWS = [
   { id: "update_log", section: "other", kind: "act", act: "open_update_log",
     label: "更新日志", note: "检查与下载失败的原因记在这里", button: "查看" },
   { id: "logs", section: "other", kind: "act", act: "open_logs",
-    label: "运行日志", note: "仅供测试反馈，请不要对外泄露你的运行日志",
+    label: "运行日志", note: "仅供测试反馈，请不要对外泄露您的运行日志",
     button: "查看" },
   // 把数据目录摆出来，并且能一键打开 —— 判据是"卸载会删掉它"。
   //   卸载程序对安装目录是 `RMDir /r`，而 `resources\app\data` 就在那里面。
@@ -416,7 +416,7 @@ export const ROWS = [
   // 恢复默认是一个真按钮，端点是 `POST /api/settings/restore-default`。
   { id: "reset", section: "other", kind: "act", act: "restore_defaults",
     label: "恢复默认", button: "恢复默认", danger: true,
-    note: "重置你的改动",
+    note: "重置您的改动",
     warnTitle: "恢复默认？",
     warnBody: "当前这一份设置会被出厂基准覆盖掉。" },
   // 这一格从 `notdone` 接成两颗真按钮。
@@ -621,7 +621,7 @@ export function dataSchemaNotice(ds) {
 
 export function leafNotice(leaf) {
   if (!leaf || !leaf.loaded) {
-    return { text: t("还没装载 —— 跑过一轮之后，这里会显示它的大小。"),
+    return { text: t("未装载 ——完成一轮之后，这里会显示它的大小。"),
              warn: false, ready: false };
   }
   const chars = withCommas(leaf.chars);

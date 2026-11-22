@@ -190,7 +190,7 @@ export function ListEditor({ row, items, busy, connected, onBack,
           title={ask.list.length === 1 ? t("删除这一条？")
                                        : t("删除选中的 {n} 项？", { n: ask.list.length })}
           body={ask.list.length === 1 ? String(ask.list[0].watch_path || ask.list[0])
-                                      : t("这些条目会从名单里移除。")}
+                                      : t("此类条目会从名单里移除。")}
           confirmLabel={t("删除")}
           busy={busy}
           onConfirm={doDelete}

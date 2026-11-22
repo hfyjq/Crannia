@@ -25,7 +25,7 @@ check("★ 没有读数 -> ready=false（不是「显示 0 字符」）",
       na.ready === false && na.warn === false, JSON.stringify(na));
 check("★★ 文案里**不出现「0 字符」**（那个 0 看起来像一个结论）",
       !/0\s*字符/.test(na.text), na.text);
-check("★ 说得出口「还没装载」", na.text.includes("还没装载"), na.text);
+check("★ 说得出口「未装载」", na.text.includes("未装载"), na.text);
 check("★ `loaded:false` 与 `leaf:null` **走同一条路**",
       leafNotice({ loaded: false, chars: 0, warn_chars: 40000, over: false }).ready === false, "");
 

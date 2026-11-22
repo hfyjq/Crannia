@@ -1,0 +1,8 @@
+Update notes - regular update (2026/11/22) v1.1.2
+
+Fixes:
+1. Fixed an automatic update issue that could install to the wrong location
+2. Fixed an uninstall issue that could close other running programs
+
+UI:
+1. Adjusted some wording and translations

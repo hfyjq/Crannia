@@ -261,7 +261,7 @@ export function Onboarding({
           else toast("通道已启动。");
         } catch (e) {
           //:框架没起来时后端回 400 —— 照实说，不许假装启动成功。
-          setError(t("配置保存好了，但通道没有启动：") + e.message);
+          setError(t("配置已保存，通道未启动：") + e.message);
           setBusy("");
           return;
         }
@@ -314,7 +314,7 @@ export function Onboarding({
               {logo ? <img className="onboard-logo" src={logo} alt="Crannia" /> : null}
               <div className="onboard-version">Crannia{version ? ` v${version}` : ""}</div>
               {/* 开屏第一句 —— 用户逐字给的。 */}
-              <h2 className="onboard-title">{t("这似乎是你的首次使用，让我们从这里开始")}</h2>
+              <h2 className="onboard-title">{t("这似乎是您的首次使用，让我们从这里开始")}</h2>
               <p className="onboard-sub">{t("模块化 AI Agent 框架")}</p>
               <p className="onboard-note">{t("让我们开始配置引导")}</p>
               <div className="onboard-actions">
@@ -427,7 +427,7 @@ export function Onboarding({
           {step === stepIndex("platform") && (
             <>
               <h2 className="onboard-title">{t("选择交流平台")}</h2>
-              <p className="onboard-sub">{t("选择你和 Agent 交流的地方")}</p>
+              <p className="onboard-sub">{t("选择您和 Agent 交流的地方")}</p>
 
               <div className="onboard-platform-grid">
                 {SELECTABLE_CHANNELS.map((d) => {

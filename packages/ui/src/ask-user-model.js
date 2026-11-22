@@ -46,6 +46,6 @@ export function buildAnswer(keys, text) {
 /** 底部提示。 */
 export function hintText(payload) {
   return payload && payload.multi
-    ? "可以选多个，回车确认；或者直接说你的想法"
-    : "数字或点击选择，回车确认；或者直接说你的想法";
+    ? "可以选多个，回车确认；或者直接说您的想法"
+    : "数字或点击选择，回车确认；或者直接说您的想法";
 }

@@ -83,7 +83,7 @@ export function FileDiff({ path, name, version, group, client, onClose }) {
               <p className="muted">{t("读取中…")}</p>
             ) : kind === "new" ? (
               <p className="diff-note">
-                {t("这是本轮新建文档，")}
+                {t("本轮新建文档，")}
                 <button className="link" onClick={reveal}>{t("在资源管理器中显示")}</button>
                 {data.added != null ? "（+" + data.added + "）" : null}
               </p>

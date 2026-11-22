@@ -1012,7 +1012,7 @@ def api_skill_uninstall():
 
       · 目录内（`source == "repo"` 且不是框架自带）-> 挪到系统回收站（可恢复）
       · 外部来源 -> 不卸，回一句
-        「这是外部应用的组件，暂不提供卸载。路径 __」
+        「外部应用的组件，暂不提供卸载。路径 __」
 
     [!] 路径只从扫描结果取（`_scan_skills()`），请求里那个 `name` 只当键——
       用户传 `../core` 之类在这里查不到 -> 404 -> 构造不出路径。
@@ -1042,10 +1042,10 @@ def api_skill_uninstall():
         return jsonify({"ok": False, "error": tr("没有这个技能：%r") % name}), 404
     if target.get("source") != "repo":
         return jsonify({"ok": False, "external": True, "path": target.get("path", ""),
-                        "error": tr("这是外部应用的组件，暂不提供卸载。路径 %s")
+                        "error": tr("外部应用的组件，暂不提供卸载。路径 %s")
                                  % (target.get("path") or "（未提供）")}), 400
     if target.get("builtin"):
-        return jsonify({"ok": False, "error": tr("这是框架自带的技能，暂不提供卸载")}), 400
+        return jsonify({"ok": False, "error": tr("框架自带的技能，暂不提供卸载")}), 400
 
     skill_dir = Path(target["path"])
     try:
@@ -1204,7 +1204,7 @@ def api_skill_install():
         return jsonify({"ok": False, "error": tr("不是一个目录")}), 400
     if not ((src / "SKILL.md").is_file() or (src / "manifest.yaml").is_file()):
         return jsonify({"ok": False,
-                        "error": tr("这个目录里既没有 SKILL.md 也没有 manifest.yaml")}), 400
+                        "error": tr("此目录里无法找到 SKILL.md 或 manifest.yaml")}), 400
 
     name = src.name
     if not name or name.startswith((".", "_", "$")):
@@ -2103,7 +2103,7 @@ def api_model_configs_test():
             base_url = _PROTOCOL_DEFAULT_BASE.get(provider_dir, "")
         if not base_url:
             return jsonify({"ok": False, "window": None,
-                            "error": tr("这条配置未填请求地址，服务商也没有提供默认地址，请填写地址。")}), 400
+                            "error": tr("此配置未填请求地址，服务商也没有提供默认地址，请填写地址。")}), 400
 
         from urllib.parse import urlsplit
         scheme = (urlsplit(base_url).scheme or "").lower()
@@ -3344,7 +3344,7 @@ def _stop_channel(channel_id: str, *, wait_s: float = 5.0,
 
     _log(f"[channel] {channel_id} 停不下来（线程没有退出）—— 需要重启应用")
     return {"ok": False, "status": "stuck", "channel_id": channel_id,
-            "error": tr("这条通道的线程没有退出，停不下来；请重启应用。")}
+            "error": tr("此通道没有成功停止；请尝试重启应用。")}
 
 
 @app.route("/api/channel/stop", methods=["POST"])
@@ -3411,7 +3411,7 @@ def api_channel_entry_create():
     data = request.get_json() or {}
     platform = _channel_platform(data.get("channel_id", ""))
     if platform not in _cc.PLATFORMS:
-        return jsonify({"error": "这个通道没有凭据表单"}), 400
+        return jsonify({"error": "此通道没有凭据表单"}), 400
     try:
         row = _cc.create(platform, data.get("name", ""), data.get("fields") or {})
     except _cc.ChannelConfigError as exc:
@@ -4057,8 +4057,8 @@ def api_chat():
     #    （那是逐张、逐轮的判据，在下游）；它管的是"在解析之前就拒绝"。
     # 给的是一个余量很大的数：4 张 4 MB 的图 ≈ 21 MB body。
     if (request.content_length or 0) > _CHAT_BODY_MAX_BYTES:
-        return jsonify({"error": "这一轮的图片太大了（请求体 %d 字节，上限 %d）—— "
-                                 "请少发几张，或先把图裁小。"
+        return jsonify({"error": "本轮的图片过大（请求体 %d 字节，上限 %d）"
+                                 "—— 请尝试裁切图片或分次发送"
                                  % (request.content_length, _CHAT_BODY_MAX_BYTES)}), 413
 
     data = request.get_json() or {}
@@ -4332,12 +4332,12 @@ def api_approval_post():
             verdict, why = _ca.answer(_key, request_id, choice)
             if verdict != REPLY_OK:
                 return jsonify({"ok": False, "reason": REPLY_STALE,
-                                "error": why or tr("这条已经回答过了，不用再点。")}), 409
+                                "error": why or tr("此条目已经完成")}), 409
             return jsonify({"ok": True, "reply": "", "sent": choice})
     if not cur:
         # 已经没有待审批了 —— 多半是双击的第二下，或者已经在别处答过
         return jsonify({"ok": False, "reason": REPLY_STALE,
-                        "error": tr("这条已经回答过了（或正在处理），不用再点。")}), 409
+                        "error": tr("此条目已经完成或正在被处理")}), 409
 
     verdict, payload_text = reply_decision(
         request_id=request_id,
@@ -4354,7 +4354,7 @@ def api_approval_post():
         return jsonify({
             "ok": False, "reason": verdict,
             #: 说人话：界面上弹的是 `error`，而 `409` 本身对用户没有信息量。
-            "error": ("这条已经回答过了，不用再点。" if verdict == REPLY_STALE
+            "error": ("此条目已经完成" if verdict == REPLY_STALE
                       else "这个选项不在这次给出的选项里。"),
         }), 409
 
@@ -4367,7 +4367,7 @@ def api_approval_post():
     _key = session_key_for(_web_session(group))
     if not _claim_approval(_key):
         return jsonify({"ok": False, "reason": REPLY_STALE,
-                        "error": tr("这条已经回答过了（或正在处理），不用再点。")}), 409
+                        "error": tr("此条目已经完成或正在被处理")}), 409
     try:
         reply = _run_chat_turn(payload_text, group=group)
     except Exception as e:
@@ -5281,7 +5281,7 @@ def api_reveal():
         #: 顺便把"试过哪儿"说一句，那是唯一能让他自己纠的地方。
         tried = "、".join(str(c) for c in cands[:3])
         return jsonify({"ok": False,
-                        "error": tr("这个路径不存在：%s（找过：%s）") % (raw, tried)}), 404
+                        "error": tr("此路径不存在：%s（找过：%s）") % (raw, tried)}), 404
 
     try:
         if os.name == "nt":

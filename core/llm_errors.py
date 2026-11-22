@@ -133,7 +133,7 @@ def kind_of(err, kind: str = "", exc_name: str = "") -> str:
 def headline(err, *, kind: str = "", exc_name: str = "") -> str:
     """横幅上那一句（短、不含原文）。
 
-    认不出的类别不装懂：退到 400 的两种形状，再退到"这一轮出错了"。
+    认不出的类别不装懂：退到 400 的两种形状，再退到"此轮出错"。
     """
     k = kind_of(err, kind=kind, exc_name=exc_name)
     if k in HEADLINES:

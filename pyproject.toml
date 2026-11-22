@@ -1,7 +1,7 @@
 [project]
 name = "crannia"
 # NOTE: Keep in sync with core/version.py __version__
-version = "1.1.1"
+version = "1.1.2"
 description = "Modular AI Agent Framework"
 readme = "README.md"
 license = "Apache-2.0"

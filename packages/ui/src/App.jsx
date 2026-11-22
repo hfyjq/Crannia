@@ -1803,7 +1803,7 @@ function AppInner({ client }) {
         editActivity((a) => ({ ...a, live: false, done: true, endedAt: Date.now() }), { create: false });
       }
       if (inflightTurnsRef.current === 0) setBusy(false);
-      notify((d && d.message) || t("这一轮出错了"));
+      notify((d && d.message) || t("此轮出错"));
     }));
 
     //:开屏那一拉 —— 与审批那两条同一形状：
@@ -2508,7 +2508,7 @@ function AppInner({ client }) {
       const d = await client.call(url, jsonRequest("POST", {}));
       if (!d.ok) notify(d.note || t("现在没有可转的前台任务"));
     } catch (e) {
-      notify((e && e.message) || t("转后台失败"));
+      notify((e && e.message) || t("转入后台失败"));
     }
   }
 
@@ -2632,7 +2632,7 @@ function AppInner({ client }) {
 
   /** 真的解散。只在确认之后调用。 */
   async function doRemoveGroupChat(g) {
-    const label = (g && g.name) || t("这个群聊");
+    const label = (g && g.name) || t("此群聊");
     try {
       const out = await client.call(
         "/api/groups/delete", jsonRequest("POST", { id: g.id }));
@@ -2759,7 +2759,7 @@ function AppInner({ client }) {
   }
 
   function nav(key, stub) {
-    if (stub) return notify(t("这个功能还没做。"));
+    if (stub) return notify(t("此功能未上线"));
     setPage(key);
     if (key === "chat") {
       setMessages([]); setProv(""); setViewing(null); setDraft(true);
@@ -2873,7 +2873,7 @@ function AppInner({ client }) {
               {ctxMenu.modelErr ? ctxMenu.modelErr : null}
               {ctxMenu.model ? (
                 ctxMenu.model.source === "frozen"
-                  ? <>{t("这一段的模型已定：{ctxMenu.model.name}。之后改默认不影响它。", { "ctxMenu.model.name": ctxMenu.model.name })}</>
+                  ? <>{t("此段模型已定：{ctxMenu.model.name}。之后的默认更改不再影响。", { "ctxMenu.model.name": ctxMenu.model.name })}</>
                   : ctxMenu.model.config_id
                     ? <>{t("跟随默认（{ctxMenu.model.default_name}）—— 收到第一条回复后就定在这条上。", { "ctxMenu.model.default_name": ctxMenu.model.default_name })}</>
                     : <>{t("目前还没有默认配置，将使用设置文件里的模型。")}</>
@@ -2891,7 +2891,7 @@ function AppInner({ client }) {
               </button>
             ))}
             {(ctxMenu.model && !ctxMenu.model.options.length) && (
-              <div className="ctx-menu-note">{t("还没有任何配置 —— 去「端配置」建一条。")}</div>
+              <div className="ctx-menu-note">{t("还没有任何配置 —— 请前往「端配置」新建一条。")}</div>
             )}
           </>
         ) : (
@@ -3122,7 +3122,7 @@ function AppInner({ client }) {
                 <span className="group-bar-sub">
                   {chatGroup.members.length} 人 ·{" "}
                   {(() => { const h = chatGroup.members.find((m) => m.host);
-                            return h ? t("只有主理人 {h.name} 看得见你说的话", { "h.name": h.name }) : t("多人聊天"); })()}
+                            return h ? t("只有主理人 {h.name} 看得见您说的话", { "h.name": h.name }) : t("多人聊天"); })()}
                 </span>
                 <button onClick={() => { setChatGroup(null); setGroupHist(null); setPage("groups"); }}>{t("← 群聊列表")}</button>
                 <button className="view-exit" onClick={leaveGroup}>{t("退出群聊")}</button>
@@ -3204,7 +3204,7 @@ function AppInner({ client }) {
                             title={chatHost.name} />
                   </div>
                   <div className="group-welcome-box">
-                    {t("在这里与此群聊主理人沟通，说明你的需求，主理人将指挥群聊分工。仅主理人可见消息")}
+                    {t("在这里与此群聊主理人沟通，说明您的需求，主理人将指挥群聊分工。仅主理人可见消息")}
                   </div>
                 </div>
               )}
@@ -3443,7 +3443,7 @@ function AppInner({ client }) {
       <Confirm
         title={t("解散这个群聊？")}
         body={<>
-          <b>{confirmGroup.name || t("这个群聊")}</b>
+          <b>{confirmGroup.name || t("此群聊")}</b>
           <br />
           {t("群成员、主理人与群配置都会删掉；它说过的话仍留在历史库里。")}
         </>}
@@ -4881,11 +4881,11 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
               </>
             ) : (
             <>
-            <h2>{t("有人在要求你吗？")}</h2>
-            <p>{t("有人暗示或要求你关闭 ICE 吗，这很有可能是诈骗行为！")}</p>
+            <h2>{t("有人在要求您吗？")}</h2>
+            <p>{t("有人暗示或要求您关闭 ICE 吗，这很有可能是诈骗行为！")}</p>
             <div className="ice-alarm">
-              <p>{t("⚠️ 如果你正在通话，请立即挂断！来电者可能在冒充他人！")}</p>
-              <p>{t("⚠️ 请勿付款或分享你的信息")}</p>
+              <p>{t("⚠️ 如果您正在通话，请立即挂断！来电者可能在冒充他人！")}</p>
+              <p>{t("⚠️ 请勿付款或分享您的信息")}</p>
             </div>
             <p className="muted">
               {t("⚠ 请注意信息安全。诈骗者通常会提供未知插件或未经验证的功能，借此窃取您的 个人信息或其它数据。来自可靠机构的工作人员绝不会要求您关闭此设置！")}
@@ -4922,7 +4922,7 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
         <div className="ice-warn-box">
           <section className="ice-warn">
             <h2>{t(ask.row.warnTitle || ask.row.label)}</h2>
-            <p>{t(ask.row.warnBody || "这一步不可撤销。")}</p>
+            <p>{t(ask.row.warnBody || "此步不可撤销。")}</p>
             <div className="ice-acts">
               <button className="skill-btn" onClick={() => setAsk(null)}>{t("取消")}</button>
               {/* 倒计时结束只解禁；真正的执行在这一次点击里。 */}
