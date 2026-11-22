@@ -15,12 +15,20 @@
     # 只测一条已有的直链（不需要令牌）
     .venv/Scripts/python.exe scripts/upload_gitcode.py --check-link <直链>
 
+    # 只改这条 release 的说明（正文从文件读，要 --tag）
+    .venv/Scripts/python.exe scripts/upload_gitcode.py ^
+        --repo <owner>/<repo> --tag v1.1.0 --edit-body notes.md
+
 ## 它走的那条协议
 
 `POST /releases` 先建 release（按 tag 寻址），再 `GET
 /releases/{tag}/upload_url?file_name=...` 取预签名地址与要原样带回的
 `x-obs-*` 头，最后 `PUT` 字节。GitCode 的 `attach_files` 端点不存在，
 别照 Gitee 的文档抄。
+
+改说明走 `PATCH /releases/{tag}`，而且必须把 `name` 一并带上：只发
+`body` 会回 400 "name must not be empty"。release 对象里没有数字 id，
+路径只能用 tag。
 
 令牌只从环境变量读，不接受命令行参数（命令行会进 shell 历史与进程表）。
 脚本不打印预签名地址与它的头。
@@ -136,6 +144,15 @@ class GitCode:
         return self._request("POST", "/repos/%s/%s/releases" % (owner, repo),
                              json=payload)
 
+    def update_release(self, owner: str, repo: str, tag: str,
+                       name: str = "", body: str = "") -> dict:
+        #: 说明要改就得整条改：`name` 也得带上，否则 400 "name must not be empty"。
+        #:   路径用 tag（release 对象里没有数字 id）。
+        payload = {"name": name or tag, "body": body}
+        return self._request("PATCH",
+                             "/repos/%s/%s/releases/%s" % (owner, repo, tag),
+                             json=payload)
+
     def upload_url(self, owner: str, repo: str, tag: str,
                    file_name: str) -> tuple:
         data = self._request("GET",
@@ -212,6 +229,8 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true",
                     help="只验令牌与仓库，不做任何写入")
     ap.add_argument("--list", action="store_true", help="列出该 release 的资产")
+    ap.add_argument("--edit-body", default="", metavar="FILE",
+                    help="只改这条 release 的说明：从文件读正文（要 --tag）")
     ap.add_argument("--check-link", default="",
                     help="只探测一条直链（不需要令牌）")
     args = ap.parse_args(argv)
@@ -266,6 +285,23 @@ def main(argv=None) -> int:
 
     if args.dry_run:
         print("dry-run：不写任何东西。真传去掉 --dry-run。")
+        return 0
+
+    if args.edit_body:
+        path = Path(args.edit_body)
+        if not path.is_file():
+            print("找不到文件：%s" % path)
+            return 2
+        text = path.read_text(encoding="utf-8").strip()
+        if not text:
+            print("说明不能是空串")
+            return 2
+        try:
+            api.update_release(owner, repo, args.tag, body=text)
+        except GitCodeError as exc:
+            print("改说明失败：%s" % exc)
+            return 1
+        print("已更新说明：%s @ %s" % (args.repo, args.tag))
         return 0
 
     if not args.file:
