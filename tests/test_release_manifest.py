@@ -575,6 +575,93 @@ def test_a_published_release_reaches_the_client():
         U._update_state.update(saved)
 
 
+# 6. 清单与产物的一致性（发布门禁）
+
+def test_manifest_must_match_the_artifacts():
+    import make_release as MR
+    from _sandbox import asar_bytes as _asar_bytes
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        unpacked = root / "win-unpacked"
+        app = unpacked / "resources" / "app"
+        (app / "core").mkdir(parents=True)
+        (app / "core" / "version.py").write_text("__version__='1.0.2'\n",
+                                                 encoding="utf-8")
+        (app / "core" / "__init__.py").write_text("", encoding="utf-8")
+        (app / "main.py").write_text("", encoding="utf-8")
+        (app / "config.yaml").write_text("", encoding="utf-8")
+        (unpacked / "resources" / "app.asar").write_bytes(_asar_bytes(
+            {"package.json": b'{"name":"x","version":"1.0.2"}', "a.cjs": b"1"}))
+        rt = unpacked / "resources" / "primary-runtime"
+        rt.mkdir(parents=True)
+        (rt / "runtime.json").write_text(json.dumps({"payloadDigest": "D1"}),
+                                         encoding="utf-8")
+        out = root / "out"
+        out.mkdir()
+        exe = out / "crannia-1.0.2-win-x64.exe"
+        exe.write_bytes(b"EXE-BYTES")
+        cp = MR.build_codepack("1.0.2", unpacked, out, "https://cdn.example/cp.zip")
+        man = MR.build_manifest(
+            version="1.0.2", channel="stable",
+            url="https://github.com/o/r/releases/download/v1.0.2/" + exe.name,
+            sha256=MR.sha256_of(exe), size_bytes=exe.stat().st_size,
+            codepack=cp)
+        ok = MR.verify_manifest(man, unpacked=unpacked, out_dir=out)
+        check("清单与产物一致 -> 通过", ok == [], repr(ok))
+        mutations = (
+            ("安装包 sha256 对不上",
+             lambda m: m["latest"]["artifacts"]["windows-exe"].__setitem__(
+                 "sha256", "0" * 64)),
+            ("壳签名对不上",
+             lambda m: m["latest"]["artifacts"]["codepack"].__setitem__(
+                 "shell_sig", "0" * 64)),
+            ("代码包 app_version 对不上",
+             lambda m: m["latest"]["artifacts"]["codepack"].__setitem__(
+                 "app_version", "1.0.1")),
+            ("地址不是 https",
+             lambda m: m["latest"]["artifacts"]["windows-exe"].__setitem__(
+                 "url", "http://x/y.exe")),
+        )
+        for label, mutate in mutations:
+            bad = json.loads(json.dumps(man))
+            mutate(bad)
+            check(label + " -> 报出来",
+                  bool(MR.verify_manifest(bad, unpacked=unpacked, out_dir=out)))
+        (app / "core" / "version.py").write_text("__version__='1.0.1'\n",
+                                                 encoding="utf-8")
+        check("打包树版本与清单不一致 -> 报出来",
+              bool(MR.verify_manifest(man, unpacked=unpacked, out_dir=out)))
+
+
+def test_published_assets_are_checked_against_the_manifest():
+    import make_release as MR
+    man = {"latest": {"version": "1.0.2", "artifacts": {
+        "windows-exe": {
+            "url": "https://github.com/o/r/releases/download/v1.0.2/a.exe",
+            "sha256": "ab" * 32, "size_bytes": 3}}}}
+    good = {"assets": [{"name": "a.exe", "size": 3,
+                        "digest": "sha256:" + "ab" * 32}]}
+    check("资产 size/digest 一致 -> 通过",
+          MR.verify_published(man, fetch=lambda u: good) == [])
+    bad = {"assets": [{"name": "a.exe", "size": 4,
+                       "digest": "sha256:" + "ab" * 32}]}
+    check("资产 size 不一致 -> 报出来",
+          bool(MR.verify_published(man, fetch=lambda u: bad)))
+    other = {"latest": {"artifacts": {"windows-exe": {
+        "url": "https://oss.example/a.exe",
+        "sha256": "ab" * 32, "size_bytes": 3}}}}
+    check("非 GitHub 地址 -> 明说没法核对（不假装通过）",
+          bool(MR.verify_published(other, fetch=lambda u: good)))
+    #: 国内镜像当主源、GitHub 当备源时，回读要走备源那一条。
+    mixed = {"latest": {"artifacts": {"windows-exe": {
+        "url": "https://gitcode.com/o/r/releases/download/v1.0.2/a.exe",
+        "urls": ["https://gitcode.com/o/r/releases/download/v1.0.2/a.exe",
+                 "https://github.com/o/r/releases/download/v1.0.2/a.exe"],
+        "sha256": "ab" * 32, "size_bytes": 3}}}}
+    check("镜像当主源、GitHub 当备源 -> 仍能回读",
+          MR.verify_published(mixed, fetch=lambda u: good) == [])
+
+
 def main() -> int:
     print("=" * 62)
     print("release chain")
@@ -591,7 +678,9 @@ def main() -> int:
                test_published_at_is_really_utc,
                test_published_at_can_be_given_explicitly,
                test_installer_runs_nsis_silently,
-               test_a_published_release_reaches_the_client):
+               test_a_published_release_reaches_the_client,
+               test_manifest_must_match_the_artifacts,
+               test_published_assets_are_checked_against_the_manifest):
         print("")
         print("-- %s --" % fn.__name__)
         try:

@@ -7746,6 +7746,9 @@ def api_update_status():
             "status": _update_state.get("status", "idle"),
             "progress": _update_state.get("progress", 0.0),
             "error": _update_state.get("error"),
+            #: 当前这一段（downloading / verifying）的起点（epoch 秒）——
+            #:   设置页那一行用它给"正在校验安装包…"计时。
+            "phase_started": _update_state.get("phase_started") or 0,
             #: 「没配更新源」与「查过了、没新版本」必须分得开 —— 设置页照这两格说人话。
             "unconfigured": bool(_update_state.get("unconfigured")),
             #: 已经下好、等着下次启动装的那一版（`None` = 没有）。
@@ -7836,7 +7839,10 @@ def api_update_download():
 
         def _download_thread():
             #: 代码包优先（几 MB），不适用/失败自动回退全量安装包。
-            checker.download_best(manifest)
+            #:   必须走 `download_thread_entry`：它把任何异常落成 `error`，
+            #:   否则线程一死，状态永远停在 `verifying`（界面就一直转）。
+            from core.updater import download_thread_entry
+            download_thread_entry(manifest, checker)
 
         task_id = secrets.token_hex(8)
         _update_state["_task_id"] = task_id
@@ -7859,6 +7865,9 @@ def api_update_progress():
             "progress": _update_state.get("progress", 0.0),
             "error": _update_state.get("error"),
             "downloaded_path": _update_state.get("downloaded_path"),
+            #: 当前这一段（downloading / verifying）的起点（epoch 秒）——
+            #:   界面用它给"正在校验安装包…"计时。
+            "phase_started": _update_state.get("phase_started") or 0,
         })
     except Exception as e:
         return jsonify({"status": "idle", "error": str(e)})

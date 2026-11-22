@@ -275,3 +275,38 @@ def pin_mode(*session_ids, key: str = "manual") -> None:
             M.set_mode(str(sid), key)
         except Exception as exc:  # noqa: BLE001
             print("  [!] pin_mode(%r, %r) 失败：%s" % (sid, key, exc))
+
+
+def asar_bytes(files: dict) -> bytes:
+    """造一个最小 asar（格式与 `@electron/asar` 一致，够壳签名解析）。
+
+    放在共享模块里：发布清单的测试要用它，而那条测试所在的文件（更新链
+    测试）不一定随公开仓发布；跨测试文件 import 在子集里会 ModuleNotFoundError。
+    """
+    import json
+    import struct
+
+    names = sorted(files)
+    offset = 0
+    leaves = []
+    for name in names:
+        body = files[name]
+        leaves.append((name, offset, len(body)))
+        offset += len(body)
+    root = {"files": {}}
+    for name, off, size in leaves:
+        parts = name.split("/")
+        node = root
+        for part in parts[:-1]:
+            node = node.setdefault("files", {}).setdefault(part, {"files": {}})
+        node.setdefault("files", {})[parts[-1]] = {"size": size, "offset": str(off)}
+    header = json.dumps(root, separators=(",", ":")).encode("utf-8")
+    out = bytearray()
+    out += struct.pack("<I", 4)
+    out += struct.pack("<I", 8 + len(header))
+    out += struct.pack("<I", len(header) + 7)
+    out += struct.pack("<I", len(header))
+    out += header
+    for name in names:
+        out += files[name]
+    return bytes(out)

@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -65,6 +66,8 @@ _update_state: dict = {
     "latest_version": None,  # str | None
     "latest_manifest": None, # dict | None (raw manifest JSON)
     "downloaded_path": None, # str | None
+    #: 当前这一段（downloading / verifying）从什么时候开始 —— 前端给校验阶段计时用。
+    "phase_started": 0.0,
     #: 这一轮下的是哪一级：`codepack`（几 MB，下次启动换目录）或 `full`（安装包）。
     "kind": None,
     #: 更新源还是占位域名，根本没发请求（与"查过了、没新版本"必须分开）。
@@ -250,6 +253,59 @@ def read_update_log(max_chars: int = 20000) -> str:
     except OSError:
         return ""
     return text[-max_chars:] if max_chars else text
+
+
+def _mark_phase(status: str) -> None:
+    """改状态的同时记下"这一段从什么时候开始"（界面给校验阶段计时）。"""
+    _update_state["status"] = status
+    _update_state["phase_started"] = time.time()
+
+
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    """`Path.replace` 带重试 —— Windows 上杀软会短暂占住刚下好的文件。
+
+    现场形状（2026-11-22 报障）：状态已经是 `verifying`，`replace` 抛
+    `PermissionError`（WinError 32/5），下载线程直接死掉，界面就永远停在
+    「正在校验安装包…」，日志里一个字都没有。重试三次，每次失败都写日志。
+    """
+    delays = (0.5, 2.0, 5.0)
+    for i in range(len(delays) + 1):
+        try:
+            src.replace(dst)
+            return
+        except PermissionError as exc:
+            log_update("replace attempt %d/%d failed: %s"
+                       % (i + 1, len(delays) + 1, exc))
+            if i >= len(delays):
+                raise
+            time.sleep(delays[i])
+
+
+#: 同一时刻只许一个下载：两个线程写同一个 `.part` 会互相抢文件
+#:   （WinError 32 的一种来源），也会让进度与状态互相覆盖。
+_DOWNLOAD_LOCK = threading.Lock()
+
+
+def download_thread_entry(manifest, checker=None) -> None:
+    """后台下载线程的唯一入口：任何异常都落成 `error`。
+
+    此前 `web/server.py` 的线程体是裸调用 —— 校验/落地那一抛，线程死掉，
+    `_update_state["status"]` 永远停在 `verifying`，而界面只看这个状态。
+    自动检查与手动下载都可能起线程，所以这里还要串行化。
+    """
+    checker = checker or UpdateChecker()
+    if not _DOWNLOAD_LOCK.acquire(blocking=False):
+        log_update("download already running; this request is skipped")
+        return
+    try:
+        checker.download_best(manifest)
+    except Exception as exc:                              # noqa: BLE001
+        _update_state["status"] = "error"
+        _update_state["error"] = "下载线程异常：%s" % exc
+        log_update("download thread crashed: %s: %s"
+                   % (type(exc).__name__, exc))
+    finally:
+        _DOWNLOAD_LOCK.release()
 
 
 def _read_config() -> dict:
@@ -553,15 +609,108 @@ def local_runtime_digest() -> str:
 
 
 def local_shell_sha256() -> str:
-    """本地壳（`app.asar`）的哈希。
+    """本地壳（`app.asar`）的整包哈希。
 
-    代码包不包含壳与前端产物（它们在 asar 里，不是 `resources/app` 那棵树）。
-      所以"壳变了"必须走全量；只换 Python 树时 asar 必须逐字节一致。
+    这一格不能用来判"壳变没变"：asar 里的 `package.json` 带着 `version`，
+      每发一版都变，整包哈希对任何跨版本更新必然不同，代码包永远用不上
+      （2026-11-22 现场）。新清单用 `shell_sig`，这一格只留给老客户端与
+      老清单。
     """
     res = install_resources_dir()
     if res is None:
         return ""
     return _sha256_file(res / "app.asar")
+
+
+def _asar_layout(blob: bytes) -> tuple[dict, int]:
+    """解析 asar 头，回 `(header, 数据区起点)`；解不开抛 `ValueError`。
+
+    格式（`@electron/asar`）：u32@4 = pickle 大小，u32@12 = header JSON 长度，
+    JSON 从 16 开始，文件内容从 `8 + pickle 大小` 开始。
+    """
+    if len(blob) < 16:
+        raise ValueError("asar too short")
+    pickle_size = struct.unpack("<I", blob[4:8])[0]
+    json_len = struct.unpack("<I", blob[12:16])[0]
+    if (pickle_size < json_len or 16 + json_len > len(blob)
+            or 8 + pickle_size > len(blob)):
+        raise ValueError("asar header sizes out of range")
+    header = json.loads(blob[16:16 + json_len].decode("utf-8"))
+    if not isinstance(header, dict):
+        raise ValueError("asar header is not an object")
+    return header, 8 + pickle_size
+
+
+def _package_json_without_version(raw: bytes) -> bytes:
+    """`package.json` 去掉 `version` 再规范化 —— 别让版本号进壳签名。
+
+    其余字段照算：依赖或入口变了，代码包仍然要回退全量。
+    """
+    try:
+        obj = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return raw
+    if not isinstance(obj, dict):
+        return raw
+    obj.pop("version", None)
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode("utf-8")
+
+
+def shell_signature(asar_path) -> str:
+    """壳的「内容签名」—— 与版本号无关的那一半。
+
+    为什么不能用整包 sha256：asar 里装着壳自己的 `package.json`，而它带着
+      `version`，每发一版都变，整包哈希对任何跨版本更新必然不同，代码包
+      永远用不上，用户每次都退回 268 MB 全量
+      （实测 1.0.0 / 1.0.3 / 1.1.0 三个哈希互不相同）。
+
+    判据：除 `package.json` 外，每个文件的 `(路径, 内容)` 都进哈希；
+      `package.json` 去掉 `version` 之后再进。`unpacked` 条目只记名字
+      （它们的字节不在 asar 里）。读不到 / 解不开回空串 —— 调用方 fail-closed。
+    """
+    try:
+        blob = Path(asar_path).read_bytes()
+        header, data_off = _asar_layout(blob)
+    except (OSError, ValueError):
+        return ""
+    entries: list[tuple[str, dict]] = []
+
+    def walk(node: dict, prefix: str) -> None:
+        for name, ent in (node or {}).items():
+            if not isinstance(ent, dict):
+                continue
+            full = prefix + name
+            children = ent.get("files")
+            if isinstance(children, dict):
+                walk(children, full + "/")
+            else:
+                entries.append((full, ent))
+
+    walk(header.get("files") or {}, "")
+    h = hashlib.sha256()
+    for full, ent in sorted(entries, key=lambda kv: kv[0]):
+        h.update(full.encode("utf-8"))
+        h.update(b"\0")
+        if ent.get("unpacked"):
+            h.update(b"<unpacked>")
+            h.update(b"\0")
+            continue
+        start = data_off + int(ent.get("offset") or 0)
+        payload = blob[start:start + int(ent.get("size") or 0)]
+        if full == "package.json":
+            payload = _package_json_without_version(payload)
+        h.update(payload)
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def local_shell_sig() -> str:
+    """本地壳的内容签名（判据同 `shell_signature`）。"""
+    res = install_resources_dir()
+    if res is None:
+        return ""
+    return shell_signature(res / "app.asar")
 
 
 def codepack_applicable(manifest) -> bool:
@@ -586,6 +735,11 @@ def codepack_applicable(manifest) -> bool:
     runtime = local_runtime_digest()
     if not runtime or str(cp.get("runtime") or "") != runtime:
         return False
+    #: 新清单带 `shell_sig`（与版本号无关的内容签名）；老清单只有整包
+    #:   `shell_sha256` —— 那个对任何跨版本更新都必然不同，只留给老客户端。
+    sig = str(cp.get("shell_sig") or "")
+    if sig:
+        return sig == local_shell_sig()
     shell = str(cp.get("shell_sha256") or "")
     if not shell:
         return False
@@ -940,7 +1094,7 @@ class UpdateChecker:
         renamed to its final name.  This prevents orphaned partial downloads.
         """
         global _update_state
-        _update_state["status"] = "downloading"
+        _mark_phase("downloading")
         _update_state["progress"] = 0.0
         _update_state["error"] = None
         _update_state["kind"] = "full"
@@ -966,6 +1120,7 @@ class UpdateChecker:
         urls = list(manifest.download_urls or []) or [manifest.download_url]
         attempts = len(self.DOWNLOAD_RETRY_DELAYS) + 1
         last_error: Exception | None = None
+        download_started = time.time()
         for attempt in range(1, attempts + 1):
             for url in urls:
                 try:
@@ -973,7 +1128,12 @@ class UpdateChecker:
                                             progress_callback)
                     last_error = None
                     break
-                except requests.RequestException as exc:
+                except (requests.RequestException, OSError) as exc:
+                    #: `OSError` 也要接：`.part` 被别的进程占着时 `open()` 抛
+                    #:   `PermissionError: [WinError 32]`（杀软 / 并发下载），
+                    #:   原来它越过这条重试直接冲进线程体 —— 2026-11-22 真机
+                    #:   日志里那一行就是它。放过这一支等于"重试机制本身会被
+                    #:   一次瞬时占用打断"。
                     last_error = exc
                     log_update("download attempt %d/%d failed (%s): %s"
                                % (attempt, attempts, url, exc))
@@ -997,26 +1157,41 @@ class UpdateChecker:
         #   「要不要校验」这个开关落在了 manifest 的提供方手上 —— 不给就跳过，
         #   下载来的 exe 直接进安装器（`-ExecutionPolicy Bypass` + `/S` 静默）。
         # 宁可不更新，也不装一个不知道是什么的东西。
-        _update_state["status"] = "verifying"
-        if not manifest.sha256:
-            dest_part.unlink(missing_ok=True)
-            _update_state["status"] = "error"
-            _update_state["error"] = ("manifest 没给 sha256 —— 拒绝投放"
-                                      "（没有校验和就无法确认这个包是什么）")
-            log_update("refused: manifest has no sha256")
-            return None
-        if not self.verify_checksum(dest_part, manifest.sha256):
-            dest_part.unlink(missing_ok=True)
-            _update_state["status"] = "error"
-            _update_state["error"] = "SHA256 checksum mismatch — download discarded"
-            log_update("refused: sha256 mismatch")
-            return None
+        try:
+            size = dest_part.stat().st_size
+        except OSError:
+            size = 0
+        log_update("download complete: %s (%d bytes) in %.1fs -> verifying"
+                   % (dest_part.name, size, time.time() - download_started))
+        _mark_phase("verifying")
+        try:
+            if not manifest.sha256:
+                dest_part.unlink(missing_ok=True)
+                _update_state["status"] = "error"
+                _update_state["error"] = ("manifest 没给 sha256 —— 拒绝投放"
+                                          "（没有校验和就无法确认这个包是什么）")
+                log_update("refused: manifest has no sha256")
+                return None
+            if not self.verify_checksum(dest_part, manifest.sha256):
+                dest_part.unlink(missing_ok=True)
+                _update_state["status"] = "error"
+                _update_state["error"] = "SHA256 checksum mismatch — download discarded"
+                log_update("refused: sha256 mismatch")
+                return None
+            log_update("verify ok: %s" % dest_part.name)
 
-        # 收口用 replace，不用 rename。Windows 上 os.rename 碰到已存在的目标会抛
-        #   FileExistsError，于是同一个版本下第二次下载（装失败后点重试，或者上次
-        #   下到一半断了）必然失败，而那句错误看起来像磁盘坏了。走到这里时哈希
-        #   已经验过，覆盖是事先想清楚的事，不是巧合。
-        dest_part.replace(dest_final)
+            # 收口用 replace，不用 rename。Windows 上 os.rename 碰到已存在的目标会抛
+            #   FileExistsError，于是同一个版本下第二次下载（装失败后点重试，或者上次
+            #   下到一半断了）必然失败，而那句错误看起来像磁盘坏了。走到这里时哈希
+            #   已经验过，覆盖是事先想清楚的事，不是巧合。
+            #   杀软可能正扫着这个刚下好的 exe，重试在 `_replace_with_retry`。
+            _replace_with_retry(dest_part, dest_final)
+        except OSError as exc:
+            _update_state["status"] = "error"
+            _update_state["error"] = ("安装包落地失败（文件可能被杀毒软件占用）：%s"
+                                      % exc)
+            log_update("finalize failed: %s" % exc)
+            return None
         _update_state["status"] = "ready"
         _update_state["downloaded_path"] = str(dest_final)
         mark_pending(manifest, dest_final)
@@ -1055,7 +1230,7 @@ class UpdateChecker:
         #:   才是权威。两种哈希认一种即可，两样都没有就拒绝。
         integrity = str(cp.get("integrity") or "")
         _update_state["kind"] = "codepack"
-        _update_state["status"] = "downloading"
+        _mark_phase("downloading")
         _update_state["progress"] = 0.0
         _update_state["error"] = None
 
@@ -1087,7 +1262,7 @@ class UpdateChecker:
                                             progress_callback)
                     last_error = None
                     break
-                except requests.RequestException as exc:
+                except (requests.RequestException, OSError) as exc:
                     last_error = exc
                     log_update("codepack attempt %d/%d failed (%s): %s"
                                % (attempt, attempts, candidate, exc))
@@ -1102,18 +1277,32 @@ class UpdateChecker:
             _update_state["error"] = "Code pack download error: %s" % last_error
             return None
 
-        _update_state["status"] = "verifying"
-        verified = (_sha256_file(dest_part) == expected) if expected \
-            else (_sha512_integrity(dest_part) == integrity)
-        if not verified:
-            dest_part.unlink(missing_ok=True)
+        try:
+            size = dest_part.stat().st_size
+        except OSError:
+            size = 0
+        log_update("code pack download complete: %s (%d bytes) -> verifying"
+                   % (dest_part.name, size))
+        _mark_phase("verifying")
+        try:
+            verified = (_sha256_file(dest_part) == expected) if expected \
+                else (_sha512_integrity(dest_part) == integrity)
+            if not verified:
+                dest_part.unlink(missing_ok=True)
+                _update_state["status"] = "error"
+                _update_state["error"] = ("Code pack %s mismatch — discarded"
+                                          % ("sha256" if expected else "integrity"))
+                log_update("code pack refused: %s mismatch"
+                           % ("sha256" if expected else "integrity"))
+                return None
+            log_update("code pack verify ok: %s" % dest_part.name)
+            _replace_with_retry(dest_part, dest_final)
+        except OSError as exc:
             _update_state["status"] = "error"
-            _update_state["error"] = ("Code pack %s mismatch — discarded"
-                                      % ("sha256" if expected else "integrity"))
-            log_update("code pack refused: %s mismatch"
-                       % ("sha256" if expected else "integrity"))
+            _update_state["error"] = ("代码包落地失败（文件可能被杀毒软件占用）：%s"
+                                      % exc)
+            log_update("code pack finalize failed: %s" % exc)
             return None
-        dest_part.replace(dest_final)
 
         try:
             new_dir = _extract_codepack(dest_final, res)
@@ -1441,11 +1630,11 @@ def background_startup_check() -> None:
                 if installed:
                     already = pending_install()
                     if not (already and already.get("version") == manifest.version):
-                        try:
-                            checker.download_best(manifest)
-                        except Exception as exc:           # noqa: BLE001
-                            log_update("download crashed: %s: %s"
-                                       % (type(exc).__name__, exc))
+                        #: 走同一条入口：任何异常都落成 `error`。此前这里是
+                        #:   裸调用 + 只记日志 —— 状态停在 `downloading`，
+                        #:   界面一直转，而下面那格还照样写 24h 时间戳
+                        #:   （2026-11-22 报障日志的现场）。
+                        download_thread_entry(manifest, checker)
                         if _update_state.get("status") == "error":
                             #: 下载失败：不写时间戳 —— 下次启动从 `.part` 续传。
                             log_update("download failed: %s"

@@ -33,11 +33,15 @@ import re
 import sys
 import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+
+#: 壳签名只此一份实现（客户端与发布脚本都调它）—— 两处各写一份必然漂。
+from core.updater import shell_signature  # noqa: E402
 
 RELEASE_DIR = _ROOT / "apps" / "desktop" / "release"
 UNPACKED = RELEASE_DIR / "win-unpacked"
@@ -214,7 +218,11 @@ def build_codepack(version: str, unpacked: Path = UNPACKED,
         "size_bytes": out.stat().st_size,
         "app_version": str(version),
         "runtime": runtime,
+        #: `shell_sha256` 是整包哈希。asar 里带着 `package.json.version`，
+        #:   它对任何跨版本更新必然不同，客户端已改认 `shell_sig`
+        #:   （与版本号无关的内容签名）。这一格留给老客户端，别拿它判"壳变没变"。
         "shell_sha256": sha256_of(asar),
+        "shell_sig": shell_signature(asar),
         "path": str(out),
     }
     #: 发布到 npm 时，真正发出去的是它打的 tarball，不是本地这个 zip —
@@ -286,6 +294,178 @@ def manifest_path(channel: str, out_dir: Path = OUT_DIR) -> Path:
     return out_dir / ("version-%s.json" % channel)
 
 
+def _tree_version(unpacked: Path = UNPACKED) -> str:
+    """打包树里 `resources/app/core/version.py` 的版本；读不到回空串。
+
+    清单的版本来自项目根的 `core/version.py`，与打包树里那一份不是同一个
+    文件。版本号改过而没重新打包时两者会不同，那正是"清单描述的不是要发的
+    那个包"。
+    """
+    p = unpacked / "resources" / "app" / "core" / "version.py"
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    m = re.search(r'^__version__\s*=\s*[\'"]([^\'"]+)', text, re.M)
+    return m.group(1) if m else ""
+
+
+def _artifact_local_path(art: dict, out_dir: Path, fallback: str) -> Path:
+    """清单里那件产物在本机的落点：先按地址的文件名找，再试约定名。
+
+    两个都可能对：上传时改名是允许的，而 npm tarball 那条地址与本地 zip
+    本来就不是同一个文件（本地那份只用来算哈希）。
+    """
+    url = str((art or {}).get("url") or "")
+    names = []
+    if url:
+        names.append(PurePosixPath(urlsplit(url).path).name)
+    names.append(fallback)
+    for name in names:
+        if name and (out_dir / name).is_file():
+            return out_dir / name
+    return out_dir / (names[0] or fallback)
+
+
+def _https_ok(url: str) -> bool:
+    return (str(url or "").startswith("https://")
+            or str(url or "").startswith("http://localhost")
+            or str(url or "").startswith("http://127.0.0.1"))
+
+
+def verify_manifest(man: dict, *, unpacked: Path = UNPACKED,
+                    out_dir: Path = OUT_DIR) -> list[str]:
+    """清单与产物的逐项一致性。返回问题列表，空列表 = 通过。
+
+    判据是"清单描述的就是即将上传的那几件文件"。仓库里同时躺着多份不同构建
+    是常态（2026-11-22 有三份不同的 1.1.0 安装包），所以这一条不能靠人看。
+    """
+    problems: list[str] = []
+    latest = (man or {}).get("latest") or {}
+    version = str(latest.get("version") or "")
+    if not version:
+        return ["清单里没有 latest.version"]
+    arts = latest.get("artifacts") or {}
+
+    exe = arts.get("windows-exe") or {}
+    exe_path = _artifact_local_path(exe, out_dir,
+                                    "crannia-%s-win-x64.exe" % version)
+    if not exe_path.is_file():
+        problems.append("找不到安装包：%s" % exe_path)
+    else:
+        if str(exe.get("sha256") or "") != sha256_of(exe_path):
+            problems.append("安装包的 sha256 与清单不一致：%s" % exe_path.name)
+        if int(exe.get("size_bytes") or 0) != exe_path.stat().st_size:
+            problems.append("安装包的 size_bytes 与清单不一致：%s" % exe_path.name)
+
+    tree_ver = _tree_version(unpacked)
+    if tree_ver and tree_ver != version:
+        problems.append("打包树里的版本是 %s，清单写的是 %s"
+                        % (tree_ver, version))
+
+    cp = arts.get("codepack")
+    if isinstance(cp, dict):
+        if str(cp.get("app_version") or "") != version:
+            problems.append("代码包的 app_version 与清单版本不一致")
+        rt_file = unpacked / "resources" / "primary-runtime" / "runtime.json"
+        try:
+            rt = json.loads(rt_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            rt = {}
+        want_rt = str((rt or {}).get("payloadDigest") or "") if isinstance(rt, dict) else ""
+        if str(cp.get("runtime") or "") != want_rt:
+            problems.append("代码包的 runtime 与打包树的 runtime.json 不一致")
+        sig = shell_signature(unpacked / "resources" / "app.asar")
+        if not sig:
+            problems.append("算不出打包树的壳签名（app.asar 读不到或不是 asar）")
+        elif str(cp.get("shell_sig") or "") != sig:
+            problems.append("代码包的 shell_sig 与打包树的 asar 不一致")
+        #: 目标是 npm tarball 时本地没有那份哈希（由注册中心补），有就核。
+        if cp.get("sha256"):
+            pack = _artifact_local_path(cp, out_dir,
+                                        "codepack-%s.zip" % version)
+            if not pack.is_file():
+                problems.append("找不到代码包：%s" % pack)
+            elif sha256_of(pack) != str(cp.get("sha256")):
+                problems.append("代码包的 sha256 与清单不一致：%s" % pack.name)
+
+    tui = arts.get("tui")
+    if isinstance(tui, dict):
+        p = _artifact_local_path(tui, out_dir,
+                                 "crannia-tui-%s-code.zip" % version)
+        if not p.is_file():
+            problems.append("找不到 TUI 代码包：%s" % p)
+        else:
+            if sha256_of(p) != str(tui.get("sha256") or ""):
+                problems.append("TUI 代码包的 sha256 与清单不一致：%s" % p.name)
+            if int(tui.get("size_bytes") or 0) != p.stat().st_size:
+                problems.append("TUI 代码包的 size_bytes 与清单不一致：%s" % p.name)
+
+    for key, art in arts.items():
+        if not isinstance(art, dict):
+            continue
+        for u in [art.get("url")] + list(art.get("urls") or []):
+            if u and not _https_ok(str(u)):
+                problems.append("%s 的地址不是 https：%s" % (key, u))
+    return problems
+
+
+def _http_json(url: str) -> dict:
+    import urllib.request
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Crannia-release-gate",
+                      "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def verify_published(man: dict, fetch=None) -> list[str]:
+    """上传之后回读发布资产，核对 size/digest 与清单一致。
+
+    只认 GitHub Releases 的资产地址（当前的发布形态）。别的宿主返回一条
+    "没法核对"，不假装通过。`fetch` 只给测试注入。
+    """
+    problems: list[str] = []
+    latest = (man or {}).get("latest") or {}
+    arts = latest.get("artifacts") or {}
+    exe = arts.get("windows-exe") or {}
+    candidates = ([str(exe.get("url") or "")]
+                  + [str(u) for u in (exe.get("urls") or [])])
+    url = next((u for u in candidates
+                if (urlsplit(u).hostname or "").lower() == "github.com"), "")
+    parts = urlsplit(url)
+    m = re.match(r"^/([^/]+)/([^/]+)/releases/download/([^/]+)/", parts.path or "")
+    if not url or not m:
+        return ["清单里没有 GitHub Releases 地址，没法回读：%r" % (candidates,)]
+    api = "https://api.github.com/repos/%s/%s/releases/tags/%s" % (
+        m.group(1), m.group(2), m.group(3))
+    try:
+        data = (fetch or _http_json)(api)
+    except Exception as exc:                              # noqa: BLE001
+        return ["回读失败：%s: %s" % (type(exc).__name__, exc)]
+    assets = {str(a.get("name")): a for a in (data.get("assets") or [])
+              if isinstance(a, dict)} if isinstance(data, dict) else {}
+    for key, art in arts.items():
+        if not isinstance(art, dict):
+            continue
+        for u in [art.get("url")] + list(art.get("urls") or []):
+            if not u:
+                continue
+            name = PurePosixPath(urlsplit(str(u)).path).name
+            got = assets.get(name)
+            if got is None:
+                continue
+            if int(got.get("size") or 0) != int(art.get("size_bytes") or 0):
+                problems.append("%s：发布资产的 size 与清单不一致（%s vs %s）"
+                                % (name, got.get("size"), art.get("size_bytes")))
+            digest = str(got.get("digest") or "").lower()
+            want = ("sha256:%s" % str(art.get("sha256") or "")).lower()
+            if digest and want != "sha256:" and digest != want:
+                problems.append("%s：发布资产的 digest 与清单不一致" % name)
+            break
+    return problems
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="验发布产物 + 写 version.json")
     ap.add_argument("--check-only", action="store_true", help="只验产物，不写 manifest")
@@ -316,7 +496,32 @@ def main(argv=None) -> int:
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     ap.add_argument("--out", default="",
                     help="直接指定 manifest 路径（例如 gh-pages/stable/version.json）")
+    ap.add_argument("--verify-published", nargs="?", const="__default__",
+                    default="",
+                    help="发布之后：读这份清单，回读 GitHub Release 资产的 "
+                         "size/digest 与它比对（不给路径则读 <out-dir>/version-<channel>.json）")
     args = ap.parse_args(argv)
+
+    if args.verify_published:
+        path = Path(args.verify_published)
+        if args.verify_published == "__default__":
+            from core.version import __version__ as _ver
+            from core.updater import channel_for_version as _chan
+            path = manifest_path(args.channel or _chan(_ver),
+                                 Path(args.out_dir))
+        try:
+            man = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print("[release] 读不到清单 %s：%s" % (path, exc))
+            return 1
+        problems = verify_published(man)
+        if problems:
+            print("[release] 发布资产与清单对不上：")
+            for p in problems:
+                print("  - " + p)
+            return 1
+        print("[release] 发布资产与清单一致：%s" % path)
+        return 0
 
     #: 显式给的时间也必须是 UTC 形状 —— 这个字段就是被误用成「本地时间 + Z」的。
     published_at = (args.published_at or "").strip()
@@ -403,6 +608,16 @@ def main(argv=None) -> int:
         codepack_urls=args.codepack_url_fallback,
         tui_urls=args.tui_url_fallback,
     )
+    mismatches = verify_manifest(man, unpacked=UNPACKED,
+                                 out_dir=Path(args.out_dir))
+    if mismatches:
+        print("[release] 清单与产物对不上，不写：")
+        for p in mismatches:
+            print("  - " + p)
+        print("[release] 这一条挡的是"
+              "「清单描述的不是即将上传的那个包」。")
+        return 1
+
     out = (Path(args.out) if args.out
            else manifest_path(channel, Path(args.out_dir)))
     out.parent.mkdir(parents=True, exist_ok=True)

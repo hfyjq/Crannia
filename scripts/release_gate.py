@@ -267,6 +267,8 @@ def main(argv=None) -> int:
           % channel)
     print("        [!] 只动**这一条渠道**的 version.json；另一条不要碰。")
     print("        [!] Pages 有缓存（约 10 分钟）—— 没生效先等，别改代码。")
+    print("        # 传完资产之后回读一遍，核对 size/digest 与清单一致：")
+    print("        %s scripts/make_release.py --verify-published <清单路径>" % py)
     print("\n[gate] 全过 [ok]")
     return _finish(0, clone_dir, args.clean_clone)
 

@@ -4044,7 +4044,14 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
     if (u.status === "downloading") {
       return t("正在下载更新… {p}%", { p: Math.round((u.progress || 0) * 100) });
     }
-    if (u.status === "verifying") return t("正在校验安装包…");
+    if (u.status === "verifying") {
+      //: 只加计时，不改文案 —— 268 MB 的包在慢盘 / 杀软扫描下要好几秒，
+      //:   而这一行静止的时候看起来就是"卡住了"。
+      const sec = u.phase_started
+        ? Math.max(0, Math.floor(Date.now() / 1000 - u.phase_started))
+        : 0;
+      return t("正在校验安装包…") + (sec ? " " + sec + "s" : "");
+    }
     if (u.ready) return t("新版本 {v} 已下载，重启应用以更新", { v: u.ready });
     if (u.status === "error") return t("上次更新失败：{why}", { why: u.error || "?" });
     if (u.status === "ready") return t("新版本已下载，重启应用以更新");
@@ -4058,6 +4065,16 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
   }
 
   useEffect(() => { loadUpdateStatus(); /* eslint-disable-line */ }, []);
+
+  //: 下载 / 校验进行中时每秒刷新一次读数 —— 校验那一行带计时，不刷新的话
+  //:   计时是死的，看起来又回到"卡住"。
+  const updatePhase = updateState && updateState.status;
+  useEffect(() => {
+    if (updatePhase !== "downloading" && updatePhase !== "verifying") return undefined;
+    const id = setInterval(() => { loadUpdateStatus(); }, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updatePhase]);
 
   /** 「是」—— 真去下。轮询到 `ready` 为止；下完这一行收掉，
    *  顶栏那条黄字由 `/api/status` 的 `update_ready` 亮起来（下一条 5 秒刷新）。 */

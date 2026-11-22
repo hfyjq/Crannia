@@ -1,0 +1,7 @@
+Update notes - regular update (2026/11/22) v1.1.1
+
+Experience:
+1. Improved download speed in mainland China
+
+Fixes:
+1. Fixed an automatic update error
