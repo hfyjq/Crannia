@@ -71,6 +71,33 @@ MIRROR_TIMEOUT = 900
 MIRROR_INTERVAL = 15
 
 
+#: 这个包里声明的许可证，必须与仓库根 `LICENSE` 一致。
+#: 2026-11-23 发现它写的是 MIT，而仓库、README 徽章、根 `package.json`
+#: 全是 Apache-2.0 —— 对着 npm 页面读的人会读到另一个答案。
+LICENSE_ID = "Apache-2.0"
+
+
+def build_package_json(version: str, latest: dict) -> dict:
+    """npm 包的 metadata。`latest` 是清单里那一格。"""
+    return {
+        "name": NAME,
+        "version": str(version),
+        "description": "Crannia application code pack for automatic updates",
+        "license": LICENSE_ID,
+        "repository": {"type": "git", "url": REPO},
+        "publishConfig": {"access": "public"},
+        #: 清单就在这一格。客户端读 `<注册中心>/<包名>/<tag>` 的 metadata，
+        #:   取 `crannia` —— 一次发布同时更新清单与代码包。
+        "crannia": latest,
+    }
+
+
+def build_readme() -> str:
+    return ("Crannia code pack - used by the desktop app's automatic updater.\n"
+            "Source: https://github.com/hfyjq/Crannia\n"
+            "License: %s\n" % LICENSE_ID)
+
+
 def _load_manifest(path: Path, version: str) -> dict | None:
     """读清单；版本号对不上就拒绝（返回 None 由调用方记一句）。"""
     try:
@@ -195,23 +222,10 @@ def main(argv=None) -> int:
         for volatile in ("url", "urls", "sha256", "integrity", "size_bytes"):
             cp.pop(volatile, None)
 
-    pkg = {
-        "name": NAME,
-        "version": __version__,
-        "description": "Crannia application code pack for automatic updates",
-        "license": "MIT",
-        "repository": {"type": "git", "url": REPO},
-        "publishConfig": {"access": "public"},
-        #: 清单就在这一格。客户端读 `<注册中心>/<包名>/<tag>` 的 metadata，
-        #:   取 `crannia` —— 一次发布同时更新清单与代码包。
-        "crannia": latest,
-    }
+    pkg = build_package_json(str(__version__), latest)
     (DST / "package.json").write_text(
         json.dumps(pkg, ensure_ascii=False, indent=2), encoding="utf-8")
-    (DST / "README.md").write_text(
-        "Crannia code pack - used by the desktop app's automatic updater.\n"
-        "Source: https://github.com/hfyjq/Crannia\n"
-        "License: MIT\n", encoding="utf-8")
+    (DST / "README.md").write_text(build_readme(), encoding="utf-8")
 
     print("[npm] 包目录：%s" % DST)
     print("[npm] 版本：%s" % __version__)
