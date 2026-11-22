@@ -1,34 +1,43 @@
 {
   "latest": {
-    "version": "1.1.0",
+    "version": "1.1.1",
     "channel": "stable",
-    "published_at": "2026-11-21T17:32:51Z",
-    "release_notes_url": "",
+    "published_at": "2026-11-22T07:50:57Z",
+    "release_notes_url": "https://github.com/hfyjq/Crannia/releases/tag/v1.1.1",
     "minimum_client_version": null,
     "mandatory": false,
     "changelog": {},
     "artifacts": {
       "windows-exe": {
-        "url": "https://github.com/hfyjq/Crannia/releases/download/v1.1.0/crannia-1.1.0-win-x64.exe",
-        "sha256": "27cf3134bbc0a15de5c174fb38851a6ffc001fbe79c40c7d12dfd2dfa57a0e7d",
-        "size_bytes": 268380182
+        "url": "https://gitcode.com/KanocRain/crannia-release/releases/download/v1.1.1/crannia-1.1.1-win-x64.exe",
+        "sha256": "c8a71066a8d3f0049ff1f93945fc05305414f29b9f7dc56d516bed379e7ab6d9",
+        "size_bytes": 268383754,
+        "urls": [
+          "https://gitcode.com/KanocRain/crannia-release/releases/download/v1.1.1/crannia-1.1.1-win-x64.exe",
+          "https://github.com/hfyjq/Crannia/releases/download/v1.1.1/crannia-1.1.1-win-x64.exe"
+        ]
       },
       "codepack": {
-        "url": "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.1.0.tgz",
-        "app_version": "1.1.0",
+        "url": "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.1.1.tgz",
+        "app_version": "1.1.1",
         "runtime": "81c9471a1aed5e0ec6716c5447082df39b68aa3c06332dc32d44d0682dd716f6",
-        "shell_sha256": "295138dd2c721457812e73a18d372c91722c7f7c3dafecd9b32054812976d58e",
+        "shell_sha256": "1d074d15a82ce4ff31f5d3cf28773d2e0f0e2f592345c584327cad7c2e80b42d",
+        "shell_sig": "6e22c3fef60a8d0ae55741e5049c50571b8f33925380740d14bc0123d6437c78",
         "urls": [
-          "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.1.0.tgz",
-          "https://registry.npmjs.org/@hfyjq/crannia/-/crannia-1.1.0.tgz"
+          "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.1.1.tgz",
+          "https://registry.npmjs.org/@hfyjq/crannia/-/crannia-1.1.1.tgz"
         ],
-        "integrity": "sha512-STJF91cl1hpgV9R37O0Ix8CY1MLxbdi1ksv84BlxS5u0P0qx1k1bcXyVccGr55o3i9eiMFMsRdmt8GubPHoGjQ==",
-        "size_bytes": 4911429
+        "integrity": "sha512-PCHol/ZWmI0DYBSdvDWAbqjrultk/1+/LLLBBhSeaIfqbV2tzd4AqECKTbzLc76wKL1CdEtxG2nYwleVhe3L4w==",
+        "size_bytes": 4914118
       },
       "tui": {
-        "url": "https://github.com/hfyjq/Crannia/releases/download/v1.1.0/crannia-tui-1.1.0-code.zip",
-        "sha256": "e5c8d40c2652ad036147ba2318f95dee76514abeae0b810898145076e71bb9e9",
-        "size_bytes": 5059723
+        "url": "https://gitcode.com/KanocRain/crannia-release/releases/download/v1.1.1/crannia-tui-1.1.1-code.zip",
+        "sha256": "5dd5fd9f72c2578d7ba79215d019793938e46cfbc3aa7e1d2b9a6280ba481df8",
+        "size_bytes": 5062691,
+        "urls": [
+          "https://gitcode.com/KanocRain/crannia-release/releases/download/v1.1.1/crannia-tui-1.1.1-code.zip",
+          "https://github.com/hfyjq/Crannia/releases/download/v1.1.1/crannia-tui-1.1.1-code.zip"
+        ]
       }
     }
   }
