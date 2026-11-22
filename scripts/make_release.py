@@ -68,10 +68,20 @@ SHELL_ASAR = "app.asar"
 MIN_ASAR_BYTES = 256 * 1024
 
 
-def find_installer(release_dir: Path = RELEASE_DIR) -> Path | None:
-    """找那个安装包（`crannia-*-win-x64.exe`）。多个取最新的一个。"""
+def find_installer(release_dir: Path = RELEASE_DIR,
+                   version: str = "") -> Path | None:
+    """找那个安装包（`crannia-*-win-x64.exe`）。
+
+    给了 `version` 就只认那一版：发布目录里留着旧版本的 exe 是常态
+    （今天同时有 1.1.0 与 1.1.1），按修改时间取最新会把上一版当成这一版。
+    没给才退回"多个取最新"。
+    """
     if not release_dir.is_dir():
         return None
+    if version:
+        exact = release_dir / ("crannia-%s-win-x64.exe" % version)
+        if exact.is_file():
+            return exact
     cands = [p for p in release_dir.glob("crannia-*-win-x64.exe") if p.is_file()]
     if not cands:
         return None
@@ -79,13 +89,14 @@ def find_installer(release_dir: Path = RELEASE_DIR) -> Path | None:
 
 
 def check_artifact(unpacked: Path = UNPACKED,
-                   release_dir: Path = RELEASE_DIR) -> list:
+                   release_dir: Path = RELEASE_DIR,
+                   version: str = "") -> list:
     """只读地验一遍产物。返回 `[(问题, 说明), ...]`；空 = 通过。
 
     [!] 每一条都写成"会怎么坏"，因为这份清单是给发版那一刻看的。
     """
     problems: list = []
-    installer = find_installer(release_dir)
+    installer = find_installer(release_dir, version)
     if installer is None:
         problems.append(("安装包", "在 %s 下没找到 crannia-*-win-x64.exe" % release_dir))
     else:
@@ -543,14 +554,14 @@ def main(argv=None) -> int:
         print("[release] 去掉 --channel 让它按版本走（= beta），或者先改版本号。")
         return 1
 
-    problems = check_artifact()
+    problems = check_artifact(version=__version__)
     if problems:
         print("[release] 产物不合格 —— %d 条：" % len(problems))
         for what, detail in problems:
             print("  - %s：%s" % (what, detail))
         print("[release] 先修产物，再谈发布。")
         return 1
-    installer = find_installer()
+    installer = find_installer(RELEASE_DIR, __version__)
     assert installer is not None
     size = installer.stat().st_size
     digest = sha256_of(installer)

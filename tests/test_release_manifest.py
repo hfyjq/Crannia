@@ -577,6 +577,25 @@ def test_a_published_release_reaches_the_client():
 
 # 6. 清单与产物的一致性（发布门禁）
 
+def test_find_installer_prefers_the_current_version():
+    import time
+    import make_release as MR
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        old = d / "crannia-1.1.0-win-x64.exe"
+        new = d / "crannia-1.1.1-win-x64.exe"
+        old.write_bytes(b"old")
+        new.write_bytes(b"new")
+        #: 让旧那个的 mtime 更新 —— 按时间挑就会挑错，正好验到判据上。
+        later = time.time() + 10
+        old.touch()
+        __import__("os").utime(old, (later, later))
+        check("给了版本 -> 只认那一版", MR.find_installer(d, "1.1.1") == new,
+              repr(MR.find_installer(d, "1.1.1")))
+        check("没给版本 -> 退回最新的一个", MR.find_installer(d) == old,
+              repr(MR.find_installer(d)))
+
+
 def test_manifest_must_match_the_artifacts():
     import make_release as MR
     from _sandbox import asar_bytes as _asar_bytes
@@ -679,6 +698,7 @@ def main() -> int:
                test_published_at_can_be_given_explicitly,
                test_installer_runs_nsis_silently,
                test_a_published_release_reaches_the_client,
+               test_find_installer_prefers_the_current_version,
                test_manifest_must_match_the_artifacts,
                test_published_assets_are_checked_against_the_manifest):
         print("")
