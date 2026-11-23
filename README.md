@@ -10,15 +10,11 @@
     <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
     <img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
-    <img alt="Status" src="https://img.shields.io/badge/status-beta-orange">
   </p>
 </div>
 
 Crannia is an open-source general-purpose agent. It helps you get things done, or
 build what you have in mind.
-
-> Crannia is in beta. The core loop, skills, channels and desktop shell are usable;
-> interfaces, prompts and on-disk formats may still change between releases.
 
 ## Quick start
 

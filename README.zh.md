@@ -10,14 +10,10 @@
     <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
     <img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
-    <img alt="Status" src="https://img.shields.io/badge/status-beta-orange">
   </p>
 </div>
 
 Crannia 是一个开源的通用型 Agent，可以协助完成事项，或构筑您的想法。
-
-> 当前是 Beta。核心循环、技能、通道和桌面壳可用；接口、提示词和磁盘格式在版本之间
-> 仍可能变化。
 
 ## 快速开始
 
