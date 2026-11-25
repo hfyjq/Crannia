@@ -28,6 +28,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from core import vision_budget as VB  # noqa: E402
+from tests._sandbox import sandbox  # noqa: E402
 
 _PASS = 0
 _FAIL = 0
@@ -167,8 +168,13 @@ def test_scale_matches_prepare_bytes():
     prov = VB.resolve(provider="anthropic", model="claude-fable-5")
     buf = io.BytesIO()
     Image.new("RGB", (3000, 2000), (200, 200, 200)).save(buf, format="PNG")
-    prepared = II.prepare_bytes(buf.getvalue(), max_edge=prov.max_edge,
-                                max_pixels=prov.max_pixels)
+    # `prepare_bytes` 会把归一化后的图写进 `data/attachments/`（内容寻址），
+    # 所以必须进沙箱。不进的话开发树因为那张图已经存在而"看着干净"
+    #    （`_spill` 命中 `p.exists()` 就不写），公开副本头一回跑就往生产
+    #    目录写了 —— 2026-11-25 在 gitC 全量里抓到。
+    with sandbox():
+        prepared = II.prepare_bytes(buf.getvalue(), max_edge=prov.max_edge,
+                                    max_pixels=prov.max_pixels)
     k = prov.scale_for(3000, 2000)
     check("prepare_bytes 的宽度 = 原宽 * scale_for（误差 1px）",
           abs(prepared.width - round(3000 * k)) <= 1,
