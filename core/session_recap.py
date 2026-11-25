@@ -30,12 +30,24 @@
   （读不到 ≠ 0，也 ≠ "很久"）。
 - 默认关：它是用户打开的功能，不是我们替他打开的。
   关着的时候本模块一行都不做（不开支、不出事件）。
+
+## 一次"回来"只说一遍（不只是靠 `last_turn_at` 前进）
+
+`last_turn_at` 是「上一轮跑完了」的时刻。若那一轮在跑完之前就失败
+（provider 报错、进程退出），它会停在旧值 —— 之后用户每发一句话，
+`due()` 都判真，回顾就会隔一句出现一次。
+
+所以这里另记一格：给出回顾时把它记在 `_LAST_RECAP[session]`。
+下一条消息若仍对着同一个 `last_turn_at`（说明那之后还没有一轮真正跑完），
+直接不说话 —— 不必等到它再老一个间隔。等哪一轮跑完，`last_turn_at` 前进，
+下一个"离开够久"的窗口才重新打开。
 """
 
 from __future__ import annotations
 
 import re
-from typing import Optional
+import time
+from typing import Dict, Optional
 
 #: 设置键（`data/settings.json`）。两个键：开关 + 触发时间。
 #: 「可关闭」那一格就落在 `ENABLED_KEY` 上 ——
@@ -52,6 +64,17 @@ DEFAULT_MINUTES = 30
 #: 边界（设置在用户手里，越界一律拒，不静默夹取）。
 MIN_MINUTES = 1
 MAX_MINUTES = 1440          # 一天；超过它等于"永远不触发"，那就该关开关
+
+#: 本会话上一次给出回顾的时刻。键 = session_id，进程内。
+#: 判据见模块 docstring 的「一次"回来"只说一遍」—— 它防的是
+#: 「那一轮没跑完 => `last_turn_at` 不前进 => 每句话都来一段回顾」。
+#: 登记在 `core/state_registry.py`（`/clear` 走 `forget`）。
+_LAST_RECAP: Dict[str, float] = {}
+
+
+def forget(session_id: str) -> None:
+    """`/clear` 的清理（`state_registry` 的 purge 入口）。"""
+    _LAST_RECAP.pop(session_id, None)
 
 
 def _settings() -> dict:
@@ -167,10 +190,21 @@ def recap_for(session_id: str, now: Optional[float] = None) -> Optional[str]:
 
     顺序是有讲究的：先判 `due`（纯读设置 + 一个钟），
     判过了才去读笔记文件 —— 绝大多数轮在第一道就返回了，不碰磁盘。
+
+    另有一道「这一次回来已经说过了」：见模块 docstring。判据是
+    `_LAST_RECAP[session] >= last_turn_at` —— 说明给出回顾之后
+    还没有任何一轮真正跑完（`last_turn_at` 没前进），此时不再重复。
     """
     from core.memory_extract import last_turn_at
 
-    if not due(last_turn_at(session_id), now):
+    anchor = last_turn_at(session_id)
+    if anchor is None:
+        return None
+    stamp = _LAST_RECAP.get(session_id)
+    if stamp is not None and stamp >= float(anchor):
+        return None
+    t = time.time() if now is None else float(now)
+    if not due(anchor, t):
         return None
     from core.memory.session_memory import SessionMemory
 
@@ -178,4 +212,7 @@ def recap_for(session_id: str, now: Optional[float] = None) -> Optional[str]:
         note = SessionMemory().load(session_id)
     except Exception:  # noqa: BLE001  —— 回顾是**锦上添花**：拿不到就算了，
         return None    # 但绝不因此弄挂这一轮（同 `context.state` 那条兜底判据）
-    return build(note or "")
+    text = build(note or "")
+    if text:
+        _LAST_RECAP[session_id] = t
+    return text

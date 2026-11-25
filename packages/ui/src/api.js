@@ -210,6 +210,10 @@ export const EVENT_TYPES = [
   "tool.start", "tool.end",
   "approval.request", "approval.resolved",
   "context.state", "memory.saved", "memory.organized",
+  // 自动回顾：轮首到达，App 画成居中的淡黄块（与手动 `/recap` 同一个块）。
+  //   它此前只订阅、没登记 —— 监听器永远不会被触发（v0.11.1003 的漏网）。
+  //   同一条纪律：加事件 = 这份名单 + `App.jsx` 的 `client.subscribe`。
+  "recap",
   "turn.queued", "files.changed", "error",
   //:一条会话线程刚被打开 —— 左栏名册要立刻跟上（新建任务的第一句落地时，
   //:   名册里就该有它；此前只靠 `task.end`，跑的过程中这一段整条失踪）。

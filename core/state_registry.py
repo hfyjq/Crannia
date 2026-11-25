@@ -295,6 +295,13 @@ SESSION_SCOPED: Tuple[SessionState, ...] = (
         "后台记忆抽取的三格（游标/节流计数/last_turn_at）+ 在飞标志。"
         "不清：新一段对话继承上一段的节流计数（早抽或晚抽几轮）与旧游标 —— "
         "游标靠指纹失配兜底，但 `last_turn_at` 是旧时刻（冷闸会误判『冷』）"),
+    SessionState(
+        "session_recap", "core/session_recap.py::_LAST_RECAP", "purge_session",
+        _lazy("core.session_recap", "forget"),
+        "本会话上一次给出自动回顾的时刻（防「那一轮没跑完 ⇒ 每句话都回顾」）。"
+        "不清的后果：新一段对话的 `last_turn_at` 也被清了（同一条 purge），"
+        "所以通常无害；但若不清，这一格会跟着会话键留下来，"
+        "让新对话在 `last_turn_at` 前进之前被旧时刻压住（该给回顾时不给）"),
     # 这两条是「授权」，不是「数据」 ——
     #   `/clear` 对它们做的是回收权限，不是丢东西。
     SessionState(
@@ -631,11 +638,16 @@ SESSION_SCOPED_BY_OTHER: Tuple[SessionState, ...] = (
     # `_profile_only` 已删：它是"新会话只带画像、不带 facts"的两档开关，
     #    而画像/facts 两段现在整段删除（只剩会话笔记），它没有可区分的对象了。
     #    census 会把"过期登记"报出来。
-    # SessionPool 2 格
+    # SessionPool 3 格（原 2 格 + 模型指纹缓存）
     SessionState(
         "_loaded", "core/session_pool.py::SessionPool._loaded",
         "SessionPool.new_session 用新 (sid, msgs) 覆盖",
         note="它是'这个 key 认不认识'的缓存 —— 判据不能只看它（磁盘上还有绑定表）"),
+    SessionState(
+        "_loaded_model", "core/session_pool.py::SessionPool._loaded_model",
+        "get_or_create 命中时按当前 provider 重新算指纹，不一致则连同 _loaded 一起失效",
+        note="只是 _loaded 那份消息按哪个模型窗口装载的标记，不是'这一段用什么模型'。"
+             "真正的会话模型在 core/session_model.py，两者不可混"),
     # 这里不能再加一格 `_model_overrides`（`SessionPool` 的会话模型覆盖）：
     #    那是一条死路（`/model` 往里写、全仓没有读者），保留它就是让
     #    「这一段用什么模型」有两个看起来都对的地方（`core/session_model.py`
@@ -1089,6 +1101,13 @@ PROCESS_SHARED: Tuple[ProcessState, ...] = (
         "★ 与 `bus/core.py::_env_warned` **同形同命**（并发下最多重算一次字符串 ⇒ 无害）。"
         "它是给回执用的一句话（'为什么这台机器上用不了回收站'），"
         "⚠️ 不许当成判据 —— 判据是 `available()`。`/clear` 不清它"),
+    ProcessState(
+        "_xdg_error", "core/recycle.py::_xdg_error",
+        "**无锁 warn-once 字符串**：Linux 那半在 `_xdg_available()` 失败时写一次"
+        "（同一句 `global`）",
+        "★ 与 `_load_error` 同形同命（并发下最多重算一次字符串 ⇒ 无害）。"
+        "它是给回执用的一句话（'Linux 上为什么建不了回收站目录'），"
+        "⚠️ 不许当成判据 —— 判据是 `available()`。`/clear` 不清它"),
     # 这两格不是会话级：没有 session_id 键，而且 `/clear` 不该碰它们 ——
     #   碰了就把挂在那个循环上的 MCP 连接一起掐了。所以归这边。
     ProcessState(
@@ -1205,6 +1224,26 @@ PROCESS_SHARED: Tuple[ProcessState, ...] = (
         "★ **必须是同一份**：`pre_process` 占位、`post_process` 落账、"
         "调度器轮末放位 —— 分成两份就是「占位写 A、落账写 B」，两边都看不出错，"
         "而平台重投照样被挡。进程级，`/clear` 不清（`core/dedup.clear()` 的注释）"),
+    ProcessState(
+        "_vision_warned", "core/computer/tools.py::_vision_warned",
+        "只增不减的集合；无锁（并发最坏是多打一行控制台）",
+        "★ 噪声抑制账本：'这个模型的视觉能力没有记录'每个模型只喊一次。"
+        "进程级，与哪条会话无关；`/clear` 不清（清了只会多喊一遍）"),
+    ProcessState(
+        "_CACHE", "core/vision_budget.py::_CACHE",
+        "★ **一把模块内锁（`_LOCK`）** —— 读与写都在锁内（`_read_json` / `_model_config`）",
+        "★ 表文件的 (mtime, 内容) 缓存，按绝对路径键。进程级只读缓存；"
+        "`reset_cache()` 给测试用，运行期不清"),
+    ProcessState(
+        "policy_cache", "core/cache_policies.py::_CACHE",
+        "★ **一把模块内可重入锁（`_LOCK`）** —— 读与写都在锁内（`_read_table` / `_model_config`）",
+        "★ 策略表与 config.yaml 的 (mtime, 内容) 缓存，按绝对路径键。"
+        "进程级只读缓存；`reset_cache()` 给测试用，运行期不清"),
+    ProcessState(
+        "model_profile_cache", "core/model_profiles.py::_CACHE",
+        "★ **一把模块内可重入锁（`_LOCK`）** —— 读与写都在锁内（`_read_table`）",
+        "★ 模型能力差异表的 (mtime, 内容) 缓存，按绝对路径键。"
+        "进程级只读缓存；`reset_cache()` 给测试用，运行期不清"),
 )
 
 

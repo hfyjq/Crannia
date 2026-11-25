@@ -60,8 +60,15 @@ def check(cond: bool, msg: str) -> None:
 
 def run_capture(fn) -> str:
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        fn()
+    # stdin 必须换成非 TTY：真机终端和 WSL 的伪终端都会让 `isatty()` 为真，
+    # 那时确认提示会停下来等键盘，这个文件就挂在这儿。
+    old_stdin = sys.stdin
+    sys.stdin = io.StringIO("")
+    try:
+        with contextlib.redirect_stdout(buf):
+            fn()
+    finally:
+        sys.stdin = old_stdin
     return buf.getvalue()
 
 

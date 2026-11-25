@@ -346,6 +346,23 @@ def _sanitize_report(text: str) -> str:
     return text
 
 
+def _child_thinking(snapshot, provider):
+    """子的思考档：同模型完全照父（前缀同源），跨模型才按子画像回落。"""
+    parent = tiers.current_spec(snapshot.session_id).thinking
+    child_model = str(getattr(provider, "_model", "") or "")
+    if not child_model or child_model == getattr(snapshot, "model", ""):
+        return parent
+    from core import model_profiles as _profiles
+    efforts = _profiles.resolve(
+        str(getattr(provider, "_provider_name", "") or ""),
+        child_model).thinking.get("efforts") or []
+    if parent is None or not isinstance(parent, str):
+        return parent
+    if parent in efforts:
+        return parent
+    return efforts[0] if efforts else None
+
+
 def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
               max_turns: int, readonly_mode: bool = False,
               emit: Callable | None = None,
@@ -476,10 +493,10 @@ def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
                 _tools=snapshot.tools,
                 _system=snapshot.system,
                 # 第四个必须同源的 —— 思考模式进提示缓存键
-                # （五项 cacheSafeParams 之一），子要是按自己的默认
-                # 发，第一条请求的前缀就从最前面断了，fork 那台机器白搭。
-                # 取自同一个会话的档（`snapshot.session_id`），不是另读一次设置。
-                thinking=tiers.current_spec(snapshot.session_id).thinking,
+                # （五项 cacheSafeParams 之一）。同模型时逐字沿用父档，
+                # fork 那台机器才不白搭；跨模型时父那档可能子模型不认，
+                # 才按子画像回落（这时前缀本来就不共享，不损失缓存）。
+                thinking=_child_thinking(snapshot, provider),
                 _emit=None,               # v0：子的轮次事件不进父的时间线（轮号会串）
                 # 任务级取消令牌：取消一个后台子 agent
                 # 只停它，不动父那一轮（会话级 `is_cancelled` 仍在）。
@@ -511,7 +528,13 @@ def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
         text = EMPTY_OUTPUT
     # `WB5`：回父之前先"去毒"（确定性那半永远跑，见 `_sanitize_report`）
     text = _sanitize_report(text)
+    # 回报带上实际用的模型：父拿到结果时才知道这段是谁说的，
+    # 跨模型 fork 的前缀假设也才能被外部判定（同模型才同前缀）。
+    _child_model = str(getattr(provider, "_model", "") or "")
+    _same_model = (_child_model == getattr(snapshot, "model", _child_model))
     return {"success": True, "output": text, "tokens": tokens,
+            "model": _child_model,
+            "same_model_as_parent": _same_model,
             "note": "子 agent 的过程、工具输出与推理都没有回传，只有上面这段话"}
 
 

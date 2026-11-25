@@ -529,6 +529,7 @@ class OpenAICompatProvider(BaseProvider):
         thinking_on: bool = False,
         model: str = "",
         has_tools: bool = False,
+        provider_name: str = "",
     ) -> list[dict]:
         """把 (messages, system) 投影成 OpenAI 的 wire 形状。
 
@@ -552,6 +553,14 @@ class OpenAICompatProvider(BaseProvider):
            历史里那条消息在库里还是原样 —— 它是"当时想了什么"的记录。
         """
         messages = OpenAICompatProvider._strip_private_parts(messages)
+        # 按目标模型清洗历史副本：上一家的思考字段不认就剥、空 assistant 补位、
+        # 悬空 tool_use 补结果。只改副本，落库那份不动（见本函数第 2 条）。
+        # 这里没有 self（静态入口，测试也按类方法直接调），provider 名由调用方传；
+        # 传空就跳过画像清洗，保持旧行为。
+        if provider_name:
+            from core import model_profiles as _profiles
+            messages = _profiles.sanitize_for_wire(
+                messages, provider_name, model)
         messages = OpenAICompatProvider._fill_reasoning_passback(
             messages, thinking_on=thinking_on, model=model, has_tools=has_tools)
         system_text = flatten_system(system)
@@ -633,6 +642,7 @@ class OpenAICompatProvider(BaseProvider):
                 thinking_on=self._thinking_on(thinking, declared),
                 model=self._model,
                 has_tools=bool(tools),
+                provider_name=self._provider_name,
             ),
             # 按次覆盖：`None`，实例默认，逐字节不变
             "temperature": self.resolve_temperature(temperature),
@@ -648,6 +658,11 @@ class OpenAICompatProvider(BaseProvider):
         }
         if tools:
             kwargs["tools"] = tools
+        # 画像禁发的参数在这里统一删；字段名按画像换。同步与流式各一处，
+        # 不能只改一条 —— 否则打开流式之后行为就漂了。
+        from core import model_profiles as _profiles
+        kwargs = _profiles.filter_request_params(
+            kwargs, self._provider_name, self._model)
 
         max_retries = self._rotator.healthy_count if self._rotator else 1
 
@@ -815,6 +830,7 @@ class OpenAICompatProvider(BaseProvider):
                 thinking_on=self._thinking_on(thinking, declared),
                 model=self._model,
                 has_tools=bool(tools),
+                provider_name=self._provider_name,
             ),
             # 按次覆盖：`None`，实例默认，逐字节不变
             "temperature": self.resolve_temperature(temperature),
@@ -826,6 +842,11 @@ class OpenAICompatProvider(BaseProvider):
         }
         if tools:
             kwargs["tools"] = tools
+        # 画像禁发的参数在这里统一删；字段名按画像换。同步与流式各一处，
+        # 不能只改一条 —— 否则打开流式之后行为就漂了。
+        from core import model_profiles as _profiles
+        kwargs = _profiles.filter_request_params(
+            kwargs, self._provider_name, self._model)
 
         max_retries = self._rotator.healthy_count if self._rotator else 1
         #: 重试节奏（`core/llm_retry.step`）：常规 10 次 + 静默 10 次。

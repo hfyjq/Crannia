@@ -68,6 +68,23 @@ Transcript .tool {
 /* 审批面板：平时藏着，出现时**占的正是输入框那个槽** ——
  * 同样的位置、同样的圆角边框，读起来是"这里暂时换了个用途"，
  * 而不是"弹了个窗"。选中态的标记（▌）画在内容里，颜色跟随文本。 */
+/* `/model set` 的编辑面板：占输入框那个槽的小框。 */
+ModelEditPanel {
+    display: none;
+    height: auto;
+    margin: 0 1;
+    padding: 0 1;
+    border: round $primary;
+}
+
+ModelEditPanel:focus {
+    border: round $accent;
+}
+
+ModelEditPanel #model-edit-body {
+    width: 100%;
+}
+
 ApprovalPanel {
     display: none;
     height: auto;
@@ -116,6 +133,10 @@ BtwPanel #btw-text {
     height: auto;
     margin: 0 1;
     border: round $primary;
+    /* 接管开着时 `App` 会在边框左上角写「【接管中】」—— 黄色，
+     * 与底栏原先那格同义。它只出现、不改输入行为。 */
+    border-title-color: yellow;
+    border-title-align: left;
 }
 
 #composer:focus {

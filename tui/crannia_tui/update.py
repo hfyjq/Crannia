@@ -165,7 +165,11 @@ def install(payload: Path, *, root: Path, version: str = "",
         if dest.exists():
             shutil.rmtree(dest)
         os.replace(tmp, dest)
-    except Exception:
+    except BaseException:
+        #: `Exception` 兜不住 Ctrl+C / `SystemExit`（都是 `BaseException`），
+        #: 而一次更新可能在拷几个 GB —— 被打断就留下整包暂存区
+        #: （真机 2026-11-21：3 个 `.incoming-*` 共 8.7 GB）。清理只做这一步，
+        #: 异常照样原样抛出去。
         shutil.rmtree(tmp, ignore_errors=True)
         raise
 

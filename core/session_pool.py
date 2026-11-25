@@ -27,6 +27,16 @@ from typing import Dict, List, Tuple
 MAX_LOADED_SESSIONS = 32
 
 
+def _provider_model_key(provider) -> str:
+    """provider 实例 → 稳定的模型指纹。读不到就是空串（不猜）。"""
+    if provider is None:
+        return ""
+    prov = str(getattr(provider, "_provider_name", "") or "")
+    model = str(getattr(provider, "_model", "") or "")
+    window = str(getattr(provider, "context_window", "") or "")
+    return f"{prov}|{model}|{window}"
+
+
 class SessionPool:
     """Per-user session facade over a single MemoryManager.
 
@@ -47,6 +57,10 @@ class SessionPool:
         #: 外键 → (存储 id, messages)。按最近使用排序，条数有上限
         #: （活动会话的完整消息表常驻，是内存随使用增长的主因）。
         self._loaded: "OrderedDict[str, Tuple[str, List[dict]]]" = OrderedDict()
+        #: 每个键装载时用的模型指纹。切换模型后缓存里的 messages 仍按旧模型的
+        #: 窗口预算装载，直接复用会让"换到小窗口模型"那一轮带着旧预算上路。
+        #: 只记指纹（provider 目录名 + 模型名），不记 provider 对象本身。
+        self._loaded_model: dict[str, str] = {}
         #: 缓存那把锁。Web 侧是多线程的，两个会话可以同时进出：
         #: 一个线程 `move_to_end` 时另一个正好把那个键淘汰掉，`KeyError`
         #: 就会从一次普通的取会话里冒出来。读也加锁 —— `OrderedDict`
@@ -65,9 +79,13 @@ class SessionPool:
         """
         with self._lock:
             got = self._loaded.get(session_key)
-            if got is not None:
+            if got is not None and self._model_key(session_key, provider):
                 self._loaded.move_to_end(session_key)      # 命中即刷新热度
                 return got
+            if got is not None:
+                # 模型变了：旧那份按旧窗口装的，不走二次检查的复用路径。
+                self._loaded.pop(session_key, None)
+                self._loaded_model.pop(session_key, None)
 
         # 锁外加载（库 I/O 不占着缓存锁）—— 然后二次检查：
         # 同一个键可能已经被另一个线程加载完放进去了，那就用他那份，
@@ -75,11 +93,18 @@ class SessionPool:
         sid, messages = self._load_thread(session_key)
         with self._lock:
             got = self._loaded.get(session_key)
-            if got is not None:
+            if got is not None and self._model_key(session_key, provider):
                 self._loaded.move_to_end(session_key)
                 return got
             self._remember_locked(session_key, (sid, messages))
+            self._loaded_model[session_key] = _provider_model_key(provider)
         return sid, messages
+
+    def _model_key(self, session_key: str, provider) -> bool:
+        """缓存那份是不是按当前模型装的。provider 没给时视为一致。"""
+        if provider is None:
+            return True
+        return self._loaded_model.get(session_key, "") == _provider_model_key(provider)
 
     def _remember(self, session_key: str,
                   value: Tuple[str, List[dict]]) -> None:
@@ -97,7 +122,9 @@ class SessionPool:
         self._loaded[session_key] = value
         self._loaded.move_to_end(session_key)
         while len(self._loaded) > MAX_LOADED_SESSIONS:
-            self._loaded.popitem(last=False)
+            old_key, _ = self._loaded.popitem(last=False)
+            # 指纹跟着消息一起走，不然这张表会随会话数一直涨。
+            self._loaded_model.pop(old_key, None)
 
     def _load_thread(self, session_key: str) -> Tuple[str, List[dict]]:
         """`通道键 → (存储 id, messages)` —— 那座桥。
@@ -201,6 +228,10 @@ class SessionPool:
         # （铸 id 的那一步也在那儿，两件事必须同一个事务/同一个所有者，不然会漏）。
         sid, messages = self._mgr.new_session(old_sid, channel_key=session_key)
         self._remember(session_key, (sid, messages))
+        # `/clear` 换了线程，那份空历史还没有"按哪个模型装载"的指纹。
+        # 不在这里编一个（没拿 provider），删掉让下一次 get_or_create 自己算。
+        with self._lock:
+            self._loaded_model.pop(session_key, None)
         return sid, messages
 
     def open_detached_thread(self, session_key: str, seed: str = "") -> str:

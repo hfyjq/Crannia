@@ -1,10 +1,11 @@
 """截图的标注层 —— 只动图，不动 UI。
 
-三件事：
+四件事：
 
 1. `crop_zoom`：按 0–1000 比例的中心 / 倍率裁一块并放大（微信那种自绘 UI 的主力）。
 2. `grid`：在图上画 10% 一格的带标签网格（模型可以直接读比例，不用估像素）。
 3. `click_marker`：在上一击的实际落点画红十字（连续校准，不靠三角测试）。
+4. `element_marks`：把元素树里的 `[N]` 画到图上的矩形上（把"报坐标"变成"挑编号"）。
 
 全部用 Pillow（已有依赖），任何一步失败都原样返回 —— 标注是附加物，
    不该把一次观察弄崩（同 `skill_index` 的判据）。
@@ -144,6 +145,81 @@ def click_marker(png: bytes, coord_rect, point) -> bytes:
         return _save(Image.alpha_composite(img, overlay))
     except Exception:                                # noqa: BLE001
         return png
+
+
+def element_marks(png: bytes, coord_rect, elements, *,
+                  max_marks: int = 80) -> tuple[bytes, list[int]]:
+    """把元素的 `[N]` 画在图上，返回 (新图, 实际画了的编号)。
+
+    ## 为什么这件事值得做
+
+    模型给坐标是一次空间回归：它得把"这个按钮在哪"估成两个数，像素级误差
+    直接变成点偏。给出编号以后同一件事变成分类：它在候选里挑一个。
+    `element_index` 那条路本来就有（精确点击），缺的只是让模型在图上看见
+    哪个编号对应哪个框 —— 树文本里 250 行，模型对不上号。
+
+    ## 三条规矩
+
+    - 编号沿用元素树的 `[N]`，不重新排序。重排之后"图上的 3"与"树里的 [3]"
+      不是同一个东西，而这个函数唯一的功能判据就是两边对得上。
+    - 只画 `coord_rect` 内的、`enabled` 且非 `offscreen` 的元素。画到图外等于
+      教模型点一个看不见的目标；画禁用元素等于给它一条必失败的路。
+    - 超过 `max_marks` 就截断（默认 80）。再多的编号会糊成一片，模型也数不过来；
+      截断的事实由调用方在文本里说出来。
+    """
+    try:
+        img = _open(png)
+        w, h = img.size
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(overlay)
+        font = _font(max(12, min(w, h) // 70))
+        frame = (0, 150, 235, 235)
+        lw = max(2, min(w, h) // 500)
+        fh = getattr(font, "size", 11) if font is not None else 11
+        l, t, r, b = coord_rect
+        boxes: list[tuple[int, int, int, int, str]] = []
+        for el in elements or ():
+            if len(boxes) >= max(0, int(max_marks)):
+                break
+            if getattr(el, "offscreen", False) or not getattr(el, "enabled", True):
+                continue
+            rect = getattr(el, "rect", None)
+            if not rect or len(rect) != 4:
+                continue
+            try:
+                if (rect[2] <= l or rect[0] >= r
+                        or rect[3] <= t or rect[1] >= b):
+                    continue
+                x1, y1, x2, y2 = _map_rect(coord_rect, w, h, rect)
+            except Exception:                        # noqa: BLE001 - 坏矩形跳过
+                continue
+            if x2 - x1 < 2 or y2 - y1 < 2:
+                continue
+            boxes.append((x1, y1, x2, y2, str(getattr(el, "index", ""))))
+        if not boxes:
+            return png, []
+        for x1, y1, x2, y2, _label in boxes:
+            d.rectangle([x1, y1, x2, y2], outline=frame, width=lw)
+        for x1, y1, x2, y2, label in boxes:
+            if not label:
+                continue
+            if font is not None:
+                tw = d.textlength(label, font=font)
+            else:
+                tw = 6 * len(label)
+            # 标签默认贴在框的上沿外侧；贴出图外就翻到内侧
+            ty = y1 - fh - 3
+            if ty < 0:
+                ty = y1 + 1
+            tx = x1
+            if tx + tw + 6 > w:
+                tx = max(0, x2 - tw - 6)
+            d.rectangle([tx, ty, tx + tw + 6, ty + fh + 3],
+                        fill=(255, 255, 255, 235))
+            d.text((tx + 3, ty + 1), label, fill=(0, 70, 190, 255), font=font)
+        return _save(Image.alpha_composite(img, overlay)), [int(b[4]) for b in boxes if b[4].isdigit()]
+    except Exception:                                # noqa: BLE001
+        return png, []
 
 
 def crop_rect_for(rect, zx: int, zy: int, scale: int):

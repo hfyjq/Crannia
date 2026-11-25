@@ -1,5 +1,6 @@
 {
   "name": "crannia-gui",
+  "desktopName": "crannia-gui",
   "private": true,
   "version": "1.1.2",
   "description": "Crannia desktop GUI",

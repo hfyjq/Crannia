@@ -1,19 +1,18 @@
 {
-  "name": "@vscode/ripgrep-win32-x64",
-  "version": "1.18.0",
-  "description": "ripgrep binary for win32-x64. Used by @vscode/ripgrep.",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/microsoft/vscode-ripgrep"
+  "win32-x64": {
+    "package": "@vscode/ripgrep-win32-x64",
+    "version": "1.18.0",
+    "tarball": "https://registry.npmjs.org/@vscode/ripgrep-win32-x64/-/ripgrep-win32-x64-1.18.0.tgz",
+    "member": "package/bin/rg.exe",
+    "sha256": "f9dde63498b3193f098355dbec97af99dc4f6b8fa0df5ed04114a03012c042cb",
+    "name": "rg.exe"
   },
-  "license": "MIT",
-  "os": [
-    "win32"
-  ],
-  "cpu": [
-    "x64"
-  ],
-  "files": [
-    "bin/"
-  ]
+  "linux-x64": {
+    "package": "@vscode/ripgrep-linux-x64",
+    "version": "1.18.0",
+    "tarball": "https://registry.npmjs.org/@vscode/ripgrep-linux-x64/-/ripgrep-linux-x64-1.18.0.tgz",
+    "member": "package/bin/rg",
+    "sha256": "193906679498de4d939345b937fa24e0e69a03c244bd70c859f5e41232713f21",
+    "name": "rg"
+  }
 }

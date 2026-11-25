@@ -49,10 +49,11 @@ __all__ = [
 _APP_ROOT = Path(__file__).resolve().parent.parent
 
 #: `(sys.platform, 机器架构)` → `vendor/ripgrep/` 下的目录名。
-#: 今天只有 Windows x64；别的平台没有二进制 —— 那就明说，不假装能用。
+#: 发了 Windows x64 与 Linux x64；别的平台没有二进制 —— 那就明说，不假装能用。
 _PLATFORM_DIRS = {
     ("win32", "amd64"): "win32-x64",
     ("win32", "x86_64"): "win32-x64",
+    ("linux", "x86_64"): "linux-x64",
 }
 
 
@@ -74,7 +75,7 @@ def platform_dir() -> str:
     name = _PLATFORM_DIRS.get(key)
     if not name:
         raise RgUnavailable(
-            "这个平台（%s/%s）**没有随包的 ripgrep** —— 今天只发了 Windows x64。"
+            "这个平台（%s/%s）**没有随包的 ripgrep** —— 只发了 Windows x64 与 Linux x64。"
             "要么换一台 Windows x64 的机器，要么用 `CRANNIA_RG` 指定一个 "
             "ripgrep 可执行文件的绝对路径。" % (sys.platform, key[1] or "?"))
     return name

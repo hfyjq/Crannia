@@ -859,6 +859,34 @@ def test_the_local_card_needs_no_key():
           MC.preflight(e["id"]) == "", repr(MC.preflight(e["id"])))
 
 
+def test_probe_refuses_to_go_out_without_a_key():
+    """没有 key 就别发请求 —— 也别把占位串的尾巴当成"用户填错了"。
+
+    真机上的形状：引导里那次 `getpass` 回空串，配置照样建成（`api` 留空是
+    合法的），联通测试带着 `not-needed` 出门，上游回 "your api key
+    ****eded is invalid" —— 而用户手里那把 key 一个字符都没进账本。
+    """
+    MC = _fresh()
+    e = _mk(MC, card="deepseek", name="没 key", model="deepseek-v4-flash",
+            base_url="https://api.deepseek.com/v1", api="")
+    ok, kind, why = MC.probe(e["id"])
+    check("★ 没 key 就不发请求，判成「密钥」那一类（好让人去改密钥）",
+          (not ok) and kind == "auth", (ok, kind, why))
+    check("★★ 说人话，不把上游那句 `****eded` 丢给用户",
+          "API Key" in why and "eded" not in why, why)
+    check("★ 需要 key 的判据只有一处：这两张卡免 key",
+          MC.KEYLESS_CARDS == frozenset({"ollama", "other"}),
+          repr(MC.KEYLESS_CARDS))
+    #: 引导据此拦第二问 —— 判据留在后端，界面不自己抄一张卡名表。
+    rows = {c["id"]: c for c in MC.card_defaults()}
+    check("★★ `card_defaults` 要带上 needs_key（界面靠它决定问不问第二遍）",
+          rows["deepseek"]["needs_key"] is True
+          and rows["ollama"]["needs_key"] is False
+          and rows["other"]["needs_key"] is False,
+          repr({k: v.get("needs_key") for k, v in rows.items()}))
+    _fresh()
+
+
 def _raises_key(fn, *a):
     try:
         fn(*a)
@@ -936,6 +964,7 @@ def main() -> int:
                        test_status_reads_the_provider_the_scheduler_swapped_in,
                        test_the_preflight_only_walks_and_leaves_no_footprints,
                        test_the_local_card_needs_no_key,
+                       test_probe_refuses_to_go_out_without_a_key,
                        test_the_link_can_go_red,
                        test_probe_errors_are_classified):
                 try:

@@ -170,6 +170,23 @@ def main() -> int:
             traceback.print_exc()
             check(fn.__name__ + " 没抛异常", False,
                   "%s: %s" % (type(exc).__name__, exc))
+    print("\n-- model fingerprint --")
+    from core.session_pool import _provider_model_key
+    from types import SimpleNamespace
+    a = SimpleNamespace(_provider_name="deepseek", _model="deepseek-flash",
+                        context_window=1048576)
+    b = SimpleNamespace(_provider_name="qwen", _model="qwen3.8-max",
+                        context_window=1000000)
+    check("different models get different cache keys",
+          _provider_model_key(a) != _provider_model_key(b),
+          "%s / %s" % (_provider_model_key(a), _provider_model_key(b)))
+    check("same model gets the same key",
+          _provider_model_key(a) == _provider_model_key(
+              SimpleNamespace(_provider_name="deepseek",
+                              _model="deepseek-flash",
+                              context_window=1048576)))
+    check("no provider is a stable empty key", _provider_model_key(None) == "")
+
     print("\n" + "=" * 62)
     if _FAILED:
         print("FAILED:")

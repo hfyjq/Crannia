@@ -17,6 +17,43 @@ from rich.cells import cell_len
 #: 补全里不列（见 `app._SUGGEST_HIDDEN`），手打也会在这里被拦下。
 _DESKTOP_ONLY = ("/resume", "/rewind")
 
+#: `/mode` 的这两个词都指向「完全权限」（中文名与英文键，`core.modes.mode_of`
+#: 两条都认）。TUI 在发出去之前要认出来：切到完全权限得先过一次安全提示。
+_FULL_ACCESS = ("full_access", "完全权限")
+
+
+def targets_full_access(text: str) -> bool:
+    """这一行是不是「把模式切到完全权限」。
+
+    只认 `/mode <词>` 这一种形状 —— 正文里出现这个词不算
+    （`/btw 完全权限是什么` 是提问，不是切换）。
+    """
+    parts = (text or "").strip().split(maxsplit=1)
+    # 命令名大小写敏感 —— 与后端那一层的匹配同一口径。这里放宽的话，
+    #   会出现「先提示一次，然后命令没被当成命令执行」。
+    if len(parts) != 2 or parts[0] != "/mode":
+        return False
+    return parts[1].strip() in _FULL_ACCESS
+
+
+def model_command(text: str) -> tuple[str, str]:
+    """`/model` 的子命令：`("status"|"more"|"set"|"switch"|"", 参数)`。
+
+    TUI 只拦 `set`（它要弹掩码编辑面板，后端没有输入口）；
+      其余原样交给后端 `_cmd_model`，两处不各写一套语义。
+    """
+    parts = (text or "").strip().split(maxsplit=2)
+    if not parts or parts[0] != "/model":
+        return "", ""
+    if len(parts) == 1:
+        return "status", ""
+    sub = parts[1]
+    if sub == "more":
+        return "more", ""
+    if sub == "set":
+        return "set", (parts[2].strip() if len(parts) > 2 else "")
+    return "switch", text.strip().split(maxsplit=1)[1]
+
 
 def parse_command(text: str) -> tuple[str, str]:
     """把一行输入分成"本地动作"和"要发出去的话"。

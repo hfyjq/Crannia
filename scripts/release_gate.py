@@ -132,6 +132,13 @@ def _finish(code: int, clone_dir: Path | None, clean: bool) -> int:
             shutil.rmtree(clone_dir.parent, ignore_errors=True)
         else:
             print("[gate] 导出的干净树：%s" % clone_dir)
+            if code == 0:
+                #: 一次 3–4 GB，发一版跑几次就是十几 GB（2026-11-24 清出 31.5 GB）。
+                print("[gate] 产物就在这棵树里。发布完成后请删掉它（一次约 3–4 GB）")
+                print("[gate] —— 或者下次带 --clean-clone。")
+            else:
+                print("[gate] 这是失败现场（产物也在里面）。排查完记得删掉，"
+                      "别让它常驻 Temp。")
     return code
 
 
@@ -170,8 +177,12 @@ def main(argv=None) -> int:
         print("[gate] 去掉 --channel（= 按版本走 beta），或者先改版本号。")
         return 1
 
-    py = str(_ROOT / ".venv" / "Scripts" / "python.exe")
+    if sys.platform == "win32":
+        py = str(_ROOT / ".venv" / "Scripts" / "python.exe")
+    else:
+        py = str(_ROOT / ".venv" / "bin" / "python3")
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
+    linux = sys.platform.startswith("linux")
 
     #: 后面每一步都在 `work_root` 里跑：默认是本机工作树，`--from-clone` 时是
     #:   HEAD 导出的那棵干净树（见 `export_head`）。
@@ -222,11 +233,14 @@ def main(argv=None) -> int:
             print("[gate] 1. 工作树干净 [ok]")
 
     steps: list = []
+    target = "linux-x64" if linux else "win-x64"
     if args.with_npm_ci or clone_dir is not None:
         steps.append(("2a. npm ci（锁文件装依赖）", [npm, "ci"]))
     #: 冒烟必须跑：`--check-only` 只验静态文件，"依赖清单非空"不等于
     #:   随包运行时真能 import（Flask / OpenAI / Office / PDF / NumPy）。
-    steps.append(("2. 备自带运行时", [py, "scripts/prepare_runtime.py"]))
+    #: `--target` 显式给：默认是 win-x64，在 Linux 上不给就会装错运行时。
+    steps.append(("2. 备自带运行时",
+                  [py, "scripts/prepare_runtime.py", "--target", target]))
     if not args.skip_build:
         steps.append(("3. 前端构建", [npm, "run", "build"]))
     if not args.skip_package:
@@ -245,10 +259,16 @@ def main(argv=None) -> int:
         print("[gate] [ok] %s" % name)
 
     # 6. 人工那一步
-    print("\n[gate] 6. **只能人做的一步**：")
-    print("        双击 %s 下那个 exe 装一次 → 装完**自己启动一次** →"
-          % (work_root / "apps" / "desktop" / "release"))
-    print("        看到主窗口、发一句话能回，才算过。")
+    print("\n[gate] 6. 只能人做的一步：")
+    if linux:
+        print("        装一次 %s 下那个 AppImage（加可执行位、双击或直接运行）→"
+              % (work_root / "apps" / "desktop" / "release"))
+        print("        看到主窗口、发一句话能回，才算过。")
+        print("        TUI：解开 dist-release 里那个 tar.gz，跑 install.sh → crannia。")
+    else:
+        print("        双击 %s 下那个 exe 装一次 → 装完自己启动一次 →"
+              % (work_root / "apps" / "desktop" / "release"))
+        print("        看到主窗口、发一句话能回，才算过。")
     print("        [!] 机械判不了这个；**只看打包命令返回 0 是最常见的自欺**。")
     if not args.manual_ok:
         print("\n[gate] 机械部分全过，但**第 6 步没做** —— 这不叫通过。")
@@ -256,19 +276,26 @@ def main(argv=None) -> int:
         return _finish(3, clone_dir, args.clean_clone)
 
     # 7. 下一步
-    print("\n[gate] 7. 下一步（发 manifest，仓库 = hfyjq/Crannia 的 GitHub Pages）：")
-    print("        # 安装包挂到 Releases，然后：")
-    print("        %s scripts/make_release.py --channel %s ^" % (py, channel))
-    print("            --url https://github.com/hfyjq/Crannia/releases/download/<tag>/"
-          "crannia-%s-win-x64.exe ^" % __version__)
-    print("            --tui-url <TUI 代码包的直链> ^")
-    print("            --out <gh-pages 检出目录>/%s/version.json" % channel)
-    print("        # 推到 gh-pages 分支 -> https://hfyjq.github.io/Crannia/%s/version.json"
-          % channel)
-    print("        [!] 只动**这一条渠道**的 version.json；另一条不要碰。")
-    print("        [!] Pages 有缓存（约 10 分钟）—— 没生效先等，别改代码。")
-    print("        # 传完资产之后回读一遍，核对 size/digest 与清单一致：")
-    print("        %s scripts/make_release.py --verify-published <清单路径>" % py)
+    if linux:
+        print("\n[gate] 7. 下一步（Linux）：")
+        print("        把 AppImage 与 TUI 的 tar.gz 挂到 Releases；")
+        print("        Linux 的内置更新与发布清单等更新链那一批。")
+        print("        %s scripts/make_release.py --check-only  # 随时可复验产物"
+              % py)
+    else:
+        print("\n[gate] 7. 下一步（发 manifest，仓库 = hfyjq/Crannia 的 GitHub Pages）：")
+        print("        # 安装包挂到 Releases，然后：")
+        print("        %s scripts/make_release.py --channel %s ^" % (py, channel))
+        print("            --url https://github.com/hfyjq/Crannia/releases/download/<tag>/"
+              "crannia-%s-win-x64.exe ^" % __version__)
+        print("            --tui-url <TUI 代码包的直链> ^")
+        print("            --out <gh-pages 检出目录>/%s/version.json" % channel)
+        print("        # 推到 gh-pages 分支 -> https://hfyjq.github.io/Crannia/%s/version.json"
+              % channel)
+        print("        [!] 只动这一条渠道的 version.json；另一条不要碰。")
+        print("        [!] Pages 有缓存（约 10 分钟）—— 没生效先等，别改代码。")
+        print("        # 传完资产之后回读一遍，核对 size/digest 与清单一致：")
+        print("        %s scripts/make_release.py --verify-published <清单路径>" % py)
     print("\n[gate] 全过 [ok]")
     return _finish(0, clone_dir, args.clean_clone)
 

@@ -109,7 +109,12 @@ def render(entries: list[dict]) -> list[str]:
 
 
 def _resolve(entries: list[dict], ref: str) -> tuple[dict | None, str]:
-    """按 id 或名字找一条；撞名 / 找不到都返回一句带候选的话。"""
+    """按 id、名字或编号找一条；撞名 / 找不到都返回一句带候选的话。
+
+    编号就是完整清单里的序号（从 1 起），与后端 `/model` 同一套口径；
+    先精确匹配 id 与名字，找不到才当编号 —— 一条正好叫 `2` 的配置
+    不会被编号 2 抢走。
+    """
     key = ref.strip().lower()
     if not key:
         return None, ""
@@ -122,6 +127,10 @@ def _resolve(entries: list[dict], ref: str) -> tuple[dict | None, str]:
     if len(same) > 1:
         return None, t("「%s」撞名了，用 id 指定：%s") % (
             ref, " · ".join("%s(%s)" % (e["name"], e["id"]) for e in same))
+    if key.isdigit():
+        n = int(key)
+        if 1 <= n <= len(entries):
+            return entries[n - 1], ""
     return None, t("没有「%s」。现有：%s") % (
         ref, " · ".join(e["name"] for e in entries) or t("（空）"))
 

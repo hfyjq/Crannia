@@ -105,6 +105,16 @@ def test_resolve():
     check(hit is not None and hit["name"] == "备用", (hit, why))
     hit, _ = profile._resolve(ENTRIES, "DeepSeek")
     check(hit is not None and hit["id"] == "m11111111", hit)
+    #: 编号 = 完整清单里的序号（从 1 起），与后端 `/model` 同一套。
+    hit, _ = profile._resolve(ENTRIES, "2")
+    check(hit is not None and hit["id"] == "m22222222", hit)
+    hit, why = profile._resolve(ENTRIES, "9")
+    check(hit is None and "现有" in why, why)
+    #: 名字优先于编号：一条真叫 `2` 的配置不许被编号抢走。
+    numbered = ENTRIES + [{"id": "m99999999", "name": "2",
+                           "model": "x", "is_default": False}]
+    hit, _ = profile._resolve(numbered, "2")
+    check(hit is not None and hit["id"] == "m99999999", hit)
     hit, why = profile._resolve(ENTRIES, "没有这个")
     check(hit is None and "现有" in why, why)
     clash = ENTRIES + [{"id": "m33333333", "name": "备用",

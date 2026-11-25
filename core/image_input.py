@@ -139,7 +139,25 @@ AUDIO_TOKEN_FALLBACK = 1000
 #: 那一格管"一轮能贴几张"，这一格管"历史里能留几张"。
 #: 保留最近 N 张而不是"最近 N 轮"：一轮四张图是常态，
 #: 按轮算会让一个四图轮把预算吃光是同一条行为，但按张算更好解释。
-KEEP_IMAGES_IN_REQUEST = 2
+#: 3 张是接管那一档的要求：最近几次观察的截图必须在上下文里，
+#: 模型翻旧图时不能把它们挤掉（详见 offload_old_images）。
+KEEP_IMAGES_IN_REQUEST = 3
+
+#: 接管轨迹里每隔多少张截图才批量卸载一次。其余轮次只追加、不改写历史 ——
+#: 每轮都改一处前缀，付出的是整段缓存重算的代价，而省下的只是几张图的钱。
+BATCH_EVERY_OBSERVATIONS = 25
+
+#: 批量边界之前允许堆多少张图。纯按次数等 25 轮的话，中途账单会一直涨；
+#: 到了这个数就提前卸一次，属于"再不裁就要付更多"的兜底。
+MAX_INLINE_IMAGES = 12
+
+#: 卸载时按来源分优先级：接管截图是受保护的，read_file 翻出来的旧图先清。
+#: 来源不靠新字段，靠历史里本来就有的 tool_call_id 反查工具名 ——
+#: 消息级的私有字段没有统一的 wire 剥除处（兼容层只剥 artifacts 与块级下划线键），
+#: 而 tool_call_id / tool_calls 会随 extra_json 落库、装载时还原。
+_PIN_TOOL = "computer"
+_TRANSIENT_TOOL = "read_file"
+_PIN_RECENT = 3
 
 #: 认这四种。判据来自附件校验（列的就是这四个），
 #: 也正好是 OpenAI 兼容端点普遍接受的集合。
@@ -403,8 +421,16 @@ class ImageToolResult:
 # 三、规范化
 
 
-def _normalize(data: bytes, media_type: str, source: str) -> PreparedImage:
+def _normalize(data: bytes, media_type: str, source: str,
+               max_edge: int | None = None,
+               max_pixels: int | None = None) -> PreparedImage:
     """校验 -> 转正 -> 剥元数据 -> 限尺寸 -> 编码，产出 `PreparedImage`。
+
+    `max_edge` / `max_pixels` 是这一轮的目标预算（接管截图按当前模型给），
+    不给就沿用 `MAX_EDGE_PX` —— 用户贴图、文档抽图这些路径的默认行为不变。
+
+    为什么不许直接把 `MAX_EDGE_PX` 改小：那是所有图片路径共用的天花板，
+    接管需要按模型缩，别的路径不需要。目标预算必须从调用方进来。
 
     无条件重编码（判据 2）：不做"字节没变就原样透传"的短路。
     那条短路看着省事，实际把两个洞一起放进来 ——
@@ -495,15 +521,33 @@ def _normalize(data: bytes, media_type: str, source: str) -> PreparedImage:
         img = img.convert("RGBA")
 
     # 限尺寸（判据 3：超了要说出来）
+    #
+    # 两条上限同时生效：长边（模型的分块档）与总像素（那一档的像素预算）。
+    # 一次算出最小比例、只缩一次 —— 缩两遍会让字更糊，而方向是"只缩一次"。
+    limit_edge = int(max_edge) if max_edge else MAX_EDGE_PX
+    if limit_edge <= 0:
+        limit_edge = MAX_EDGE_PX
+    limit_pixels = int(max_pixels) if max_pixels else 0
     w, h = img.size
     longest = max(w, h)
-    if longest > MAX_EDGE_PX:
-        scale = MAX_EDGE_PX / float(longest)
-        new_size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
+    scale = 1.0
+    why = ""
+    if longest > limit_edge:
+        scale = limit_edge / float(longest)
+        why = "长边上限 %d" % limit_edge
+    if limit_pixels > 0 and w * h * scale * scale > limit_pixels:
+        by_pixels = (limit_pixels / float(w * h)) ** 0.5
+        if by_pixels < scale:
+            scale = by_pixels
+            why = "总像素上限 %d 万" % (limit_pixels // 10000)
+    if scale < 1.0:
+        # 向下取整而不是四舍五入：round 会让两边各多半个像素，
+        # 加起来刚好越过像素预算（1,150,188 > 1,150,000 那种）。
+        new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
         img = img.resize(new_size, _resample())
-        notes.append("已降采样 %d×%d -> %d×%d（超过长边上限 %d，那个尺寸对模型"
-                     "没有额外信息，只是更多 token）"
-                     % (w, h, new_size[0], new_size[1], MAX_EDGE_PX))
+        notes.append("已降采样 %d×%d -> %d×%d（%s，那个尺寸对模型没有额外信息，"
+                     "只是更多 token）"
+                     % (w, h, new_size[0], new_size[1], why))
         w, h = new_size
 
     # 编码（不带 exif / icc / pnginfo —— 元数据在这里掉光）
@@ -639,11 +683,16 @@ def _guard_b64_size(b64: str, what: str) -> None:
 
 
 def prepare_bytes(data: bytes, *, media_type: str = "",
-                  source: str = "") -> PreparedImage:
+                  source: str = "",
+                  max_edge: int | None = None,
+                  max_pixels: int | None = None) -> PreparedImage:
     """从内存里的字节做一张图。`media_type` 只是提示 —— 真正判的是魔数。
 
     魔数优先：`media_type` 传了也只在魔数认不出时当兜底，
     因为"用户说它是 PNG"与"它真的是 PNG"是两件事。
+
+    `max_edge` / `max_pixels` 是这一轮的目标预算（接管截图按当前模型给）；
+    不给就走 `MAX_EDGE_PX`，所有既有路径的行为不变。
     """
     if not data:
         raise ImageInputError("这张图是空的（0 字节）")
@@ -656,7 +705,8 @@ def prepare_bytes(data: bytes, *, media_type: str = "",
         claimed = ("（说是 %s，但文件头对不上）" % media_type) if media_type else ""
         raise ImageInputError(
             "认不出这是什么图片格式%s —— 支持 PNG / JPEG / WebP / GIF。" % claimed)
-    return _normalize(data, sniffed, source)
+    return _normalize(data, sniffed, source,
+                      max_edge=max_edge, max_pixels=max_pixels)
 
 
 def prepare_path(path: str | Path, *, source: str = "") -> PreparedImage:
@@ -1500,7 +1550,10 @@ def rebuild_audio_blocks(paths: Sequence[str]) -> tuple[list[dict], list[str]]:
 
 
 def expand_attachments(messages: Sequence[dict],
-                       keep: int = KEEP_IMAGES_IN_REQUEST) -> int:
+                       keep: int = KEEP_IMAGES_IN_REQUEST, *,
+                       batch_every: int = BATCH_EVERY_OBSERVATIONS,
+                       max_inline: int = MAX_INLINE_IMAGES,
+                       eviction: str = "batch") -> int:
     """把历史里那些指针装回成图片块，然后卸载掉太老的。返回装回去几张。
 
     ## 它为什么存在
@@ -1553,7 +1606,9 @@ def expand_attachments(messages: Sequence[dict],
     #   （b）这一轮刚append 上去的新图，两者合起来一样会超 `keep`。
     #   挂在上面的 `if n:` 里，第 3 张图进来那一轮卸载不发生，
     #   而症状是"账单比预期高"（没有任何地方会红）。
-    offload_old_images(messages, keep=keep)
+    if eviction != "none":
+        offload_old_images(messages, keep=keep,
+                           batch_every=batch_every, max_inline=max_inline)
     return n
 
 
@@ -1619,9 +1674,35 @@ def audio_token_allowance(content: Any) -> int:
     return total
 
 
+def _tool_names_by_call(messages: Sequence[dict]) -> dict[str, str]:
+    """每条工具结果对应的工具名，从 assistant 的 `tool_calls` 反查。
+
+    为什么不给图片块加内部键：块级下划线键在兼容层会被剥掉，消息级的却没有
+    统一的剥除处（那里只剥 `artifacts`），加了就可能漏上 wire 被严格网关拒。
+    工具名是历史本来就有的字段，随 `extra_json` 落库、装载时还原，跨轮次不丢。
+    """
+    out: dict[str, str] = {}
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        calls = msg.get("tool_calls")
+        if not isinstance(calls, (list, tuple)):
+            continue
+        for tc in calls:
+            if not isinstance(tc, dict) or not tc.get("id"):
+                continue
+            fn = tc.get("function")
+            name = fn.get("name") if isinstance(fn, dict) else ""
+            if name:
+                out[str(tc["id"])] = str(name)
+    return out
+
+
 def offload_old_images(messages: Sequence[dict],
-                       keep: int = KEEP_IMAGES_IN_REQUEST) -> int:
-    """把最近 `keep` 张之外的图片块换成一句带路径的话。返回换了几张。
+                       keep: int = KEEP_IMAGES_IN_REQUEST, *,
+                       batch_every: int = 0,
+                       max_inline: int = 0) -> int:
+    """把该卸的图片块换成一句带路径的话。返回换了几张。
 
     ## 为什么要卸载
 
@@ -1629,15 +1710,25 @@ def offload_old_images(messages: Sequence[dict],
     账单随轮数线性涨，而模型早就不看它们了。四类裁剪里第四类（图片卸载）
     干的就是这件事。
 
-    ## 两条判据
+    ## 三条判据
 
-    * 卸载 ≠ 丢掉：换上去的那句话里带着路径，而 `data/attachments/`
-      是可读的（`_framework_readable`），模型取得回来。
-      这是「指针必须真能取到」的直接套用 —— 不写路径的卸载就是"把丢失
-      伪装成清理"。
-    * 就地改，不改结构：只替换块里面那一项，
-      `content` 仍然是同一个列表、同样的块数，前后两条消息的 JSON 形状一致，
-      压缩/分类器/持久化都不需要知道这里发生过什么。
+    卸载不等于丢掉：换上去的那句话里带着路径，而 `data/attachments/`
+      是可读的（`_framework_readable`），模型取得回来。不写路径的卸载
+      就是把丢失伪装成清理。
+
+    就地改，不改结构：只替换块里面那一项，`content` 仍是同一个列表、
+      同样的块数，前后两条消息的 JSON 形状一致，压缩与持久化都不用知道。
+
+    受保护的图不能因为翻旧图被顶掉：接管截图里最近三张永远留着。
+      模型用 `read_file` 翻出来的旧图排在它们后面，单看位置会误把新截图
+      当成"更早的图"卸掉，所以要看来源，不能只看下标。
+
+    ## 批量边界
+
+    `batch_every > 0` 且历史里有接管截图时，只有截图数到边界、或总图数
+      超过 `max_inline` 才卸载一次。其余轮次一个字节都不改，前缀纯追加。
+    没有接管截图（普通用户贴图）时不启用批量，仍按每轮保留最后 `keep` 张 ——
+      那种轨迹里图很少，批量带来的前缀收益抵不上多留几张的成本。
 
     它是有副作用的（改 `messages` 里的对象）—— 所以调用点必须在
     发请求之前、且在 `messages` 的副本语义明确之后。返回计数是为了让
@@ -1646,22 +1737,50 @@ def offload_old_images(messages: Sequence[dict],
     if keep < 0:
         keep = 0
 
-    # 先从后往前数出所有图片块的位置（`(msg_idx, part_idx)`），再决定换哪些。
-    found: list[tuple[int, int, str]] = []
+    names = _tool_names_by_call(messages)
+    # 位置三元组再加一格来源（工具名），路径来自块自身的内容摘要。
+    found: list[tuple[int, int, str, str]] = []
     for mi, msg in enumerate(messages):
-        content = msg.get("content") if isinstance(msg, dict) else None
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content")
         if not isinstance(content, list):
             continue
+        source = names.get(str(msg.get("tool_call_id") or ""), "")
         for pi, part in enumerate(content):
             if isinstance(part, dict) and part.get("type") == "image_url":
-                path = _path_of(part)
-                found.append((mi, pi, path))
+                found.append((mi, pi, _path_of(part), source))
 
     if len(found) <= keep:
         return 0
 
+    pins = [x for x in found if x[3] == _PIN_TOOL]
+    batching = bool(pins) and batch_every > 0
+    if batching:
+        # 观察次数按累计的 tool_calls 数，不按当前图块数 —— 卸载会把老图块换成
+        # 文本，按图块数数的话每卸一次序号就倒退，25 次边界永远到不了。
+        obs_seq = sum(1 for name in names.values() if name == _PIN_TOOL)
+        boundary = obs_seq > 0 and obs_seq % batch_every == 0
+        overflow = max_inline > 0 and len(found) > max_inline
+        if not (boundary or overflow):
+            return 0
+
+    if not pins:
+        # 没有接管截图：保留最后的 keep 张，这是批量机制加入之前的行为。
+        victims = found[:-keep] if keep else list(found)
+    else:
+        # 最近三张截图受保护。翻出来的旧图先清，再清其它来源的旧图；
+        # 每个来源内部仍从最老的开始，序号是模型唯一的指代方式，不能重排。
+        protected = {(x[0], x[1]) for x in pins[-_PIN_RECENT:]}
+        others = [x for x in found if (x[0], x[1]) not in protected]
+        transient = [x for x in others if x[3] == _TRANSIENT_TOOL]
+        normal = [x for x in others if x[3] != _TRANSIENT_TOOL]
+        order = transient + normal
+        slots = max(0, keep - len(protected))
+        victims = order[:max(0, len(order) - slots)]
+
     replaced = 0
-    for mi, pi, path in found[:-keep] if keep else found:
+    for mi, pi, path, _source in victims:
         messages[mi]["content"][pi] = {
             "type": "text",
             "text": _OFFLOAD_TEMPLATE.format(
@@ -1801,7 +1920,7 @@ __all__ = [
     "MAX_EDGE_PX", "MAX_BASE64_BYTES", "MAX_IMAGE_BYTES",
     "MAX_IMAGES_PER_TURN", "MAX_TURN_TOTAL_BYTES",
     "MAX_SOURCE_BYTES", "SUPPORTED_MEDIA", "ATTACHMENT_DIR",
-    "KEEP_IMAGES_IN_REQUEST",
+    "KEEP_IMAGES_IN_REQUEST", "BATCH_EVERY_OBSERVATIONS", "MAX_INLINE_IMAGES",
     "ImageInputError", "PreparedImage", "ImageToolResult",
     "sniff_media_type", "looks_like_image", "image_kind_name",
     "prepare_bytes", "prepare_path", "prepare_data_url",

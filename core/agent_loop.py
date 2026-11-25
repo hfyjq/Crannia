@@ -338,7 +338,8 @@ _SESSION_ONLY_REASONS = {
         "It only becomes available after the user enables 「接管」(takeover) **in this "
         "conversation**. Use run_command / file tools / a dedicated skill instead; only "
         "if the target truly exists only on screen should you stop and ask the user to "
-        "click the 「接管」button."),
+        "enable takeover — the GUI button, or `/takeover on` after switching to full "
+        "access."),
     "ask_member": (
         "It is only offered in group chats, and this conversation is not one."),
     "run_workflow": (
@@ -3705,7 +3706,19 @@ def agent_loop(
     #
     # 必须在 append 之后调 —— 卸载是按"全表最近 keep 张"算的，
     #   漏掉刚 append 的这一轮，新图就永远挤不掉老图。
-    expand_attachments(messages)
+    # 回收策略按当前模型取：保留几张、多少观察卸一次、能不能客户端裁。
+    # 默认与 B 批一致，表读不到时行为不变。
+    from core import cache_policies as _cp
+    _policy = _cp.resolve(
+        str(getattr(provider, "_provider_name", "") or ""),
+        model_name_of(provider))
+    expand_attachments(
+        messages,
+        keep=_policy.keep_images,
+        batch_every=(_policy.batch_every if _policy.eviction == "batch" else 0),
+        max_inline=_policy.max_inline_images,
+        eviction=_policy.eviction,
+    )
 
     # 工具表在每轮循环开头重算 —— 模型可能在上一步通过 search_tools
     # 发现了新工具，下一轮就该看到它们。`_tools`（计划分步执行传入的预过滤表）
@@ -3888,6 +3901,12 @@ def agent_loop(
 
         # 每轮重算：常驻工具 ∪ 已发现工具
         tools = _tools if _tools is not None else get_tool_schemas_active(session_id)
+        # 画像明确说这一家不收工具时才不发；查不到照旧（自建端大多查不到能力）。
+        from core import model_profiles as _profiles
+        if tools and not _profiles.accepts_tools(
+                str(getattr(provider, "_provider_name", "") or ""),
+                model_name_of(provider)):
+            tools = []
 
         # 技能索引（user 侧、瞬时）
         #
@@ -4213,7 +4232,16 @@ def agent_loop(
         #   必须 `content or reasoning` —— 两样都空就没有"接着写"的起点
         #      （追加一条全空的 assistant 消息还可能被上游 400）。
         #      那时照旧走"什么都没说"那两句话（不装作恢复过）。
-        if (_finish_of(response) == _TRUNCATED_FINISH and not tool_calls
+        _finish = _finish_of(response)
+        from core import model_profiles as _profiles
+        _cut_or_dropped = (
+            _finish == _TRUNCATED_FINISH
+            or (not _finish and bool(content or reasoning)
+                and _profiles.reports_finish_reason(
+                    str(getattr(provider, "_provider_name", "") or ""),
+                    model_name_of(provider)))
+        )
+        if (_cut_or_dropped and not tool_calls
                 and _recovery_left > 0 and (content or reasoning)):
             _recovery_left -= 1
             _carry += content or ""
@@ -5118,7 +5146,19 @@ async def agent_loop_stream(
     #
     # 必须在 append 之后调 —— 卸载是按"全表最近 keep 张"算的，
     #   漏掉刚 append 的这一轮，新图就永远挤不掉老图。
-    expand_attachments(messages)
+    # 回收策略按当前模型取：保留几张、多少观察卸一次、能不能客户端裁。
+    # 默认与 B 批一致，表读不到时行为不变。
+    from core import cache_policies as _cp
+    _policy = _cp.resolve(
+        str(getattr(provider, "_provider_name", "") or ""),
+        model_name_of(provider))
+    expand_attachments(
+        messages,
+        keep=_policy.keep_images,
+        batch_every=(_policy.batch_every if _policy.eviction == "batch" else 0),
+        max_inline=_policy.max_inline_images,
+        eviction=_policy.eviction,
+    )
 
     # 工具表在每轮循环开头重算 —— 模型可能在上一步通过 search_tools
     # 发现了新工具，下一轮就该看到它们。`_tools`（计划分步执行传入的预过滤表）
@@ -5293,6 +5333,12 @@ async def agent_loop_stream(
 
         # 每轮重算：常驻工具 ∪ 已发现工具
         tools = _tools if _tools is not None else get_tool_schemas_active(session_id)
+        # 画像明确说这一家不收工具时才不发；查不到照旧（自建端大多查不到能力）。
+        from core import model_profiles as _profiles
+        if tools and not _profiles.accepts_tools(
+                str(getattr(provider, "_provider_name", "") or ""),
+                model_name_of(provider)):
+            tools = []
 
         # 技能索引（user 侧、瞬时）—— 与 sync 逐字同形
         #
@@ -6113,8 +6159,16 @@ async def agent_loop_stream(
             continue  # next turn of tool-calling loop
 
         # 与 sync 逐字同一条（锁步）。
-        if (str(stream_finish or "") == _TRUNCATED_FINISH and _recovery_left > 0
-                and (accumulated_content or accumulated_reasoning)):
+        from core import model_profiles as _profiles
+        _cut_or_dropped = (
+            str(stream_finish or "") == _TRUNCATED_FINISH
+            or (not stream_finish and bool(accumulated_content or accumulated_reasoning)
+                and _profiles.reports_finish_reason(
+                    str(getattr(provider, "_provider_name", "") or ""),
+                    model_name_of(provider)))
+        )
+        if _cut_or_dropped and _recovery_left > 0 \
+                and (accumulated_content or accumulated_reasoning):
             _recovery_left -= 1
             _carry += accumulated_content or ""
             _cut: dict = {"role": "assistant", "content": accumulated_content or ""}

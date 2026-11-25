@@ -387,6 +387,30 @@ def logical_window_rect(hwnd) -> tuple[int, int, int, int]:
     return (0, 0, 0, 0)
 
 
+def cursor_pos() -> tuple[int, int] | None:
+    """光标此刻的物理坐标；取不到就 `None`（不是 `(0, 0)`）。
+
+    ## 为什么它是"事实"而不是"意图"
+
+    注入点是我们要它去哪，回读值是它实际去了哪。两者在有 DPI 缩放、
+    多屏、或者注入被系统改写的场合会不一样，而模型看到的红十字如果画的是
+    意图点，就等于拿一个假设当反馈 —— 点偏了还会以为点对了。
+
+    `None` 与 `(0, 0)` 必须分开：左上角是一个合法坐标，用它表示"不知道"
+    会让"光标在 0,0"和"读不到"变成同一件事。
+    """
+    if not IS_WINDOWS:
+        return None
+    try:
+        with dpi_aware():
+            pt = wintypes.POINT()
+            if user32.GetCursorPos(ctypes.byref(pt)):
+                return (int(pt.x), int(pt.y))
+    except Exception:                                # noqa: BLE001 - 回读失败不该反噬点击
+        return None
+    return None
+
+
 def virtual_screen() -> tuple[int, int, int, int]:
     """返回 (x, y, 宽, 高) —— 覆盖所有显示器的虚拟屏幕（物理像素）。"""
     _require_windows()

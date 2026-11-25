@@ -28,7 +28,8 @@
     "THIRD-PARTY-PYTHON.md",
     "THIRD-PARTY-FRONTEND.md",
     "sbom.json",
-    "tui/crannia.cmd"
+    "tui/crannia.cmd",
+    "tui/crannia.sh"
   ],
   "exclude": [
     "**/__pycache__/**",

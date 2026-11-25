@@ -319,6 +319,19 @@ DEFAULT_CROSS_ZONE_EXCLUDE: list[str] = [
     "C:/$Recycle.Bin",
     "C:/System Volume Information",
     "C:/Recovery",
+    # POSIX system directories (Linux / macOS)。判据与上面那组相同：
+    #   系统目录又大又噪、且不属于用户自己的资料。
+    "/etc",
+    "/usr",
+    "/var",
+    "/boot",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/snap",
+    "/System",
+    "/Library",
     # App data — massive, noisy, potentially sensitive
     "{home}/AppData",
     # Dev dependency caches — millions of tiny files
@@ -2801,8 +2814,13 @@ class USNWatcher(_BaseWatcher):
         try:
             import ctypes
             vol = USNWatcher._get_volume(path)
+            # 反斜杠要提到 f-string 外面：3.12 起表达式里才允许出现反斜杠
+            # （PEP 701），3.11 及以前是语法错。写在一起会让整个模块在旧
+            # 解释器上编译不过，而这里只是 Windows 的可用性探测，不该成为
+            # 整个项目的版本门槛。
+            vol = vol.rstrip("\\")
             handle = ctypes.windll.kernel32.CreateFileW(
-                f"\\\\.\\{vol.rstrip('\\')}", 0x80000000,
+                f"\\\\.\\{vol}", 0x80000000,
                 3, None, 3, 0x02000000, None
             )
             if handle and handle != -1:

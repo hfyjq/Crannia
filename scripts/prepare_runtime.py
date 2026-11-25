@@ -2,15 +2,19 @@
 # -*- coding: utf-8 -*-
 """自带 Python 运行时 —— 下载 / 校验 / 组装 / 事务落地。
 
-    .venv/Scripts/python.exe scripts/prepare_runtime.py            # 备好（需要时下载）
+    .venv/Scripts/python.exe scripts/prepare_runtime.py --target linux-x64
     .venv/Scripts/python.exe scripts/prepare_runtime.py --smoke    # 只跑冒烟
     .venv/Scripts/python.exe scripts/prepare_runtime.py --no-smoke # 备好但不跑
 
 ## 一句话
 
-把 `apps/desktop/primary-runtime-lock.json` 里锁住的那个解释器，
-逐字节核对哈希之后，组装到 `apps/desktop/runtime/primary-runtime/`，
-并写一份 `runtime.json`（谁在里面 + `payloadDigest`）。
+把锁文件里锁住的那个解释器，逐字节核对哈希之后，组装到
+`apps/desktop/runtime/primary-runtime/`，并写一份 `runtime.json`
+（谁在里面 + `payloadDigest`）。
+
+一个 target 一把锁（`--target` 选；`win-x64` 沿用旧名
+`primary-runtime-lock.json`，别的加后缀）。判 `target` 不判
+`os.name` —— 包的布局是"给谁的"，不是"在哪台机器上组装的"。
 
 ## 八条判据（逐条落在这里）
 
@@ -82,7 +86,60 @@ _RELEASE_BASE = "https://github.com/astral-sh/python-build-standalone/releases/d
 #: 说不出来的支持等于没支持，而说了却做不到的东西会一路绿灯发出去。
 _TARGET_PLATFORM = {
     "win-x64": ("win32", "x64"),
+    "linux-x64": ("linux", "x64"),
 }
+
+#: 每个 target 的解释器包内部布局（一处定义）。
+#:
+#: 为什么不能拿构建机的 `os.name` 判：在 Windows 上给 Linux 组装时
+#:   `os.name` 是 `nt`，而包里是 POSIX 布局 —— 判据必须是"包是给谁的"。
+#: `python-build-standalone` 的两种布局：
+#:   Windows: `<root>/python.exe` + `<root>/Lib/site-packages` + `<root>/Scripts`
+#:   POSIX:   `<root>/bin/python3` + `<root>/lib/python3.X/site-packages` + `<root>/bin`
+_TARGETS: dict[str, dict] = {
+    "win-x64": {
+        "platform": "win32", "arch": "x64",
+        "exe": "python.exe",
+        "site": "Lib/site-packages",
+        "scripts": "Scripts",
+        "py_tag": "",                      # Windows 布局不带版本号
+        "prune_dirs": (
+            ("Lib/idlelib", "IDLE 是编辑器，运行期不加载（1.2 MB / 90 文件）"),
+            ("Lib/turtledemo", "Turtle 的演示脚本"),
+            ("Lib/ensurepip", "自带一份 pip 的 wheel，只有『首次引导虚拟环境』用"),
+            ("Lib/venv", "我们不创建虚拟环境"),
+            ("Lib/pydoc_data", "`pydoc` 的文档数据"),
+            ("Lib/test", "CPython 自带测试套件"),
+            ("include", "C 头文件 —— 只有编译扩展才要（1.8 MB / 264 文件）"),
+            ("libs", "Windows 的 .lib 导入库，同理"),
+            ("Lib/site-packages/pythonwin", "pywin32 的 IDE；我们要的是它的 `win32*` API"),
+        ),
+        "prune_files": ("Scripts/magika.exe",),
+    },
+    "linux-x64": {
+        "platform": "linux", "arch": "x64",
+        "exe": "bin/python3",
+        "site": "",                        # 带版本号，组装时按实际目录认（见 _site_dir）
+        "scripts": "bin",
+        "py_tag": "",                      # 同上；`lib/python3.X` 组装时探出来
+        "prune_dirs": (
+            ("lib/python3.13/idlelib", "IDLE 是编辑器，运行期不加载"),
+            ("lib/python3.13/turtledemo", "Turtle 的演示脚本"),
+            ("lib/python3.13/ensurepip", "自带一份 pip 的 wheel"),
+            ("lib/python3.13/venv", "我们不创建虚拟环境"),
+            ("lib/python3.13/pydoc_data", "`pydoc` 的文档数据"),
+            ("lib/python3.13/test", "CPython 自带测试套件"),
+            ("include", "C 头文件 —— 只有编译扩展才要"),
+        ),
+        "prune_files": (),                 # Windows 的 magika.exe 在 Linux 布局里是 bin/magika
+    },
+}
+
+#: 锁文件名：一个 target 一把锁（`win-x64` 沿用旧名，别的加后缀）。
+def lock_path(target: str) -> Path:
+    if target == "win-x64":
+        return _LOCK
+    return _LOCK.with_name(_LOCK.stem + ".%s.json" % target)
 
 
 def target_platform(target: str) -> tuple[str, str]:
@@ -191,21 +248,41 @@ def download(lock: dict, cache_dir: Path = CACHE_DIR) -> Path:
 # ----------------------------------------------------------------------
 
 def _tar_filter(member, dest: str):
-    """拒符号链接（判据 7）。
+    """链接只许指在包内（判据 7）。
 
-    一个 tar 里的软链接可以把"解包出来的东西"指到包外去 —— 组装阶段**没有执行
-    任何东西**，所以它是这条路线上唯一能翻出围栏的动作。
-    -> 链接一律拒（不是"跳过"：跳过会让产物静默少文件，那更难查）。
-    绝对路径与 `..` 由 `tarfile` 的 `data` 过滤器挡（Python 3.12+），
-      这里只补它不挡的那一条（链接）。
+    组装阶段没有执行任何东西，链接是这条路线上唯一能翻出围栏的动作。
+    原来这里"链接一律拒"—— 那是把 Windows 包当成了全貌：POSIX 布局的
+    `bin/` 里 `python3 -> python3.13` 这类包内链接是发行的标准形态，
+    一律拒等于 Linux 根本组装不出来。判据收紧成它本来的意图：
+
+    - 目标是绝对路径 -> 拒（指到盘上去）；
+    - 目标解出来越出包根 -> 拒（`../../..` 那一族）；
+    - 指在包内的 -> 放行。
+
+    放行的依据是 tar 头里声明的 `linkname`（没解包就判了），
+    不是解出来再查 —— 拒要发生在"落地"之前。
+    `..` 与绝对路径成员本身由 `tarfile` 的 `data` 过滤器挡（Python 3.12+），
+      这里只补它不挡的那一格。
     """
     if member.issym() or member.islnk():
-        raise SystemExit("[runtime] 压缩包里带链接，拒：%s" % member.name)
+        name = member.linkname or ""
+        if name.startswith("/"):
+            raise SystemExit("[runtime] 压缩包里的链接指向绝对路径，拒：%s -> %s"
+                             % (member.name, name))
+        root = Path(dest).resolve()
+        here = (root / member.name).parent
+        if not (here / name).resolve().is_relative_to(root):
+            raise SystemExit("[runtime] 压缩包里的链接越出包根，拒：%s -> %s"
+                             % (member.name, name))
+    if member.name.startswith("/") or ".." in Path(member.name).parts:
+        raise SystemExit("[runtime] 压缩包里的成员路径越界，拒：%s" % member.name)
+    member = tarfile.data_filter(member, dest)
     return member
 
 
-def extract_python(archive: Path, dest: Path) -> Path:
-    """把解释器解到 *dest*。返回那个 python.exe 的路径。"""
+def extract_python(archive: Path, dest: Path, target: str) -> Path:
+    """把解释器解到 *dest*。返回包内根目录（`python/` 的上一层）。"""
+    spec = _TARGETS[target]
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:gz") as tf:
         tf.extractall(dest, filter=_tar_filter)
@@ -213,7 +290,7 @@ def extract_python(archive: Path, dest: Path) -> Path:
     if len(roots) != 1:
         raise SystemExit("[runtime] 压缩包里应当**恰好一个**顶层目录，实得 %d 个"
                          % len(roots))
-    exe = roots[0] / ("python.exe" if os.name == "nt" else "bin/python")
+    exe = roots[0] / spec["exe"]
     if not exe.exists():
         raise SystemExit("[runtime] 解出来的目录里没有解释器：%s" % exe)
     return roots[0]
@@ -235,17 +312,20 @@ def extract_python(archive: Path, dest: Path) -> Path:
 _WHEEL_SCHEMES = ("purelib", "platlib", "scripts", "data")
 
 
-def _wheel_dest(scheme: str, rest: str, site_packages: Path, prefix: Path) -> Path:
-    """wheel 里那一段该落到哪儿（一处定义）。"""
+def _wheel_dest(scheme: str, rest: str, site_packages: Path, prefix: Path,
+                target: str) -> Path:
+    """wheel 里那一段该落到哪儿（一处定义）。判 target 不判 `os.name` ——
+    在 Windows 上给 Linux 组装时 `os.name` 会说谎。"""
+    spec = _TARGETS[target]
     if scheme in ("purelib", "platlib"):
         return site_packages / rest
     if scheme == "scripts":
-        #: Windows 上 `sys.prefix/Scripts`；POSIX 上是 `sys.prefix/bin`。
-        return prefix / ("Scripts" if os.name == "nt" else "bin") / rest
+        return prefix / spec["scripts"] / rest
     return prefix / rest                      # `data` -> 相对 `sys.prefix`
 
 
-def unpack_wheel(path: Path, site_packages: Path, prefix: Path | None = None) -> None:
+def unpack_wheel(path: Path, site_packages: Path, prefix: Path | None = None,
+                 target: str = "win-x64") -> None:
     """把一个 wheel 解到 *site-packages* —— 不跑 pip、不 exec（判据 3）。
 
     三种成员分别落位（见 `_WHEEL_SCHEMES`）：
@@ -260,8 +340,10 @@ def unpack_wheel(path: Path, site_packages: Path, prefix: Path | None = None) ->
     site_packages.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path) as zf:
         for info in zf.infolist():
+            if info.is_dir():
+                continue                  # 目录条目没有安装路径可言（fonttools 4.68 起带）
             parts = info.filename.split("/")
-            if len(parts) > 1 and parts[0].endswith(".data"):
+            if len(parts) > 1 and parts[0].endswith(".data") and parts[1]:
                 if parts[1] not in _WHEEL_SCHEMES:
                     raise SystemExit("[runtime] wheel 要求不支持的安装路径：%s"
                                      % info.filename)
@@ -272,7 +354,8 @@ def unpack_wheel(path: Path, site_packages: Path, prefix: Path | None = None) ->
                 continue
             parts = info.filename.split("/")
             if len(parts) > 1 and parts[0].endswith(".data"):
-                dest = _wheel_dest(parts[1], "/".join(parts[2:]), site_packages, prefix)
+                dest = _wheel_dest(parts[1], "/".join(parts[2:]), site_packages,
+                                   prefix, target)
             else:
                 dest = site_packages / info.filename
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -401,19 +484,37 @@ def fetch_wheels(lock: dict, cache_dir: Path = CACHE_DIR) -> int:
     return fetched
 
 
+def _site_dir(py_root: Path, target: str) -> Path:
+    """包内根 -> `site-packages` 的实际路径。
+
+    Windows 布局是写死的（`Lib/site-packages`）；POSIX 的 `lib/python3.X`
+    带版本号，按解出来的实况认 —— 认不出就拒（猜错的症状是依赖全落错层，
+    而冒烟那一关过不了，但离出错点已经隔了一整次打包）。
+    """
+    if target == "win-x64":
+        return py_root / "Lib" / "site-packages"
+    cands = sorted(py_root.glob("lib/python3.*/site-packages"))
+    if len(cands) != 1:
+        raise SystemExit("[runtime] POSIX 布局里 site-packages 认不出（实得 %d 个）：%s"
+                         % (len(cands), [str(c) for c in cands]))
+    return cands[0]
+
+
 def assemble(lock: dict, archive: Path, out_dir: Path = RUNTIME_DIR,
              *, prune: bool = True, tiktoken: bool = True) -> dict:
     """组装到临时目录，再事务式落地（判据 5）。返回那份 `runtime.json`。"""
+    target = lock["target"]
+    spec = _TARGETS[target]
     staging = Path(tempfile.mkdtemp(prefix="lv-runtime-"))
     try:
-        root = extract_python(archive, staging / "unpacked")
+        root = extract_python(archive, staging / "unpacked", target)
         payload = staging / "payload"
         payload.mkdir(parents=True)
-        target = payload / "python"
-        shutil.move(str(root), str(target))
+        py_root = payload / "python"
+        shutil.move(str(root), str(py_root))
+        site = _site_dir(py_root, target)
 
         wheels = lock.get("wheels") or []
-        site = target / "Lib" / "site-packages"
         n_sdist = 0
         for w in wheels:
             blob = CACHE_DIR / w["sha256"]
@@ -426,7 +527,7 @@ def assemble(lock: dict, archive: Path, out_dir: Path = RUNTIME_DIR,
                 unpack_sdist(blob, site, w.get("packages") or [])
                 n_sdist += 1
             else:
-                unpack_wheel(blob, site)
+                unpack_wheel(blob, site, py_root, target)
         if wheels:
             print("[runtime] 解包 %d 个依赖（无执行；其中 sdist %d 条）"
                   % (len(wheels), n_sdist))
@@ -435,7 +536,7 @@ def assemble(lock: dict, archive: Path, out_dir: Path = RUNTIME_DIR,
         #:   ① 词表随包走（否则安装版第一次用模型要联网下载）
         #:   ② 瘦身（装出来的包因此少三成文件 —— 安装速度按文件数付费）
         token_info = vendor_tiktoken_cache(payload) if tiktoken else {"skipped": True}
-        prune_info = prune_runtime(payload) if prune else {"skipped": True}
+        prune_info = prune_runtime(payload, target) if prune else {"skipped": True}
 
         plat, arch = target_platform(lock["target"])
         manifest = {
@@ -494,23 +595,8 @@ def land(payload: Path, out_dir: Path) -> None:
 # 4. 瘦身（构建期删；落地前跑，所以装出来的包从一开始就少这些文件）
 # ----------------------------------------------------------------------
 
-#: 打了但运行期没有任何代码路径会碰的东西。
-#:   判据不是"看着像垃圾"，而是能说出谁在用；说不出来的，删之前先问。
-#:   数字是在真产物上当场数的（`win-unpacked`）。
-PRUNE_DIRS = (
-    ("Lib/idlelib", "IDLE 是编辑器，运行期不加载（1.2 MB / 90 文件）"),
-    ("Lib/turtledemo", "Turtle 的演示脚本"),
-    ("Lib/ensurepip", "自带一份 pip 的 wheel，只有『首次引导虚拟环境』用"),
-    ("Lib/venv", "我们不创建虚拟环境"),
-    ("Lib/pydoc_data", "`pydoc` 的文档数据"),
-    ("Lib/test", "CPython 自带测试套件"),
-    ("include", "C 头文件 —— 只有编译扩展才要（1.8 MB / 264 文件）"),
-    ("libs", "Windows 的 .lib 导入库，同理"),
-    ("Lib/site-packages/pythonwin", "pywin32 的 IDE；我们要的是它的 `win32*` API"),
-)
-#: 点名的二进制：`magika.exe` 是命令行工具，docvortex 走的是它的 Python API（24.4 MB）。
-PRUNE_FILES = ("Scripts/magika.exe",)
-#: site-packages 里这些名字的子目录整个删（包自带的测试；scipy/numpy/sklearn 是大头）。
+#: 点名的二进制等 per-target 清单进了 `_TARGETS[target]["prune_files"]`。
+#: 两种布局共用的一条：包自带的测试目录整个删。
 PRUNE_PKG_SUBDIRS = ("tests", "test")
 #: pip 不删：`run_command` 允许模型跑 `pip install`（服务端有专门的审批规则），
 #:   而装进自带运行时是它唯一的一条路。874 个文件（10.7 MB）买这个能力，值。
@@ -533,11 +619,12 @@ def _measure(path: Path) -> tuple[int, int]:
     return n, s
 
 
-def prune_runtime(payload: Path) -> dict:
+def prune_runtime(payload: Path, target: str) -> dict:
     """删掉运行期用不到的东西，回一份读数（进了 `runtime.json`）。
 
     三条判据：
-      ① 只删"说得清谁不用它"的 —— 说不出理由的先留着。
+      ① 只删"说得清谁不用它"的 —— 说不出理由的先留着。清单按 target 走
+         （`_TARGETS[target]["prune_dirs"]`），因为两种布局的路径本来就不同。
          反例是"看着没 import、其实是别的包的声明依赖"那一类：先查反向依赖再动。
          `kubernetes` / `scipy` / `scikit-learn` 今天不在 `requirements.txt` 里，
          是因为没人用它们 —— 不是因为体积。
@@ -546,6 +633,7 @@ def prune_runtime(payload: Path) -> dict:
          "包里怎么少了个 idlelib"，没人答得上来。
     """
     py = payload / "python"
+    spec = _TARGETS[target]
     detail: list[dict] = []
     removed_files = removed_bytes = 0
 
@@ -566,12 +654,12 @@ def prune_runtime(payload: Path) -> dict:
         detail.append({"path": str(path.relative_to(payload)).replace("\\", "/"),
                        "files": n, "bytes": s, "why": why})
 
-    for rel, why in PRUNE_DIRS:
+    for rel, why in spec["prune_dirs"]:
         _rm(py / rel, why)
-    for rel in PRUNE_FILES:
+    for rel in spec["prune_files"]:
         _rm(py / rel, "命令行二进制，运行期不走它")
 
-    site = py / "Lib" / "site-packages"
+    site = _site_dir(py, target)
     if site.is_dir():
         for pkg in sorted(site.iterdir()):
             if not pkg.is_dir():
@@ -681,8 +769,20 @@ SMOKE_IMPORTS = ("flask", "waitress", "yaml", "httpx", "openai", "anthropic",
                  "matplotlib", "curl_cffi")
 
 
-def python_exe(out_dir: Path = RUNTIME_DIR) -> Path:
-    return out_dir / "python" / ("python.exe" if os.name == "nt" else "bin/python")
+def runtime_dir(target: str) -> Path:
+    """组装产物落哪儿。两种 target 共用这一个目录（桌面壳的
+    `extraResources` 按它找，改了名字两边的包都会静默缺运行时）。
+
+    混装的代价有人兜着：`electron-builder.config.mjs::beforePack` 在打包前
+    校验 `runtime.json.platform` 与打包目标平台；`main.cjs::pythonExe()`
+    在启动时再校验一次。真发生了"后组装的顶掉先组装的"，
+    两道闸都会当场出声，不会把别人的解释器静默发出去。
+    """
+    return RUNTIME_DIR
+
+
+def python_exe(out_dir: Path, target: str) -> Path:
+    return out_dir / "python" / _TARGETS[target]["exe"]
 
 
 def _run_child(exe: Path, code: str, timeout: int = 300):
@@ -705,9 +805,25 @@ def _run_child(exe: Path, code: str, timeout: int = 300):
         timeout=timeout)
 
 
-def smoke(out_dir: Path = RUNTIME_DIR) -> None:
-    """在刚组装出来的那个解释器上真跑一次。"""
-    exe = python_exe(out_dir)
+def _host_can_run(target: str) -> bool:
+    """构建机跑不跑得了这个 target 的解释器（冒烟的前提）。"""
+    if target == "win-x64":
+        return os.name == "nt"
+    return os.name != "nt"          # POSIX 布局在 Windows 上没法 exec
+
+
+def smoke(out_dir: Path, target: str) -> None:
+    """在刚组装出来的那个解释器上真跑一次。
+
+    构建机与 target 不同平台时（如在 Windows 上给 Linux 组装）跑不了，
+    只能明说跳过 —— 别让"没跑"长得像"通过"。
+    """
+    if not _host_can_run(target):
+        print("[runtime] [!] 冒烟跳过：构建机（%s）执行不了 target=%s 的解释器 "
+              "—— 组装与解包都验过了，但「能跑」这一档没人验。"
+              % (os.name, target))
+        return
+    exe = python_exe(out_dir, target)
     if not exe.exists():
         raise SystemExit("[runtime] 冒烟：没有解释器 %s（先跑一次组装）" % exe)
     r = _run_child(exe, SMOKE_CODE, timeout=120)
@@ -724,10 +840,10 @@ def smoke(out_dir: Path = RUNTIME_DIR) -> None:
               "先跑 `scripts/pin_wheels.py` 把表填上。"
               % manifest.get("wheelCount", 0))
         return
-    smoke_imports(out_dir)
+    smoke_imports(out_dir, target)
 
 
-def smoke_imports(out_dir: Path = RUNTIME_DIR) -> None:
+def smoke_imports(out_dir: Path, target: str) -> None:
     """真 import 一遍框架要用的那些。
 
     判据是"装上了"与"真能用"是两件事：一个解包错层、少一层目录、
@@ -738,7 +854,7 @@ def smoke_imports(out_dir: Path = RUNTIME_DIR) -> None:
 这几行 import 只可能来自随包那份运行时自己的 `site-packages`。
       少了它，冒烟会借用开发机上装好的包，"通过"是一句假话。
     """
-    exe = python_exe(out_dir)
+    exe = python_exe(out_dir, target)
     code = ("import %s; print('framework imports ok')" % ", ".join(SMOKE_IMPORTS))
     r = _run_child(exe, code, timeout=300)
     out = ((r.stdout or "") + (r.stderr or "")).strip()
@@ -759,6 +875,8 @@ _ALLOWED_WHEEL_HOSTS = ("files.pythonhosted.org",)
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Crannia 自带 Python 运行时")
+    ap.add_argument("--target", default="win-x64", choices=sorted(_TARGETS),
+                    help="给哪个平台组装（默认 win-x64；锁文件与产物目录都跟着走）")
     ap.add_argument("--smoke", action="store_true", help="只跑冒烟，不下载/不组装")
     ap.add_argument("--no-smoke", action="store_true", help="备好但跳过冒烟")
     ap.add_argument("--fetch-only", action="store_true",
@@ -769,12 +887,18 @@ def main(argv: list[str] | None = None) -> int:
                     help="不把 tiktoken 词表带进包（调试用；正常组装**一定**带）")
     args = ap.parse_args(argv)
 
-    lock = load_lock()
-    print("[runtime] 锁：python %s+%s · %s · %s · 依赖 %d 条"
+    target = args.target
+    out_dir = runtime_dir(target)
+    lock = load_lock(lock_path(target))
+    if lock["target"] != target:
+        raise SystemExit("[runtime] 锁文件声明的是 %r，与 --target %r 不符 —— 别混着用。"
+                         % (lock["target"], target))
+    print("[runtime] 锁：python %s+%s · %s · %s · 依赖 %d 条 -> %s"
           % (lock["pythonVersion"], lock["pythonRelease"],
-             lock["pythonTarget"], lock["flavor"], len(lock.get("wheels") or [])))
+             lock["pythonTarget"], lock["flavor"], len(lock.get("wheels") or []),
+             out_dir.name))
     if args.smoke:
-        smoke()
+        smoke(out_dir, target)
         return 0
 
     if args.fetch_only:
@@ -786,10 +910,10 @@ def main(argv: list[str] | None = None) -> int:
     manifest = assemble(lock, archive,
                         prune=not args.no_prune,
                         tiktoken=not args.no_tiktoken)
-    print("[runtime] 组装好了：%s" % RUNTIME_DIR)
+    print("[runtime] 组装好了：%s" % out_dir)
     print("[runtime] payloadDigest = %s" % manifest["payloadDigest"][:16])
     if not args.no_smoke:
-        smoke()
+        smoke(out_dir, target)
     return 0
 
 

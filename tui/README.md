@@ -92,6 +92,21 @@ TUI 只读下面这一列（其余键存在但不读——砍掉的功能不靠�
 API Key（掩码）→ 自动发一次最小请求做联通测试；失败就只改错的那一项。
 联通测试超时 25 秒；失败也可以先保留配置，之后随时 `crannia setup` 再来。
 
+界面里的模型命令：
+
+```
+/model                 当前用哪条 + 前 8 条配置（含编号）+ 用法
+/model <编号|名字|id>   这一段切到那条（下一轮生效）
+/model 默认            这一段切回跟随默认
+/model more            完整配置单
+/model set <编号|名字|id>
+                       弹编辑面板：条目名 / 模型名 / API key，
+                       空回车跳过（`Esc` 退出，成功后 1.25 秒自动关闭）
+```
+
+密钥只从这个面板收，别在聊天框里直接发 —— 打错一个字它就不再是命令，
+会被当成普通消息落库并送给模型。
+
 通道：
 
 ```
@@ -342,6 +357,16 @@ GUI 还有一条"本轮已压缩 12.3K→3.1K，现 22%"的读数；TUI 是把�
 
 两种都装时，`crannia` 指向**后装**的那一份；卸载只删指向自己的那个入口，不会
 把另一份的入口删掉。
+
+Linux（独立包）：解压 `crannia-tui-<版本>-linux-x64.tar.gz`，在解压目录运行
+`./install.sh`。它装到 `${XDG_DATA_HOME:-~/.local/share}/crannia-tui`，并把
+`crannia` 符号链接到 `~/.local/bin`（可用 `CRANNIA_HOME` / `CRANNIA_BIN_DIR`
+改位置）。卸载运行安装目录里的 `uninstall.sh`；用户数据在
+`${XDG_DATA_HOME:-~/.local/share}/crannia`，不动。Linux 下 `crannia.sh` 是同一套
+薄壳，认 POSIX 的三层布局（GUI 安装包 / 开发树 / 独立包），没有"换到 Windows
+Terminal 重开"那一段 —— 现代终端都解释 ANSI。粘贴图片需要 Wayland 的
+`wl-clipboard` 或 X11 的 `xclip`。中文界面需要终端字体里有 CJK 字形
+（系统装 `fonts-noto-cjk`；只影响终端怎么画字，不影响程序本身）。
 
 ## 跑法
 

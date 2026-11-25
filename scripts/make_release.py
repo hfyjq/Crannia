@@ -68,37 +68,69 @@ SHELL_ASAR = "app.asar"
 MIN_ASAR_BYTES = 256 * 1024
 
 
-def find_installer(release_dir: Path = RELEASE_DIR,
-                   version: str = "") -> Path | None:
-    """找那个安装包（`crannia-*-win-x64.exe`）。
+def _host_platform() -> str:
+    """本机打包目标（与 `electron-builder` 的 `${os}` 同一套名字）。
 
-    给了 `version` 就只认那一版：发布目录里留着旧版本的 exe 是常态
+    只认 Windows / Linux：macOS 还没有运行时锁与产物规则，明说，不猜。
+    """
+    if sys.platform == "win32":
+        return "win32"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    raise SystemExit("[release] 这个平台（%s）还没有产物校验规则；"
+                     "今天只支持 Windows 与 Linux。" % sys.platform)
+
+
+def _unpacked_name(platform: str) -> str:
+    return "linux-unpacked" if platform == "linux" else "win-unpacked"
+
+
+def _installer_name(version: str, platform: str) -> str:
+    return ("crannia-%s-linux-x64.AppImage" % version if platform == "linux"
+            else "crannia-%s-win-x64.exe" % version)
+
+
+def _installer_glob(platform: str) -> str:
+    return ("crannia-*-linux-x64.AppImage" if platform == "linux"
+            else "crannia-*-win-x64.exe")
+
+
+def find_installer(release_dir: Path = RELEASE_DIR,
+                   version: str = "", platform: str | None = None) -> Path | None:
+    """找那个安装包（Windows `.exe` / Linux `.AppImage`）。
+
+    给了 `version` 就只认那一版：发布目录里留着旧版本的包是常态
     （今天同时有 1.1.0 与 1.1.1），按修改时间取最新会把上一版当成这一版。
     没给才退回"多个取最新"。
     """
+    platform = platform or _host_platform()
     if not release_dir.is_dir():
         return None
     if version:
-        exact = release_dir / ("crannia-%s-win-x64.exe" % version)
+        exact = release_dir / _installer_name(version, platform)
         if exact.is_file():
             return exact
-    cands = [p for p in release_dir.glob("crannia-*-win-x64.exe") if p.is_file()]
+    cands = [p for p in release_dir.glob(_installer_glob(platform)) if p.is_file()]
     if not cands:
         return None
     return max(cands, key=lambda p: p.stat().st_mtime)
 
 
-def check_artifact(unpacked: Path = UNPACKED,
+def check_artifact(unpacked: Path | None = None,
                    release_dir: Path = RELEASE_DIR,
-                   version: str = "") -> list:
+                   version: str = "", platform: str | None = None) -> list:
     """只读地验一遍产物。返回 `[(问题, 说明), ...]`；空 = 通过。
 
     [!] 每一条都写成"会怎么坏"，因为这份清单是给发版那一刻看的。
     """
+    platform = platform or _host_platform()
+    if unpacked is None:
+        unpacked = release_dir / _unpacked_name(platform)
     problems: list = []
-    installer = find_installer(release_dir, version)
+    installer = find_installer(release_dir, version, platform)
     if installer is None:
-        problems.append(("安装包", "在 %s 下没找到 crannia-*-win-x64.exe" % release_dir))
+        problems.append(("安装包", "在 %s 下没找到 %s"
+                         % (release_dir, _installer_glob(platform))))
     else:
         size = installer.stat().st_size
         if size < MIN_INSTALLER_BYTES:
@@ -109,7 +141,7 @@ def check_artifact(unpacked: Path = UNPACKED,
     runtime = unpacked / "resources" / "primary-runtime"
     #: 解释器在 `primary-runtime/python/` 底下（`prepare_runtime.py` 摊出来的
     #:   那个目录），不是直接躺在 `primary-runtime/` 里。
-    py = runtime / "python" / "python.exe"
+    py = runtime / "python" / ("bin/python3" if platform == "linux" else "python.exe")
     if not py.is_file():
         problems.append(("没有 Python 解释器",
                          "缺 %s —— 装完之后后端起不来" % py.relative_to(unpacked)))
@@ -124,10 +156,10 @@ def check_artifact(unpacked: Path = UNPACKED,
             problems.append(("runtime.json 坏了", "%s: %s" % (type(exc).__name__, exc)))
             rt = {}
         if isinstance(rt, dict) and rt:
-            if rt.get("platform") != "win32":
+            if rt.get("platform") != platform:
                 problems.append(("平台不对",
-                                 "runtime.json 写着 platform=%r —— 装到 Windows 上是错的"
-                                 % (rt.get("platform"),)))
+                                 "runtime.json 写着 platform=%r —— 装到 %s 上是错的"
+                                 % (rt.get("platform"), platform)))
             pkgs = rt.get("pythonPackages")
             if not isinstance(pkgs, dict) or not pkgs:
                 problems.append(("依赖清单是空的",
@@ -554,14 +586,15 @@ def main(argv=None) -> int:
         print("[release] 去掉 --channel 让它按版本走（= beta），或者先改版本号。")
         return 1
 
-    problems = check_artifact(version=__version__)
+    plat = _host_platform()
+    problems = check_artifact(version=__version__, platform=plat)
     if problems:
         print("[release] 产物不合格 —— %d 条：" % len(problems))
         for what, detail in problems:
             print("  - %s：%s" % (what, detail))
         print("[release] 先修产物，再谈发布。")
         return 1
-    installer = find_installer(RELEASE_DIR, __version__)
+    installer = find_installer(RELEASE_DIR, __version__, plat)
     assert installer is not None
     size = installer.stat().st_size
     digest = sha256_of(installer)
@@ -573,10 +606,16 @@ def main(argv=None) -> int:
             print("[release] 没给 --url —— 只验产物，不写 manifest。")
         return 0
 
+    if plat != "win32":
+        print("[release] 本平台还没有更新清单：清单里的 artifacts 键是 windows-exe。")
+        print("[release] Linux 的发布清单等更新链那一批；现在只能用 --check-only 验产物。")
+        return 1
+
     codepack = None
     if args.codepack_url:
-        codepack = build_codepack(__version__, UNPACKED, Path(args.out_dir),
-                                  args.codepack_url)
+        codepack = build_codepack(__version__,
+                                  RELEASE_DIR / _unpacked_name(plat),
+                                  Path(args.out_dir), args.codepack_url)
         if codepack is None:
             print("[release] 给了 --codepack-url，但造不出代码包"
                   "（缺 resources/app/core/version.py · runtime.json · app.asar）")
@@ -619,7 +658,7 @@ def main(argv=None) -> int:
         codepack_urls=args.codepack_url_fallback,
         tui_urls=args.tui_url_fallback,
     )
-    mismatches = verify_manifest(man, unpacked=UNPACKED,
+    mismatches = verify_manifest(man, unpacked=RELEASE_DIR / _unpacked_name(plat),
                                  out_dir=Path(args.out_dir))
     if mismatches:
         print("[release] 清单与产物对不上，不写：")

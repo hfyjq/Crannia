@@ -601,6 +601,8 @@ def test_breaker_opens_after_three_degraded():
 
 def test_progress_payload_three_outcomes():
     """界面那一格：ok 带百分比 / degraded / broken 各有各的话。"""
+    from core.i18n import t as tr
+    from core.memory import compressor as C
     from core.memory.compressor import progress_payload
 
     ok = progress_payload({"level": "llm", "post_tokens": 82_000}, 900_000)
@@ -608,12 +610,16 @@ def test_progress_payload_three_outcomes():
     assert "9" in ok["message"], ok
     degraded = progress_payload({"level": "note", "post_tokens": 10}, 100)
     assert degraded["state"] == "degraded"
-    assert "质量降低" in degraded["message"], degraded["message"]
-    assert "重启应用" not in degraded["message"], "降级不等于要重启"
+    # 文案跟着界面语言走（没有中文 locale 的机器上就是英文），所以拿同一份
+    # tr 的结果比，而不是比某个语言的字面量。
+    assert degraded["message"] == tr(C._USER_DEGRADED), degraded["message"]
+    assert tr(C._USER_BLOCKED) != degraded["message"], "降级不等于要重启"
     blocked = progress_payload(None, 100, payload_blocked=True)
-    assert blocked["state"] == "degraded" and "重启应用" in blocked["message"]
+    assert blocked["state"] == "degraded", blocked
+    assert blocked["message"] == tr(C._USER_BLOCKED), blocked["message"]
     broken = progress_payload({"level": "cut", "breaker_tripped": True}, 100)
-    assert broken["state"] == "broken" and "压缩器异常" in broken["message"]
+    assert broken["state"] == "broken", broken
+    assert broken["message"] == tr(C._USER_BREAKER), broken["message"]
     unknown = progress_payload({"level": "llm"}, None)
     assert unknown["percent"] is None, "读不到百分比不许编"
     print("  [ok] ok/degraded/broken 三种收尾各一句话")

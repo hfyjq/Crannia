@@ -58,6 +58,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import zipfile
@@ -68,10 +69,57 @@ sys.path.insert(0, str(_ROOT))
 
 _TREE_FILE = _ROOT / "apps" / "desktop" / "package-tree.json"
 _RUNTIME_SRC = _ROOT / "apps" / "desktop" / "runtime" / "primary-runtime"
-_LAUNCHER = _ROOT / "tui" / "crannia.cmd"
-_INSTALLER = _ROOT / "tui" / "standalone-install.cmd"
-_UNINSTALLER = _ROOT / "tui" / "standalone-uninstall.cmd"
 _OUT_DIR = _ROOT / "dist-release"
+
+#: 每个 target 的启动器 / 安装器 / 运行时布局 / 归档格式（一处定义）。
+#:
+#: 判 target，不判构建机的 `os.name`：在 Windows 上给 Linux 组包时
+#: `os.name` 会说谎，而包是给谁的由 target 决定。
+_TARGETS: dict[str, dict] = {
+    "win-x64": {
+        "launcher": _ROOT / "tui" / "crannia.cmd",
+        "installer": _ROOT / "tui" / "standalone-install.cmd",
+        "uninstaller": _ROOT / "tui" / "standalone-uninstall.cmd",
+        "launcher_name": "crannia.cmd",
+        "installer_name": "install.cmd",
+        "uninstaller_name": "uninstall.cmd",
+        "python": ("python.exe",),
+        "archive": "zip",
+    },
+    "linux-x64": {
+        "launcher": _ROOT / "tui" / "crannia.sh",
+        "installer": _ROOT / "tui" / "standalone-install.sh",
+        "uninstaller": _ROOT / "tui" / "standalone-uninstall.sh",
+        "launcher_name": "crannia.sh",
+        "installer_name": "install.sh",
+        "uninstaller_name": "uninstall.sh",
+        "python": ("bin", "python3"),
+        "archive": "tar.gz",
+    },
+}
+
+#: 兼容旧引用（Windows 那套文件）；新代码用 `_TARGETS[target]`。
+_LAUNCHER = _TARGETS["win-x64"]["launcher"]
+_INSTALLER = _TARGETS["win-x64"]["installer"]
+_UNINSTALLER = _TARGETS["win-x64"]["uninstaller"]
+
+
+def _host_can_run(target: str) -> bool:
+    """构建机跑不跑得了 target 的解释器（冒烟的前提）。"""
+    if target == "win-x64":
+        return sys.platform == "win32"
+    return sys.platform.startswith("linux")
+
+
+def _host_target() -> str:
+    """本机该组哪个 target。macOS 还没有运行时锁 —— 明说，不猜。"""
+    if sys.platform == "win32":
+        return "win-x64"
+    if sys.platform.startswith("linux"):
+        return "linux-x64"
+    raise SystemExit(
+        "[tui] 这个平台（%s）还没有随包运行时；今天只支持 win-x64 与 linux-x64。"
+        % sys.platform)
 
 #: 代码树在 release 目录里必须有的几样（与 `crannia_tui.update._REQUIRED` 同一条）。
 _REQUIRED = ("crannia_tui", "main.py", "core", "web")
@@ -145,13 +193,29 @@ def _stage_code(dest: Path, tree: dict) -> int:
         src = _ROOT / rel
         if not src.is_file():
             raise SystemExit("[tui] package-tree.json 里的文件不存在：%s" % src)
-        if rel == "tui/crannia.cmd":
+        if rel in ("tui/crannia.cmd", "tui/crannia.sh"):
             continue  # 启动器放在包根，不重复进代码树
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
         n += 1
     return n
+
+
+def _copy_posix_script(src: Path, dest: Path) -> None:
+    """把 POSIX 脚本铺进包，顺手把 CRLF 归一成 LF。
+
+    Windows 检出（`core.autocrlf=true`）会把工作区副本换成 CRLF；原样拷进
+    tar.gz 后 bash 把行尾的 `\\r` 当成命令的一部分，报错却是
+    「No such file or directory」，而那个文件明明在。仓库里的字节是 LF，
+    这里只是把它还原回去；真改了就说一声，不静默。
+    """
+    data = src.read_bytes()
+    fixed = data.replace(b"\r\n", b"\n")
+    if fixed != data:
+        print("[tui] 行尾归一（CRLF -> LF）：%s" % src.name)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(fixed)
 
 
 def _zip_dir(src: Path, out_zip: Path) -> None:
@@ -163,6 +227,20 @@ def _zip_dir(src: Path, out_zip: Path) -> None:
                 zf.write(path, path.relative_to(src).as_posix())
 
 
+def _tar_gz_dir(src: Path, out_tar: Path) -> None:
+    """把 `src` 的内容打成 tar.gz（根下就是内容，不多一层）。
+
+    Linux 用 tar.gz 而不是 zip：zip 不保留可执行位，解出来 `crannia.sh`
+    与 `python/bin/python3` 都是 644，安装脚本第一步就报「不是完整包」。
+    """
+    out_tar.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(out_tar, "w:gz") as tf:
+        for path in sorted(src.rglob("*")):
+            if path.is_file() or path.is_symlink():
+                tf.add(path, arcname=path.relative_to(src).as_posix(),
+                       recursive=False)
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -171,11 +249,12 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def verify(root: Path, *, smoke: bool = True) -> list:
-    """验一棵设备好的独立包（或解开的 zip）。回问题清单（空 = 过）。"""
+def verify(root: Path, *, smoke: bool = True, target: str = "win-x64") -> list:
+    """验一棵设备好的独立包（或解开的归档）。回问题清单（空 = 过）。"""
     bad: list = []
+    spec = _TARGETS[target]
     runtime = root / "runtime"
-    py = runtime / "python" / ("python.exe" if sys.platform == "win32" else "python3")
+    py = runtime / "python" / Path(*spec["python"])
     if not py.is_file():
         bad.append("运行时缺解释器：%s" % py)
     if not (runtime / "runtime.json").is_file():
@@ -197,12 +276,25 @@ def verify(root: Path, *, smoke: bool = True) -> list:
                 bad.append("代码树缺 %s" % name)
     if not (root / "version.json").is_file():
         bad.append("缺 version.json")
-    if not (root / "crannia.cmd").is_file():
-        bad.append("缺 crannia.cmd")
-    for name in ("install.cmd", "uninstall.cmd"):
+    if not (root / spec["launcher_name"]).is_file():
+        bad.append("缺 %s" % spec["launcher_name"])
+    for key in ("installer_name", "uninstaller_name"):
+        name = spec[key]
         if not (root / name).is_file():
             bad.append("缺 %s（独立包靠它装入口）" % name)
-    if smoke and py.is_file():
+    if target != "win-x64":
+        #: POSIX 脚本带 CRLF 时 bash 会把 `\r` 当成命令的一部分，症状是
+        #: 「No such file or directory」而后端明明在包里 —— 装完才暴露，这里先拦。
+        for key in ("launcher_name", "installer_name", "uninstaller_name"):
+            p = root / spec[key]
+            if p.is_file() and b"\r\n" in p.read_bytes():
+                bad.append("%s 用了 CRLF（bash 会把 \\r 当成命令）" % spec[key])
+    if smoke and py.is_file() and not _host_can_run(target):
+        #: 交叉组包（在 Windows 上给 Linux 组，或反过来）跑不了冒烟 ——
+        #: 明说跳过，别让「没跑」长得像「通过」。
+        print("[tui] [!] 冒烟跳过：构建机（%s）执行不了 target=%s 的解释器"
+              % (sys.platform, target))
+    elif smoke and py.is_file():
         r = subprocess.run([str(py), "-c", "import flask, textual, rich"],
                            capture_output=True, text=True, encoding="utf-8",
                            errors="replace", timeout=120)
@@ -213,10 +305,12 @@ def verify(root: Path, *, smoke: bool = True) -> list:
     return bad
 
 
-def build(out_dir: Path, *, skip_runtime: bool) -> int:
+def build(out_dir: Path, *, skip_runtime: bool, target: str | None = None) -> int:
+    target = target or _host_target()
+    spec = _TARGETS[target]
     version = _read_version()
     tree = _load_tree()
-    prefix = "crannia-tui-%s-win-x64" % version
+    prefix = "crannia-tui-%s-%s" % (version, target)
     stage = out_dir / prefix
 
     if not _RUNTIME_SRC.is_dir():
@@ -248,39 +342,55 @@ def build(out_dir: Path, *, skip_runtime: bool) -> int:
                     "installed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                                   time.gmtime())},
                    indent=2) + "\n", encoding="utf-8")
-    shutil.copy2(_LAUNCHER, stage / "crannia.cmd")
-    shutil.copy2(_INSTALLER, stage / "install.cmd")
-    shutil.copy2(_UNINSTALLER, stage / "uninstall.cmd")
+    for key, name_key in (("launcher", "launcher_name"),
+                          ("installer", "installer_name"),
+                          ("uninstaller", "uninstaller_name")):
+        dest = stage / spec[name_key]
+        if target == "win-x64":
+            shutil.copy2(spec[key], dest)
+        else:
+            _copy_posix_script(spec[key], dest)
+            os.chmod(dest, 0o755)
 
-    bad = verify(stage)
+    bad = verify(stage, target=target)
     if bad:
         print("[tui] 设备好的包没通过自查：")
         for line in bad:
             print("      - " + line)
         return 1
 
-    full_zip = out_dir / (prefix + ".zip")
+    archive = spec["archive"]
+    full = out_dir / (prefix + ("." + archive if archive != "tar.gz" else ".tar.gz"))
     code_zip = out_dir / ("crannia-tui-%s-code.zip" % version)
-    print("[tui] 打全文包：%s" % full_zip)
-    _zip_dir(stage, full_zip)
+    print("[tui] 打全文包：%s" % full)
+    if archive == "tar.gz":
+        _tar_gz_dir(stage, full)
+    else:
+        _zip_dir(stage, full)
     print("[tui] 打代码包：%s" % code_zip)
     _zip_dir(code, code_zip)
 
-    for path in (full_zip, code_zip):
+    for path in (full, code_zip):
         print("[tui] %s  %s  %d B" % (path.name, _sha256(path)[:16], path.stat().st_size))
     print("[tui] 产物在 %s" % out_dir)
     return 0
 
 
-def check(path: Path) -> int:
-    """`--check-only <路径>`：目录直接验；zip 先解到临时目录再验。"""
+def check(path: Path, *, target: str | None = None) -> int:
+    """`--check-only <路径>`：目录直接验；zip / tar.gz 先解到临时目录再验。"""
+    target = target or _host_target()
     if path.is_dir():
-        bad = verify(path)
+        bad = verify(path, target=target)
     elif path.is_file() and path.suffix.lower() == ".zip":
         with tempfile.TemporaryDirectory(prefix="tui-check-") as raw:
             with zipfile.ZipFile(path) as zf:
                 zf.extractall(raw)
-            bad = verify(Path(raw))
+            bad = verify(Path(raw), target=target)
+    elif path.is_file() and path.name.endswith((".tar.gz", ".tgz")):
+        with tempfile.TemporaryDirectory(prefix="tui-check-") as raw:
+            with tarfile.open(path) as tf:
+                tf.extractall(raw)
+            bad = verify(Path(raw), target=target)
     else:
         print("[tui] 不认识的目标：%s" % path)
         return 1
@@ -298,19 +408,23 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=str(_OUT_DIR), help="产物目录（默认 dist-release）")
     ap.add_argument("--skip-runtime", action="store_true",
                     help="复用已拷好的 runtime/（开发迭代用；发版不要加）")
+    ap.add_argument("--target", choices=sorted(_TARGETS), default=None,
+                    help="组哪个平台的包（默认按本机；macOS 还没有运行时锁）")
     ap.add_argument("--check-only", nargs="?", const="", default=None,
                     metavar="PATH",
-                    help="只验：给目录或 zip；不给路径则验默认产物")
+                    help="只验：给目录 / zip / tar.gz；不给路径则验默认产物")
     args = ap.parse_args(argv)
 
     if args.check_only is not None:
-        target = args.check_only
-        if target:
-            return check(Path(target))
+        target = args.target or _host_target()
+        if args.check_only:
+            return check(Path(args.check_only), target=target)
         version = _read_version()
-        return check(Path(args.out) / ("crannia-tui-%s-win-x64" % version))
+        return check(Path(args.out) / ("crannia-tui-%s-%s" % (version, target)),
+                     target=target)
 
-    return build(Path(args.out), skip_runtime=args.skip_runtime)
+    return build(Path(args.out), skip_runtime=args.skip_runtime,
+                 target=args.target)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,13 @@ const gone = require("./renderer-gone.cjs");
 // 换装脚本的生成与安装目录判据。不 import electron —— 纯函数，node 直接测。
 // 现场：路径含空格时 `$Dir` 被截断，装到了盘根，还触发 NSIS 按路径前缀误杀。
 const updateApply = require("./update-apply.cjs");
+
+//: 图标按平台选格式：Windows 读 `.ico`，Linux/macOS 读 `.png`
+//:   （Electron 在非 Windows 上不保证解码 `.ico`；托盘在 Linux 上尤其只认 PNG）。
+//:   两张图都在 asar 根（`electron-builder` 的 `SHELL_FILES` 同时白名单了它们）。
+const APP_ICON = path.join(__dirname, "../../" +
+  (process.platform === "win32" ? "crannia.ico" : "crannia.png"));
+
 let mainWindow; let tray; let quitting = false; let backend;
 let backendStopped = false;  // 子进程收过尾了（`will-quit` 只许走一次）
 let quitChecked = false;     // "现在退会打断什么"问过了（`before-quit` 只许走一次）
@@ -423,7 +430,20 @@ function dataRoot() {
   const override = String(process.env.CRANNIA_DATA_DIR || "").trim();
   if (override) return override;
   if (!app.isPackaged) return backendRoot();
-  return path.join(app.getPath("appData"), "Crannia");
+  if (process.platform === "win32") {
+    return path.join(app.getPath("appData"), "Crannia");
+  }
+  if (process.platform === "darwin") {
+    //: macOS：Electron 的 appData 就是 ~/Library/Application Support，
+    //:   与 `core/paths.py` 的 `.../Application Support/Crannia` 同一条。
+    return path.join(app.getPath("appData"), "Crannia");
+  }
+  //: Linux：后端用 `$XDG_DATA_HOME/crannia`（默认 ~/.local/share/crannia），
+  //:   而 Electron 的 appData 是 ~/.config —— 直接拼会读到另一个目录，
+  //:   症状是设置页/更新标记跟后端各看各的，且什么都不红。
+  const xdg = String(process.env.XDG_DATA_HOME || "").trim();
+  const base = xdg || path.join(app.getPath("home"), ".local", "share");
+  return path.join(base, "crannia");
 }
 
 // 已有后端：端点文件（一个数据根只许一个后端）
@@ -486,6 +506,11 @@ async function attachExistingBackend() {
   API_PORT = ep.port;
   API_BASE = `http://127.0.0.1:${API_PORT}`;
   _token = ep.token;
+  //: `probeEndpoint` 已经用这个令牌拿到 200 了。这里不置位的话，
+  //:   页面里所有转发都会在 `if (!backendReady)` 那一支答 503 ——
+  //:   外壳资源照常（dist 由壳端上来），只有 API 与 `/static/*` 静默失败
+  //:   （现场：logo 裂图、状态值一片空白）。GUI 与 TUI 共存时必然走到这条路。
+  backendReady = true;
   console.log(`[backend] 接入已有后端：127.0.0.1:${API_PORT}（pid=${ep.pid}，${got}）`);
   return true;
 }
@@ -1317,16 +1342,47 @@ ipcMain.on("window:focus", (event) => {
 function pythonExe() {
   if (process.env.CRANNIA_PYTHON) return process.env.CRANNIA_PYTHON;
   // 随包分发的那份排在项目 `.venv` 之前。
-  //   判据是"两级互不打扰"：打包之后没有 `.venv`（源码与运行时都在 resources 里）
-  //   所以只剩这一级；开发时 `resourcesPath` 下根本没有这个目录
-  //   所以落到 `.venv` 那一级。两个环境各走各的，不需要 `app.isPackaged` 分支。
-  //   产物由 `scripts/prepare_runtime.py` 组装（`.gitignore` 里有它
-  //     新克隆的仓库里没有这个目录，得先跑那个脚本）。
+  //: 两级互不打扰：打包之后没有 `.venv`（源码与运行时都在 resources 里）
+  //:   所以只剩随包那一级；开发时 `resourcesPath` 下根本没有这个目录
+  //:   所以落到 `.venv` 那一级。产物由 `scripts/prepare_runtime.py` 组装
+  //:     （`.gitignore` 里有它，新克隆的仓库里没有这个目录，得先跑那个脚本）。
   const bundled = process.resourcesPath
-    ? path.join(process.resourcesPath, "primary-runtime", "python",
-                process.platform === "win32" ? "python.exe" : "python")
+    ? (() => {
+        //: 两种布局（`scripts/prepare_runtime.py::_TARGETS`，一处定义）：
+        //:   Windows `python/python.exe` · POSIX `python/bin/python3`。
+        //:   判 `process.platform`（装好那台机器的平台），不判包里有什么 ——
+        //:     文件名猜错的症状是"装好了但后端起不来"。
+        const root = path.join(process.resourcesPath, "primary-runtime", "python");
+        return process.platform === "win32"
+          ? path.join(root, "python.exe")
+          : path.join(root, "bin", "python3");
+      })()
     : "";
-  if (bundled && fs.existsSync(bundled)) return bundled;
+  if (bundled && fs.existsSync(bundled)) {
+    //: 随包运行时是谁家的，`runtime.json.platform` 说了算（组装时按锁写的）。
+    //:   开发机上两个 target 共用一个产物目录，后组装的顶掉先组装的 ——
+    //:   真发生了这种情况，这里宁可不用它（落到下一级），也不装作没事。
+    try {
+      const manifestPath = path.join(process.resourcesPath, "primary-runtime",
+                                     "runtime.json");
+      const plat = String(JSON.parse(fs.readFileSync(manifestPath, "utf8"))
+                          .platform || "");
+      const want = process.platform === "win32" ? "win32"
+                 : process.platform === "darwin" ? "darwin" : "linux";
+      if (plat && plat !== want) {
+        console.warn(`[backend] 随包运行时是 ${plat} 的，本机是 ${want} —— 不用它`);
+        return venvPath();
+      }
+    } catch {
+      //: runtime.json 读不出来不算罪 —— 那是"没随包"的正常形态（开发树）。
+    }
+    return bundled;
+  }
+  return venvPath();
+}
+
+/** 项目 `.venv` 那一级（开发树）；两个调用口共用（一处定义）。 */
+function venvPath() {
   const venv = path.resolve(__dirname, "../../.venv/Scripts/python.exe");
   return fs.existsSync(venv) ? venv : "python";
 }
@@ -1581,7 +1637,7 @@ function createWindow() {
     //: 窗口底色跟着系统深浅走 —— 页面自己会在首屏前打 `data-theme`，
     //:   这一格管的是"页面还没画出来的那一瞬"（写死浅色 = 深色用户先闪一下白）。
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#121514" : "#f7f9f6",
-    icon: path.join(__dirname, "../../crannia.ico"),
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       //: 令牌经它进渲染进程（`preload.cjs` 读 `process.argv`）。
@@ -1770,9 +1826,15 @@ function attachContextMenu(win) {
 }
 
 function createTray() {
-  tray = new Tray(path.join(__dirname, "../../crannia.ico")); tray.setToolTip("Crannia");
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: "打开 Crannia", click: () => mainWindow?.show() }, { type: "separator" }, { label: "退出", click: () => { quitting = true; app.quit(); } }]));
-  tray.on("click", () => mainWindow?.show());
+  //: 托盘不是启动的必要条件：Linux 桌面（尤其 WSLg / 精简会话）可能没有
+  //: StatusNotifier 宿主，`new Tray` 会抛。抛了就说一句，主窗照常起。
+  try {
+    tray = new Tray(APP_ICON); tray.setToolTip("Crannia");
+    tray.setContextMenu(Menu.buildFromTemplate([{ label: "打开 Crannia", click: () => mainWindow?.show() }, { type: "separator" }, { label: "退出", click: () => { quitting = true; app.quit(); } }]));
+    tray.on("click", () => mainWindow?.show());
+  } catch (err) {
+    console.warn("[tray] 托盘不可用（本桌面没有托盘宿主）：" + (err && err.message ? err.message : err));
+  }
 }
 // ── 退出的两关 ──────────────────────────────────────────────────────
 //

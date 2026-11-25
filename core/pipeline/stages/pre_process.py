@@ -764,9 +764,17 @@ class PreProcessStage(Stage):
         #   · `/model 默认` / `跟随`，切回"跟随默认"
         session_key = session_key_of_ctx(ctx)
         parts = user_input.split(maxsplit=1)
+        rest = parts[1].strip() if len(parts) == 2 else ""
         ctx.metadata["stop"] = True
-        if len(parts) == 2:
-            ctx.response = _switch_session_model(session_key, parts[1].strip())
+        sub, _, tail = rest.partition(" ")
+        if sub == "more" and not tail.strip():
+            ctx.response = _list_all_models()
+        elif sub == "set":
+            ctx.response = _edit_model_guidance(tail.strip())
+        elif rest:
+            ctx.response = _switch_session_model(
+                session_key, rest, pool=ctx.session_pool,
+                provider=getattr(ctx, "provider", None))
         else:
             ctx.response = _describe_session_model(session_key)
         return ctx
@@ -858,6 +866,16 @@ class PreProcessStage(Stage):
         parts = user_input.split(maxsplit=1)
         ctx.metadata["stop"] = True
         ctx.response = _handle_mode(parts, session_key)
+        return ctx
+
+    def _cmd_takeover(self, ctx: StageContext, user_input: str) -> StageContext:
+        # ---- /takeover on|off ----
+        # 接管的开关只能在完全权限下用 —— 与 `/api/computer-use/enable`
+        # 同一道判据（`frozen_mode == "full_access"`），两处不许各写一套。
+        # 这条命令让 TUI / IM / CLI 也有入口：GUI 那颗按钮不是唯一的路。
+        ctx.metadata["stop"] = True
+        ctx.response = _handle_takeover(user_input.split(),
+                                        session_key_of_ctx(ctx))
         return ctx
 
     def _cmd_btw(self, ctx: StageContext, user_input: str) -> StageContext:
@@ -1146,6 +1164,103 @@ def _count_external_tools(mgr) -> int:
         return 0
 
 
+#: 无参清单只显示前几条。超过这个数就该走 `/model more`。
+_MODEL_LIST_LIMIT = 8
+
+
+def _model_no_config() -> str:
+    return tr("未配置模型，拉起一个终端运行 crannia setup 以配置，"
+              "或前往 GUI 内的端配置页尝试添加")
+
+
+def _model_dup_names(rows) -> set:
+    """同名的那些名字。撞名时列表里要带 id，否则切换那条会回"重名"。"""
+    seen: dict = {}
+    for name, _cid, _label, _model in rows:
+        key = str(name or "").strip().lower()
+        seen[key] = seen.get(key, 0) + 1
+    return {k for k, n in seen.items() if n > 1}
+
+
+def _model_item(index: int, row, default_id: str, dups: set) -> str:
+    """列表里的一条：`1、「名字」（模型，默认）`。"""
+    name, cid, _label, model = row
+    tail = str(model or "").strip() or "-"
+    is_default = cid == default_id
+    dup = str(name or "").strip().lower() in dups
+    if is_default and dup:
+        tail = tr("%s，默认，id %s") % (tail, cid)
+    elif is_default:
+        tail = tr("%s，默认") % tail
+    elif dup:
+        tail = tr("%s，id %s") % (tail, cid)
+    return tr("%d、「%s」（%s）") % (index, name or cid, tail)
+
+
+def _model_list_block(rows, default_id: str, *, limit=None) -> list[str]:
+    """配置清单：一行头 + 一行条目（用 ` · ` 分开，终端自己折行）。"""
+    total = len(rows)
+    if not total:
+        return []
+    shown = rows if limit is None else rows[:limit]
+    if limit is None:
+        head = tr("全部配置（%d 条）：") % total
+    elif total > limit:
+        head = tr("已配置 %d 条（显示前 %d 条，/model more 看全部）：") % (
+            total, limit)
+    else:
+        head = tr("已配置 %d 条：") % total
+    dups = _model_dup_names(rows)
+    items = [_model_item(i, row, default_id, dups)
+             for i, row in enumerate(shown, 1)]
+    return [head, " · ".join(items)]
+
+
+def _model_usage_lines() -> list[str]:
+    """切换与修改的用法。两条路各一句，不混在一起。"""
+    return [
+        tr("使用 /model 编号、/model 配置名 或 /model <id> 切换；"
+           "/model 默认 切回跟随默认。"),
+        tr("使用 /model more 打印完整配置单；"
+           "/model set <编号|配置名|id> 修改现有配置。"),
+    ]
+
+
+def _resolve_model_ref(ref: str):
+    """名字 / id / 编号 → 一条配置。编号是完整清单里的序号（从 1 起）。
+
+    先按名字与 id 精确找，找不到才当编号 —— 一条正好叫 `9` 的配置
+      不会被编号 9 抢走。
+    """
+    from core import model_configs as _mc
+
+    ref = str(ref or "").strip()
+    if not ref:
+        return None
+    hit = _mc.find_by_ref(ref)
+    if hit is not None:
+        return hit
+    if ref.isdigit():
+        rows = _mc.list_names()
+        n = int(ref)
+        if 1 <= n <= len(rows):
+            return _mc.get(rows[n - 1][1])
+    return None
+
+
+def _model_ref_error(ref: str) -> str:
+    """引用找不到 / 撞名时的拒绝话术 —— 切换与修改共用这一份。"""
+    from core import model_configs as _mc
+
+    clash = _mc.name_clashes(ref)
+    if clash:
+        return tr("存在重名配置，%s，使用/model id 以指定") % ref
+    rows = _mc.list_names()
+    avail = ("、".join(f"「{n}」" for n, _i, _c, _m in rows) if rows
+             else tr("（空）"))
+    return trf("没有找到此配置，已配置列表：{avail}", avail)
+
+
 def _describe_session_model(session_key: str) -> str:
     """`/model` 不带参数 —— 这一段现在用哪条模型配置。
 
@@ -1153,22 +1268,63 @@ def _describe_session_model(session_key: str) -> str:
       默认换掉之后这一段会不会跟着变。
     少了第二样，用户看到"正在用 A"就分不出那是自己选的还是恰好是默认的
       —— 而这正是他问 `/model` 想知道的事。
+
+    清单与用法也接在这里：只说"跟随默认配置中"等于让用户自己猜下一步，
+      而配置名与 id 是切换唯一能用的两种引用。
     """
     from core import model_configs as _mc
     from core import session_model as _sm
 
     info = _sm.describe(session_key)
-    if not info["config_id"]:
-        return tr("跟随默认配置——前往端配置页配置一个模型以开始")
+    rows, default_id = _mc.list_names(), _mc.default_id()
+    if not rows:
+        return _model_no_config()
     if info["frozen"]:
         e = _mc.get(info["config_id"]) or {}
-        return (tr("当前固定：%s，使用/model 配置名 以切换模型")
-                % (e.get("name") or info["config_id"]))
-    return tr("跟随默认配置中")
+        head = tr("当前固定：「%s」。") % (e.get("name")
+                                           or info["config_id"])
+    elif not info["config_id"]:
+        head = tr("还没有默认模型。")
+    else:
+        head = tr("跟随默认配置中。")
+    return "\n".join([head,
+                      *_model_list_block(rows, default_id,
+                                         limit=_MODEL_LIST_LIMIT),
+                      *_model_usage_lines()])
 
 
-def _switch_session_model(session_key: str, ref: str) -> str:
-    """`/model <配置名|id|默认>` —— 把这一段换成那条配置。
+def _list_all_models() -> str:
+    """`/model more` —— 完整配置单。"""
+    from core import model_configs as _mc
+
+    rows, default_id = _mc.list_names(), _mc.default_id()
+    if not rows:
+        return _model_no_config()
+    return "\n".join([*_model_list_block(rows, default_id),
+                      *_model_usage_lines()])
+
+
+def _edit_model_guidance(ref: str) -> str:
+    """`/model set` 在非 TUI 通道的答复。
+
+    后端没有掩码输入口，不能在这里收密钥：命令正文会被当成普通消息
+      落库并送往模型（打错一个字就不再是命令）。真正编辑在 TUI 的
+      编辑面板，或桌面端端配置页。
+    """
+    ref = str(ref or "").strip()
+    if not ref:
+        return tr("使用 /model set <编号|配置名|id> 修改现有配置。")
+    entry = _resolve_model_ref(ref)
+    if entry is None:
+        return _model_ref_error(ref)
+    return tr("要修改「%s」：在 TUI 里直接使用 /model set（会弹出编辑面板）；"
+              "桌面端在「端配置」页编辑；没有界面时运行 crannia setup。") % (
+                  entry.get("name") or entry.get("id"))
+
+
+def _switch_session_model(session_key: str, ref: str, *, pool=None,
+                          provider=None) -> str:
+    """`/model <编号|配置名|id|默认>` —— 把这一段换成那条配置。
 
     三条纪律（与 `/effort` 同族）：
       ① 先试装、后落盘 —— 装不上就不写（`preflight`，与"设为默认"相同）。
@@ -1182,22 +1338,61 @@ def _switch_session_model(session_key: str, ref: str) -> str:
 
     if ref in ("默认", "跟随", "default", "follow"):
         _sm.follow_default(session_key)
-        return tr("已切回跟随默认")
+        return tr("已切回跟随默认") + _compact_after_model_switch(
+            session_key, pool, provider)
 
-    entry = _mc.find_by_ref(ref)
+    entry = _resolve_model_ref(ref)
     if not entry:
-        clash = _mc.name_clashes(ref)
-        if clash:
-            return tr("存在重名配置，%s，使用/model id 以指定") % ref
-        rows = _mc.list_names()
-        avail = ("、".join(f"「{n}」" for n, _i, _c, _m in rows) if rows
-                 else tr("（空）"))
-        return trf("没有找到此配置，已配置列表：{avail}", avail)
+        return _model_ref_error(ref)
     why = _mc.preflight(entry["id"])
     if why:
         return tr("此配置异常，请前往端配置页检查配置")
     _sm.set_for(session_key, entry["id"])
-    return tr("已切换，下一条消息起生效。")
+    return tr("已切换，下一条消息起生效。") + _compact_after_model_switch(
+        session_key, pool, provider)
+
+
+def _compact_after_model_switch(session_key: str, pool, provider=None) -> str:
+    """切换模型后立刻按新窗口重算；超阈值就压一次。
+
+    为什么不等下一轮：窗口变小之后，下一轮会在溢出检查里自救 —— 但那次
+    请求已经带着装不下的历史出门（先失败再压，或者上游直接 400）。
+    切换是用户明说"换模型"的那一刻，也是唯一能在他发下一条消息之前
+    做这件事的点。
+
+    只做"超阈值才压"：没超就一个字节不动，不替用户付一次摘要调用。
+    压不成的真实原因原样带出来（`last_skip_note`），不编一句"已完成"。
+    """
+    if pool is None:
+        return ""
+    try:
+        _sid, msgs = pool.get_or_create(session_key, provider)
+        if not msgs:
+            return ""
+        usage = pool.get_context_usage(session_key, msgs)
+        threshold = int(usage.get("threshold_tokens") or 0)
+        estimated = int(usage.get("estimated_tokens") or 0)
+        if threshold <= 0 or estimated < threshold:
+            return ""
+        compacted, was_done = pool.compact(session_key, msgs)
+        if not was_done:
+            why = str(getattr(pool, "last_skip_note", "") or "").strip()
+            return tr("（新模型窗口较小，但这次没压成：%s）") % (
+                why or tr("原因没拿到"))
+        # 与 `/compact` 同一条：会话池缓存的是对象引用 —— 不写回的话，
+        # 下一轮拿回的还是压缩前那份。
+        if session_key in pool._loaded:
+            pool._loaded[session_key] = (pool._loaded[session_key][0], compacted)
+        from core.memory.compressor import progress_payload
+        note = str(progress_payload(
+            pool.last_compression or {},
+            usage.get("context_window")).get("message") or "").strip()
+        return tr("（新模型窗口较小，已立即压缩：%s）") % (
+            note or tr("完成"))
+    except Exception as exc:                                    # noqa: BLE001
+        # 切换本身已经成功了；这里失败不该把整条命令说成失败。
+        return tr("（切换成功；按新窗口检查失败：%s: %s —— 下一轮会自行处理）") % (
+            type(exc).__name__, exc)
 
 
 def _handle_language(parts: list, session_key: str) -> str:
@@ -1328,6 +1523,32 @@ def _handle_effort(parts: list, session_key: str) -> str:
     set_level(session_key, level)
 
     return tr("已切换，下一条消息起生效（仅当前对话）。")
+
+
+def _handle_takeover(parts: list, session_key: str) -> str:
+    """`/takeover on|off` —— 开关接管（无参 = 看状态）。
+
+    与 GUI 那颗按钮、与 `/api/computer-use/{enable,disable}` 是同一件事：
+    真值都在 `core.computer.session`，这里只做入口与措辞。
+    """
+    from core import modes
+    from core.computer import session as _cs
+
+    arg = parts[1].strip().lower() if len(parts) >= 2 else ""
+    if arg not in ("on", "off"):
+        state = tr("已开启") if _cs.enabled_for(session_key) else tr("未开启")
+        return tr("当前接管状态：%s。用法：/takeover on|off") % state
+    if arg == "off":
+        # 只关自己持有的那一次 —— 别的会话开着的不替它关。
+        if _cs.disable_for_session(session_key, "user"):
+            return tr("已关闭接管模式。")
+        return tr("当前会话没有在接管，无需关闭。")
+    if modes.frozen_mode(session_key) != "full_access":
+        return tr("接管模式仅在完全权限下支持，请先切换至完全权限后重试")
+    ok, msg = _cs.enable(session_key)
+    if not ok:
+        return tr("启用接管失败：%s") % msg
+    return tr("已启用接管模式，使用/takeover off以取消")
 
 
 def _handle_mode(parts: list, session_key: str) -> str:
@@ -2014,14 +2235,17 @@ _COMMANDS: tuple = (
     _CommandSpec("/context", "查看当前上下文的构成与占用", "_cmd_context"),
     _CommandSpec("/skill", "检查与启用技能", "_cmd_skill", MATCH_PREFIX),
     # 这一条必须排在 `/mode` 前面（见本表抬头）
-    _CommandSpec("/model", "查看或切换模型", "_cmd_model", MATCH_PREFIX),
+    _CommandSpec("/model", "查看或切换模型（/model more 看全部，/model set 修改）",
+                 "_cmd_model", MATCH_PREFIX),
     _CommandSpec("/change", "查看 / 切换接入的对话（/change [编号]）", "_cmd_change",
                  MATCH_PREFIX),
     _CommandSpec("/effort", "调整模型档位", "_cmd_effort", MATCH_PREFIX),
     _CommandSpec("/language", "切换模型的回答语言（仅本次对话）",
                  "_cmd_language", MATCH_PREFIX),
-    _CommandSpec("/mode", "切换模式（手动 / 自动 / 计划）", "_cmd_mode",
+    _CommandSpec("/mode", "切换模式（手动 / 自动 / 计划 / 完全权限）", "_cmd_mode",
                  MATCH_PREFIX),
+    _CommandSpec("/takeover", "开启或关闭接管模式（/takeover on|off）",
+                 "_cmd_takeover", MATCH_PREFIX),
     _CommandSpec("/btw", "顺带问一句，不进入主对话与历史", "_cmd_btw",
                  MATCH_PREFIX),
     _CommandSpec("/recap", "回顾最近的对话进度", "_cmd_recap"),

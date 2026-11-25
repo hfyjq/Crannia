@@ -187,6 +187,17 @@ def needs_setup(python: Path, home: Path, *, query_fn=None) -> bool:
     return not bool(state.get("default"))
 
 
+def _card_label(card: dict) -> str:
+    """卡片的显示名。
+
+    名字来自后端的 `model_configs.CARDS`：九张是品牌名（GPT / Claude / …），
+    四张带中文（火山引擎 / 腾讯混元 / Ollama（本地）/ 其他）。品牌名查表
+    查不到，原样返回；那四张的名字在 `locales/` 里有译文，界面语言是英文
+    时就跟着换。
+    """
+    return t(str(card.get("label") or ""))
+
+
 def _pick_card(cards: list[dict], ask) -> dict:
     """选卡。回车 = 「其他」（OpenAI 兼容）。"""
     default_id = "other" if any(c["id"] == "other" for c in cards) else \
@@ -204,7 +215,10 @@ def _pick_card(cards: list[dict], ask) -> dict:
             if 1 <= n <= len(cards):
                 return cards[n - 1]
         for c in cards:
-            if answer.lower() in (c["id"].lower(), str(c["label"]).lower()):
+            #: 英文界面上按译名也能选中（`Volcengine`），中文原文照旧认。
+            names = {str(c["id"]).lower(), str(c["label"]).lower(),
+                     _card_label(c).lower()}
+            if answer.lower() in names:
                 return c
         print(t("没有「%s」。请填写编号或直接回车。") % answer)
 
@@ -315,11 +329,12 @@ def setup_command(*, python: Path, home: Path, query_fn=None,
             suffix = ""
         else:
             suffix = t("（地址由 SDK 决定）")
-        print("   %2d. %s%s" % (i, c["label"], suffix))
+        print("   %2d. %s%s" % (i, _card_label(c), suffix))
     card = _pick_card(cards, ask_)
 
-    name = (ask_(t("配置名称 [eg：%s]: ") % card["label"]) or "").strip() \
-        or card["label"]
+    card_label = _card_label(card)
+    name = (ask_(t("配置名称 [eg：%s]: ") % card_label) or "").strip() \
+        or card_label
     #: 「其他」没有自己的 manifest —— 它的默认值是 OpenAI 那一份，拿它当提示
     #: 会把人往错的方向带（那家的模型名与地址都不同）。
     hint_model = "" if card["id"] == "other" else card.get("default_model", "")
@@ -342,6 +357,23 @@ def setup_command(*, python: Path, home: Path, query_fn=None,
 
     api = (sec_(t("API Key（此字段不可见，请直接粘贴；本地模型可直接回车跳过）: "))
            or "").strip()
+    #: 需要 key 的卡却没读到输入 —— 再问一次，别让它带着空 key 往下走。
+    #:
+    #: `getpass` 读不到东西时回空串（粘贴掉了、终端没接住、直接回车），
+    #:   而"建一条没有 key 的配置"本身是合法的（`_api_of` 允许留空），
+    #:   于是它会一路走到底：联通测试带着占位串出门，回一句
+    #:   "你的 key ****eded 无效"，末尾还印一句"已确认"。
+    #:   真机上就这样把一个有效 key 白扔了二十多分钟。
+    #: 字段缺省就**不拦**：老后端 / 手搓的载荷不发 `needs_key`，
+    #:   而界面上多问一句比"存不下配置"要轻 —— 判据在后端，这里只照它做。
+    if card.get("needs_key") is True and not api:
+        print(t("这张卡要 API Key，刚才没读到输入（粘贴后按回车）。"))
+        api = (sec_(t("API Key（此字段不可见，请直接粘贴）: "))
+               or "").strip()
+        if not api and (ask_(t("仍然保存这条没有 key 的配置？[y/N] "))
+                        or "").strip().lower() not in ("y", "yes", "是"):
+            print(t("没有保存。"))
+            return 1
 
     try:
         created = _create_config(
@@ -359,6 +391,10 @@ def setup_command(*, python: Path, home: Path, query_fn=None,
 
     print(t("最小请求联通测试…"))
     rep = _probe(python, home, cid, query_fn=query_fn)
+    #: 结尾那句话要说真话：没测通就不许印"已确认"。
+    #:   原来这条路上两句都印（"已保留，联通测试未通过" + "已确认"），
+    #:   看上去像过了 —— 真机上就是这么误判的。
+    confirmed = bool(rep.get("ok"))
     if not rep.get("ok"):
         label, suggest = _hint(str(rep.get("kind") or ""))
         print(t("API 异常（%s）：%s")
@@ -376,5 +412,8 @@ def setup_command(*, python: Path, home: Path, query_fn=None,
         print(t("更改默认失败：%s") % exc)
         return 1
 
-    print(t("已确认。运行 `crannia` 开始使用。"))
+    if confirmed:
+        print(t("已确认。运行 `crannia` 开始使用。"))
+    else:
+        print(t("配置已保存，但联通测试没通过 —— 改好后跑 `crannia setup` 再测一次。"))
     return 0

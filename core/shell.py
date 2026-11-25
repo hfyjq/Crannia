@@ -68,6 +68,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -148,7 +149,7 @@ _BASH_CANDIDATES: tuple[str, ...] = (
 ENV_WHITELIST: tuple[str, ...] = (
     # ① 进程能起来所必需（缺了 bash 或子进程会直接跑不动）
     "path", "pathext", "systemroot", "windir", "systemdrive",
-    "comspec", "temp", "tmp",
+    "comspec", "temp", "tmp", "tmpdir",
     # ② `~` 与用户目录（bash 靠 HOME/USERPROFILE 展开 `~`）
     "home", "homedrive", "homepath", "userprofile",
     "appdata", "localappdata", "programdata",
@@ -536,6 +537,10 @@ _CWD_MARK = "\x01CRANNIA_CWD\x01"
 #: （`subprocess.run` 的 timeout 只杀直接子进程，孙进程会活下来）。
 _CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 
+#: POSIX 的对应物：子进程自成会话（新进程组），`/stop` 才能 killpg 整棵树。
+#: Windows 上传 True 会被 `subprocess` 拒，所以这一格在 Windows 上必须是 False。
+_START_NEW_SESSION = os.name != "nt"
+
 
 def _wrap(command: str, snapshot: str = "") -> str:
     """给命令拼上"回报 cwd + 保留退出码"的尾巴（见模块 docstring 第三节）。
@@ -671,7 +676,8 @@ def _kill_tree(proc: subprocess.Popen) -> None:
     """杀掉整棵进程树（best-effort）。
 
     Windows 上 `proc.kill()` 只结束直接子进程；`taskkill /T` 才带子进程。
-    拿不到 `taskkill` 就退回 `kill()` —— 降级要出声。
+    POSIX 上子进程由 `start_new_session=True` 自成一组，`killpg` 才带子进程。
+    拿不到对应的工具就退回 `kill()` —— 降级要出声。
     """
     if sys.platform == "win32":
         taskkill = shutil.which("taskkill")
@@ -685,6 +691,33 @@ def _kill_tree(proc: subprocess.Popen) -> None:
                       f" —— 退回单进程 kill，孙进程可能残留")
         else:
             print("[shell] 找不到 taskkill —— 退回单进程 kill，孙进程可能残留")
+        try:
+            proc.kill()
+        except Exception as exc:
+            print(f"[shell] kill 也失败了（{type(exc).__name__}: {exc}）")
+        return
+
+    # POSIX：先确认它真的自成一组，再杀组 —— 杀错组的代价是把框架自己带走。
+    try:
+        pgid = os.getpgid(proc.pid)
+    except ProcessLookupError:
+        return
+    except Exception as exc:
+        pgid = None
+        print(f"[shell] 查不到进程组（{type(exc).__name__}: {exc}）"
+              f" —— 退回单进程 kill，孙进程可能残留")
+    if pgid is not None:
+        if pgid == proc.pid:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+                return
+            except ProcessLookupError:
+                return
+            except Exception as exc:
+                print(f"[shell] killpg 失败（{type(exc).__name__}: {exc}）"
+                      f" —— 退回单进程 kill，孙进程可能残留")
+        else:
+            print("[shell] 子进程不在独立进程组 —— 只杀它自己，孙进程可能残留")
     try:
         proc.kill()
     except Exception as exc:
@@ -990,10 +1023,13 @@ def _run(command: str, work_dir: Path, timeout_ms: int, *,
         argv = [powershell_path(), "-NoProfile", "-NoLogo",
                 "-NonInteractive", "-Command", _wrap_ps(command)]
     else:
+        route = ("Windows 上装 Git for Windows，或确认系统自带的 powershell.exe 在。"
+                 if os.name == "nt"
+                 else "装一个 bash（Debian / Ubuntu：`apt install bash`）。")
         return {
             "success": False,
             "error": ("找不到可用的 shell（bash 与 PowerShell 都没有），命令没有执行。"
-                      "Windows 上装 Git for Windows，或确认系统自带的 powershell.exe 在。"),
+                      + route),
         }
 
     ms = int(timeout_ms or 0) or DEFAULT_TIMEOUT_MS
@@ -1009,6 +1045,7 @@ def _run(command: str, work_dir: Path, timeout_ms: int, *,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             creationflags=_CREATE_NEW_PROCESS_GROUP,
+            start_new_session=_START_NEW_SESSION,
         )
     except OSError as exc:
         return {"success": False,

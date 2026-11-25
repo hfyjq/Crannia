@@ -8,7 +8,7 @@
   </p>
   <p>
     <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
-    <img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue">
+    <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   </p>
 </div>
@@ -32,7 +32,7 @@ installer for machines without the desktop app.
 
 ### Option B — from source
 
-Requirements: Windows 10/11, Python **3.12+**, Node.js.
+Requirements: Windows 10/11, Python **3.11+**, Node.js.
 
 ```powershell
 git clone https://github.com/hfyjq/Crannia.git
@@ -56,6 +56,35 @@ Models can be added from the endpoint settings page instead of editing
 
 > The framework never writes API keys into the repository. Keys belong in `.env`, or
 > in the credential store used by the endpoint settings page.
+
+### Linux
+
+Requirements: Linux x64, Python **3.11+** (Node.js only for the desktop GUI).
+
+```bash
+git clone https://github.com/hfyjq/Crannia.git
+cd Crannia
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cp .env.example .env
+# edit .env and set at least one provider key
+
+# Terminal UI
+cd tui && ../.venv/bin/python -m crannia_tui
+
+# Web UI (from the repo root)
+.venv/bin/python -m web
+```
+
+The standalone TUI package (`crannia-tui-*-linux-x64.tar.gz`) needs no system
+Python: extract it, run `./install.sh`, then type `crannia`. It installs under
+`${XDG_DATA_HOME:-~/.local/share}/crannia-tui` and links the command into
+`~/.local/bin`; user data lives in `${XDG_DATA_HOME:-~/.local/share}/crannia`.
+
+`fonts-noto-cjk` is needed for the Chinese interface and for Chinese documents
+(minimal/server installs often lack it; without it CJK text renders as boxes).
+Optional for Office work: LibreOffice (format conversions). Pasting images into
+the TUI needs `wl-clipboard` on Wayland or `xclip` on X11.
 
 ## Interoperability
 

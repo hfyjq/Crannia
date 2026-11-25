@@ -28,7 +28,10 @@ socksio>=1.0            # httpx 的 SOCKS 支持
 PySocks>=1.7.1          # requests 的 SOCKS 支持
 jieba>=0.42
 lark-oapi>=1.7
-mcp>=1.28
+# 2.x 把 streamable HTTP 的入口改名成 `streamable_http_client`（`mcpx/client.py`
+#   用的是 1.x 的 `streamablehttp_client`）。上界钉在这里，钉谁的版本换 API，
+#   就得连 `mcpx/client.py:390` 一起迁。
+mcp>=1.28,<2.0
 numpy>=2.4
 openai>=2.44
 openpyxl>=3.1

@@ -469,6 +469,30 @@ def member_reply_content(name: str, content: str) -> str:
     return "【%s】%s" % (name, str(content or "").strip())
 
 
+#: 只给界面看的字段 —— 群历史走过四家供应商的 wire 之前要摘掉。
+_UI_ONLY_FIELDS = frozenset({"kind", "speaker", "avatar", "artifacts",
+                             "tokens", "model"})
+
+
+def normalize_history(messages: list[dict]) -> list[dict]:
+    """群聊历史 → 所有供应商同形的副本。
+
+    为什么需要它：四位成员可能各用一家模型，历史里混着上一家特有的字段
+    （`reasoning_content` / `tool_calls` / `model`）—— 这些对下一家没有意义，
+    而"每条消息长什么样"应当只由群聊协议决定，不由上一位发言者的供应商决定。
+
+    普通历史只留 `role` / `content`（content 原样，可能是图片块列表）。
+    真的出现工具协议消息时退回"去掉界面字段后的透传" —— 剥掉
+    `tool_call_id` 会让 tool 结果变成悬空消息，那是另一种坏形状。
+    """
+    items = [m for m in (messages or []) if isinstance(m, dict)]
+    if any(m.get("role") == "tool" or m.get("tool_calls") for m in items):
+        return [{k: v for k, v in m.items() if k not in _UI_ONLY_FIELDS}
+                for m in items]
+    return [{"role": str(m.get("role") or ""),
+             "content": m.get("content", "")} for m in items]
+
+
 def strip_member_prefix(name: str, content: str) -> str:
     """给 GUI 用：把 `【名字】` 前缀剥掉（只剥自己那一层）。"""
     prefix = "【%s】" % (name or "")

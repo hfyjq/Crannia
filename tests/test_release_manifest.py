@@ -246,7 +246,8 @@ def _fake_release(t: Path, *, py=True, platform="win32", pkgs=None,
     清单，于是验产物对真包永久报缺文件，而测试一直绿。
     """
     rel = t / "release"
-    unpacked = rel / "win-unpacked"
+    linux = platform == "linux"
+    unpacked = rel / ("linux-unpacked" if linux else "win-unpacked")
     app = unpacked / "resources" / "app"
     for rel_name in app_files:
         f = app / rel_name
@@ -255,8 +256,12 @@ def _fake_release(t: Path, *, py=True, platform="win32", pkgs=None,
     rt = unpacked / "resources" / "primary-runtime"
     rt.mkdir(parents=True, exist_ok=True)
     if py:
-        (rt / "python").mkdir(parents=True, exist_ok=True)
-        (rt / "python" / "python.exe").write_bytes(b"MZ")
+        if linux:
+            (rt / "python" / "bin").mkdir(parents=True, exist_ok=True)
+            (rt / "python" / "bin" / "python3").write_bytes(b"\x7fELF")
+        else:
+            (rt / "python").mkdir(parents=True, exist_ok=True)
+            (rt / "python" / "python.exe").write_bytes(b"MZ")
     (rt / "runtime.json").write_text(json.dumps({
         "platform": platform, "arch": "x64",
         "pythonPackages": pkgs if pkgs is not None else {"flask": "3.0"},
@@ -264,7 +269,8 @@ def _fake_release(t: Path, *, py=True, platform="win32", pkgs=None,
     if asar:
         (unpacked / "resources" / "app.asar").write_bytes(
             b"x" * (300 * 1024))      # 过 asar 的最小体量门槛
-    exe = rel / "crannia-1.0.0-win-x64.exe"
+    exe = rel / ("crannia-1.0.0-linux-x64.AppImage" if linux
+                 else "crannia-1.0.0-win-x64.exe")
     exe.write_bytes(b"")
     with open(exe, "r+b") as fh:
         fh.truncate(21 * 1024 * 1024)          # 过最小体量门槛
@@ -276,27 +282,38 @@ def test_artifact_checks_catch_the_four_real_failures():
     with tempfile.TemporaryDirectory() as td:
         t = Path(td)
         unpacked, rel = _fake_release(t)
-        check("★ 好产物 -> 零问题", MR.check_artifact(unpacked, rel) == [],
-              repr(MR.check_artifact(unpacked, rel)))
+        check("★ 好产物 -> 零问题",
+              MR.check_artifact(unpacked, rel, platform="win32") == [],
+              repr(MR.check_artifact(unpacked, rel, platform="win32")))
+
+        #: Linux 的布局（linux-unpacked + bin/python3 + AppImage）走同一把尺子。
+        lu, lrel = _fake_release(t / "lin", platform="linux")
+        check("★ Linux 好产物 -> 零问题",
+              MR.check_artifact(lu, lrel, platform="linux") == [],
+              repr(MR.check_artifact(lu, lrel, platform="linux")))
+        lu2, lrel2 = _fake_release(t / "lin2", platform="linux", py=False)
+        txt = " ".join(d for _w, d in MR.check_artifact(lu2, lrel2, platform="linux"))
+        # 报错里的路径由 Path 拼出，分隔符随平台（Windows 是 `\`）——断言前归一。
+        check("★★ Linux 没有解释器 -> 抓得住", "bin/python3" in txt.replace("\\", "/"), txt)
 
         unpacked2, rel2 = _fake_release(t / "a", py=False)
-        txt = " ".join(d for _w, d in MR.check_artifact(unpacked2, rel2))
+        txt = " ".join(d for _w, d in MR.check_artifact(unpacked2, rel2, platform="win32"))
         check("★★ 没有解释器 -> 抓得住", "python.exe" in txt, txt)
 
         unpacked3, rel3 = _fake_release(t / "b", platform="darwin")
-        txt = " ".join(d for _w, d in MR.check_artifact(unpacked3, rel3))
+        txt = " ".join(d for _w, d in MR.check_artifact(unpacked3, rel3, platform="win32"))
         check("★★ 平台写错（那个 else darwin 的老 bug）-> 抓得住", "darwin" in txt, txt)
 
         unpacked4, rel4 = _fake_release(t / "c", pkgs={})
-        txt = " ".join(d for _w, d in MR.check_artifact(unpacked4, rel4))
+        txt = " ".join(d for _w, d in MR.check_artifact(unpacked4, rel4, platform="win32"))
         check("★★ 依赖清单为空 -> 抓得住（审计原话）", "pythonPackages" in txt, txt)
 
         unpacked5, rel5 = _fake_release(t / "d", app_files=("main.py",))
-        txt = " ".join(d for _w, d in MR.check_artifact(unpacked5, rel5))
+        txt = " ".join(d for _w, d in MR.check_artifact(unpacked5, rel5, platform="win32"))
         check("★ resources/app 缺文件 -> 抓得住", "web/server.py" in txt, txt)
 
         unpacked6, rel6 = _fake_release(t / "e", asar=False)
-        txt = " ".join(d for _w, d in MR.check_artifact(unpacked6, rel6))
+        txt = " ".join(d for _w, d in MR.check_artifact(unpacked6, rel6, platform="win32"))
         check("★★ 壳没打进去（缺 app.asar）-> 抓得住", "app.asar" in txt, txt)
 
 
@@ -425,8 +442,13 @@ def test_installer_runs_nsis_silently():
         err = str(U._update_state.get("error") or "")
     finally:
         U._update_state.update(saved)
-    check("★ 源码运行 -> 拒，并给路线（不替用户装）",
-          "源码" in err, err)
+    if sys.platform == "win32":
+        check("★ 源码运行 -> 拒，并给路线（不替用户装）",
+              "源码" in err, err)
+    else:
+        #: 本平台没有内置换装器 —— 拒的判据一样，路线是「去 Releases 下载」。
+        check("★ 非 Windows -> 拒，并给路线（不替用户装）",
+              "Releases" in err and "下载" in err, err)
 
 
 # 5. 端到端：真发一版，客户端真收得到
@@ -590,10 +612,21 @@ def test_find_installer_prefers_the_current_version():
         later = time.time() + 10
         old.touch()
         __import__("os").utime(old, (later, later))
-        check("给了版本 -> 只认那一版", MR.find_installer(d, "1.1.1") == new,
-              repr(MR.find_installer(d, "1.1.1")))
-        check("没给版本 -> 退回最新的一个", MR.find_installer(d) == old,
-              repr(MR.find_installer(d)))
+        check("给了版本 -> 只认那一版",
+              MR.find_installer(d, "1.1.1", platform="win32") == new,
+              repr(MR.find_installer(d, "1.1.1", platform="win32")))
+        check("没给版本 -> 退回最新的一个",
+              MR.find_installer(d, platform="win32") == old,
+              repr(MR.find_installer(d, platform="win32")))
+
+        #: Linux 的产物名不同（AppImage），同一段判据要认得出它。
+        la = d / "crannia-1.1.0-linux-x64.AppImage"
+        lb = d / "crannia-1.1.1-linux-x64.AppImage"
+        la.write_bytes(b"old")
+        lb.write_bytes(b"new")
+        check("Linux：给了版本 -> 只认那一版",
+              MR.find_installer(d, "1.1.1", platform="linux") == lb,
+              repr(MR.find_installer(d, "1.1.1", platform="linux")))
 
 
 def test_manifest_must_match_the_artifacts():

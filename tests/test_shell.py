@@ -285,9 +285,16 @@ def test_cwd_memory_round_trip() -> None:
               str(r.get("cwd", "")).replace("\\", "/").endswith("/workspace/sub")
               and str(wm.session_cwd).replace("\\", "/").endswith("/workspace/sub"),
               "cwd=%r wm.session_cwd=%r" % (r.get("cwd"), wm.session_cwd))
-        check("  结果是 Windows 风格路径（不是 MSYS 的 `/d/...`）",
-              not str(r.get("cwd", "")).startswith("/"),
-              repr(r.get("cwd")))
+        # MSYS 的 `/d/...` 必须被转成 `D:\...`。Linux 上 cwd 本来就是 `/` 开头，
+        # 这条判据在那里没有对应物 —— 换成"回报的确实是个绝对路径"。
+        if os.name == "nt":
+            check("  结果是 Windows 风格路径（不是 MSYS 的 `/d/...`）",
+                  not str(r.get("cwd", "")).startswith("/"),
+                  repr(r.get("cwd")))
+        else:
+            check("  回报的 cwd 是绝对路径",
+                  str(r.get("cwd", "")).startswith("/"),
+                  repr(r.get("cwd")))
         # 记忆生效：下一条不传 cwd 的命令应当落在刚刚那个子目录里
         p2, note2 = _resolve_cwd("", wm)
         check("★ 记住了：下一条不传 cwd 的命令落在同处",
@@ -463,10 +470,14 @@ def test_user_forbidden_dir_reaches_run_command() -> None:
     print("\n-- 5f. 规避目录端到端--")
     from core.shell import run_command
     guard, wm = _real_guard_and_wm()
-    guard.forbidden_dirs = ["D:\\重要资料"]          # = 用户在设置页加的那一条
+    # 两个平台的路径形状不同，表本身和判据是同一套 —— 只换路径。
+    guarded = "D:\\重要资料" if os.name == "nt" else "/tmp/重要资料"
+    guard.forbidden_dirs = [guarded]               # = 用户在设置页加的那一条
     restore = _install_wm(wm)
     try:
-        r = run_command("rm /d/重要资料/合同.docx")
+        hit = ("/d/重要资料/合同.docx" if os.name == "nt"
+               else "/tmp/重要资料/合同.docx")
+        r = run_command("rm " + hit)
         check("★ 单文件删除（修前落 allow）-> 停下来问",
               r.get("status") == "pending_command_approval", repr(r)[:150])
         check("  ★ 理由点名是**用户划的那条线**，不是「框架自己的源码」",
@@ -474,7 +485,9 @@ def test_user_forbidden_dir_reaches_run_command() -> None:
               repr(r.get("detail"))[:140])
         # 反向：不在那张表里的路径照旧走普通档
         # （收窄过头 = 少拦的那一侧，而它不会红、只会静默）
-        n = run_command("echo /d/别的资料/x.txt")
+        other = ("/d/别的资料/x.txt" if os.name == "nt"
+                 else "/tmp/别的资料/x.txt")
+        n = run_command("echo " + other)
         check("对照：别的路径照旧普通（不是全都升档）",
               n.get("status") == "pending_command_approval"
               and "规避目录" not in str(n.get("detail", "")), repr(n)[:140])

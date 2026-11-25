@@ -62,8 +62,13 @@ class Takeover:
     windows: dict[str, win32.WindowInfo] = field(default_factory=dict)
     observations: dict[str, Observation] = field(default_factory=dict)
     latest_by_window: dict[str, str] = field(default_factory=dict)
-    #: 每个窗口最近一次点击的物理点（下一张截图用来画红十字；取一次就清）。
+    #: 每个窗口最近一次点击的实际物理点（下一张截图用来画红十字；取一次就清）。
     last_click: dict[str, tuple[int, int]] = field(default_factory=dict)
+    #: 最近一次点击"实际落点 − 请求落点"的差值（取一次就清）。
+    #: 存在它是为了把"点偏了多少"变成可读的反馈，而不是让模型自己猜图有没有对。
+    click_miss: dict[str, tuple[int, int]] = field(default_factory=dict)
+    #: 下一次观察要自动开网格的窗口（点偏超阈值时置，取一次就清）。
+    grid_hint: set[str] = field(default_factory=set)
     seq: int = 0
     stop_reason: str = ""
     #: 「接管」与「正在对抗检测」是两态。
@@ -354,11 +359,28 @@ def consume(obs_id: str) -> None:
             _state.observations[obs_id].consumed = True
 
 
-def note_click(window_id: str, x: int, y: int) -> None:
-    """记下实际点到的物理点（下一张截图在它上面画红十字）。"""
+def note_click(window_id: str, x: int, y: int, *,
+               requested: tuple[int, int] | None = None,
+               miss_limit: int = 0) -> None:
+    """记下实际点到的物理点，并顺手算出它偏离请求点多少。
+
+    `requested` 是"我们让它去的点"，`x`/`y` 是回读到的实际点。两者不一样时，
+    偏了多少必须留给下一张图/下一句回执 —— 只画一个红十字而不说差值，
+    模型得自己从图上量，那又变成一次目测。
+
+    `miss_limit` 是"算不算偏"的阈值（调用方按窗口尺寸算）。超过就置一次
+    网格提示：点偏之后最缺的是位置依据，网格正好补它。
+    """
     with _lock:
-        if _state is not None:
-            _state.last_click[window_id] = (int(x), int(y))
+        if _state is None:
+            return
+        _state.last_click[window_id] = (int(x), int(y))
+        if requested is not None:
+            dx = int(x) - int(requested[0])
+            dy = int(y) - int(requested[1])
+            _state.click_miss[window_id] = (dx, dy)
+            if miss_limit > 0 and max(abs(dx), abs(dy)) > miss_limit:
+                _state.grid_hint.add(window_id)
 
 
 def take_last_click(window_id: str) -> tuple[int, int] | None:
@@ -367,6 +389,25 @@ def take_last_click(window_id: str) -> tuple[int, int] | None:
         if _state is None:
             return None
         return _state.last_click.pop(window_id, None)
+
+
+def take_click_miss(window_id: str) -> tuple[int, int] | None:
+    """取走"上次点偏了多少"（同上，只报一次）。"""
+    with _lock:
+        if _state is None:
+            return None
+        return _state.click_miss.pop(window_id, None)
+
+
+def take_grid_hint(window_id: str) -> bool:
+    """上一次点偏了没有（取了就清，只影响紧接的那一张图）。"""
+    with _lock:
+        if _state is None:
+            return False
+        if window_id in _state.grid_hint:
+            _state.grid_hint.discard(window_id)
+            return True
+        return False
 
 
 def reset_for_tests() -> None:

@@ -2313,85 +2313,6 @@ def api_session_model_set():
         return jsonify({"ok": False, "error": "%s: %s" % (type(e).__name__, e)}), 500
 
 
-@app.route("/api/session-workspace")
-def api_session_workspace_get():
-    """这一段对话的工作目录。
-
-    入参：`?storage_id=`（那一段的存储 id；缺省，用当前绑定的那段）。
-
-    判据全在 `core/session_workspace.py`（`describe`）—— 这一条只是把它
-      接上网，一个字都不自己判。
-    不碰写侧：这是一条纯读口。
-    `default_dir` 与 `path` 分开给 —— 界面要说得出"你这个是选的还是
-      默认的"（用户点了「用默认」之后，界面如果还写着某个目录名，
-      他就不知道那个按钮到底生效没有）。
-    """
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    sid = str(request.args.get("storage_id") or "").strip()
-    try:
-        from core import session_workspace as _sw
-        from core.workspace import default_output_dir
-        info = _sw.describe(sid) if sid else {"path": "", "is_set": False,
-                                              "source": "default"}
-        return jsonify({
-            "ok": True,
-            "storage_id": sid,
-            "path": info["path"],
-            "is_set": info["is_set"],
-            "source": info["source"],
-            #: 没选时要落在哪儿 —— 界面那行字要写得出一个真路径，
-            #:   而不是空白（"没选"与"落在默认工作区"是两件事，用户要看后者）。
-            "default_dir": str(default_output_dir()),
-        })
-    except Exception as e:                                       # noqa: BLE001
-        return jsonify({"ok": False, "error": "%s: %s" % (type(e).__name__, e)})
-
-
-@app.route("/api/session-workspace", methods=["POST"])
-def api_session_workspace_set():
-    """把这一段的工作目录设成某个目录（`path` 空串 = 切回「用默认工作区」）。
-
-    先校验、后落盘 —— 校验不过就不写：写进去的话，这一段每一处写
-      都会指着一个不存在的目录，而症状要到很远的地方才看得见
-      （标签在说谎）。判据只有一处：`session_workspace.check_dir`。
-
-    归属核对（与 `/api/session-model` 用的是同一个 `_desktop_thread`）——
-      端点收到的是客户端传来的 id，不核对的话这条路能给任意一段写一行。
-    """
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    data = request.get_json(silent=True) or {}
-    sid = str(data.get("storage_id") or "").strip()
-    path = str(data.get("path") or "").strip()
-    if not sid:
-        return jsonify({"ok": False, "error": tr("缺少 storage_id")}), 400
-    try:
-        from core import session_workspace as _sw
-        mm = _mem()
-        st = getattr(mm, "short_term", None) if mm is not None else None
-        if st is None:
-            return jsonify({"ok": False,
-                            "error": tr("记忆库未连接：框架未启动。")}), 503
-        ok, why = _desktop_thread(st, sid)
-        if not ok:
-            return jsonify({"ok": False, "error": why}), 404
-
-        if not path:
-            _sw.use_default(sid)
-            return jsonify({"ok": True, "path": "", "is_set": False,
-                            "message": tr("已切回默认工作区")})
-        good, why2 = _sw.check_dir(path)
-        if not good:
-            return jsonify({"ok": False, "error": why2}), 400
-        norm = _sw.set_for(sid, path)
-        return jsonify({"ok": True, "path": norm, "is_set": True,
-                        "message": tr("工作目录已改为 %s，下一条消息起生效。")
-                                   % norm})
-    except Exception as e:                                       # noqa: BLE001
-        return jsonify({"ok": False, "error": "%s: %s" % (type(e).__name__, e)}), 500
-
-
 @app.route("/api/mcp/install", methods=["POST"])
 def api_mcp_install():
     """Run an MCP install command in background subprocess.
@@ -4802,32 +4723,6 @@ def _make_qr_data_uri(data: str, size: int = 240) -> str:
         return f"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&data={quote(data)}"
 
 
-@app.route("/api/wechat/qrcode/status")
-def api_wechat_qrcode_status():
-    """Poll the scan status of a WeChat QR code directly from iLink.
-
-    Query params: qrcode=<key> (the qrcode value returned by /api/wechat/qrcode)
-    Returns: {ok, status: "wait"|"scaned"|"confirmed"|"expired", ...}
-    On "confirmed", also returns bot_token (masked) info.
-    """
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    qrcode_key = request.args.get("qrcode", "")
-    if not qrcode_key:
-        return jsonify({"error": "missing qrcode param"}), 400
-    try:
-        from channels.wechat_channel.auth import poll_qrcode_status
-        status = poll_qrcode_status(qrcode_key)
-        state = status.get("status", "")
-        result = {"ok": True, "status": state}
-        if state == "confirmed":
-            result["bot_id"] = status.get("ilink_bot_id", "")[:16] + "..."
-        return jsonify(result)
-    except Exception as e:
-        _log(f"[web] WeChat QR status poll failed: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route("/api/has-api-key")
 def api_has_api_key():
     """Check if at least one API key is configured."""
@@ -5029,21 +4924,6 @@ def api_env_keys_rename():
         prov["keys"][kid]["label"] = new_label
         _save_api_keys(store)
     return jsonify({"ok": True})
-
-
-@app.route("/api/key-labels")
-def api_key_labels():
-    """Return custom labels from the multi-key store (for backward compat)."""
-    # 它回的是多 key 仓库里的 key id 与标签
-    #   —— 别的 key 端点（activate / delete / rename）都按 id 认，给它守门。
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    store = _load_api_keys()
-    labels: dict = {}
-    for prov_key, prov_data in store.items():
-        for kid, kd in prov_data.get("keys", {}).items():
-            labels[kid] = kd.get("label", prov_key)
-    return jsonify(labels)
 
 
 # Settings
@@ -7522,57 +7402,6 @@ def api_set_primary_workspace(ws_id):
             _persist_workspaces(wm)
         return jsonify({"ok": ok})
     return jsonify({"ok": False, "error": "framework not running"}), 503
-
-
-@app.route("/api/workspace-index")
-def api_workspace_index():
-    """Return path index statistics."""
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    wm = _get_wm()
-    if wm:
-        return jsonify({"stats": wm.index_stats})
-    return jsonify({"stats": {"file_count": 0, "total_size_mb": 0, "last_built": ""}})
-
-
-@app.route("/api/workspace-index/rebuild", methods=["POST"])
-def api_rebuild_index():
-    """Rebuild the path index."""
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    wm = _get_wm()
-    if wm:
-        count = wm.build_index()
-        return jsonify({"ok": True, "stats": wm.index_stats})
-    return jsonify({"ok": False, "error": "framework not running"}), 503
-
-
-@app.route("/api/workspace-search")
-def api_workspace_search():
-    """Search files across workspaces (and cross-zone if enabled)."""
-    if not _check_token():
-        return jsonify({"error": "unauthorized"}), 403
-    q = request.args.get("q", "*")
-    scope = request.args.get("scope", "workspaces")
-    max_results = int(request.args.get("max", "200"))
-    wm = _get_wm()
-    if wm:
-        # `search_files` 返回三元组 (results, notice, action)。
-        # 只解包两个，只要这个端点被调用就 `ValueError` 500。
-        # 全仓目前没有任何调用方（前端也没有），所以一直没有暴露 ——
-        # 留着一个一定崩的端点不写注释，下一个人接上它就会以为是新 bug。
-        results, notice, _action = wm.search_files(
-            q, scope=scope, max_results=max_results)
-        return jsonify({
-            "results": [
-                {"name": r.name, "path": r.path, "ext": r.ext,
-                 "size": r.size, "modified": r.modified}
-                for r in results
-            ],
-            "notice": notice,
-            "count": len(results),
-        })
-    return jsonify({"results": [], "notice": None, "count": 0})
 
 
 def _persist_workspaces(wm) -> None:

@@ -87,6 +87,13 @@ def write_logo_and_icons() -> None:
                            (32, 32), (16, 16)])
         print("[asset] wrote", name)
 
+    #: Linux 的桌面集成要 PNG（AppImage / .desktop 的 Icon 键认它，
+    #:   512×512 是 electron-builder 对 linux 图标的下限）。
+    #:   与 `.ico` 同一次绘制 —— 改设计只改 `C_CELLS`，两边一起变。
+    png = _ROOT / "crannia.png"
+    _draw_logo(512).save(str(png), format="PNG")
+    print("[asset] wrote", png.relative_to(_ROOT))
+
 
 def main() -> int:
     write_logo_and_icons()

@@ -202,11 +202,18 @@ def test_child_env_is_whitelisted():
     `-I` 是隔离运行选项，不是环境清洗器 —— 这条测试钉的就是这个区别。
     """
     import os
+    import tempfile
+
+    #: 平台各有一种「临时目录」环境变量；把它塞进父进程，子进程必须原样
+    #: 看得到 —— 白名单里那一格（`temp` / `tmp` / `tmpdir`）就是为了这个。
+    temp_key = "TEMP" if sys.platform == "win32" else "TMPDIR"
+    temp_val = tempfile.gettempdir()
 
     keys = {
         "DEEPSEEK_API_KEY": "sk-test-should-not-leak",
         "FEISHU_APP_SECRET": "secret-should-not-leak",
         "HTTPS_PROXY": "http://user:pass@127.0.0.1:9",
+        temp_key: temp_val,
     }
     old = {k: os.environ.get(k) for k in keys}
     try:
@@ -217,7 +224,8 @@ def test_child_env_is_whitelisted():
             "print('K2=' + repr(os.environ.get('FEISHU_APP_SECRET')))\n"
             "print('K3=' + repr(os.environ.get('HTTPS_PROXY')))\n"
             "print('PATHOK=' + str(bool(os.environ.get('PATH') or os.environ.get('Path'))))\n"
-            "print('TEMPOK=' + str(bool(os.environ.get('TEMP') or os.environ.get('TMP'))))\n")
+            "print('TEMPOK=' + str(os.environ.get(%r) == %r))\n"
+            % (temp_key, temp_val))
     finally:
         for k, v in old.items():
             if v is None:

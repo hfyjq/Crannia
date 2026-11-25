@@ -937,7 +937,7 @@ def test_task_pills_nav() -> None:
             await pilot.pause()
             bar = app.query_one(StatusBar)
             tasks_cell = str(bar.query_one("#tasks").content)
-            check("2个后台" in tasks_cell and "1个子代理" in tasks_cell,
+            check("后台：2" in tasks_cell and "子代理：1" in tasks_cell,
                   f"两格应显示计数：{tasks_cell!r}")
 
             await pilot.press("down")
@@ -1409,6 +1409,82 @@ def test_btw_orphan_and_recap() -> None:
             await pilot.pause()
             last = str(transcript.children[-1].render())
             check("回顾：打包链已经收尾" in last, last)
+
+            # 5) 后台记忆事件：橙色一行；同一轮两条事件只多一行。
+            n_before = len(transcript.children)
+            app._on_event(ev(E.MEMORY_SAVED, count=3, names=["偏好"]))
+            app._on_event(ev(E.MEMORY_ORGANIZED, count=0, sessions=2))
+            await pilot.pause()
+            check(len(transcript.children) == n_before + 1,
+                  "两条记忆事件同轮只该多一行（共 %d 行）"
+                  % (len(transcript.children) - n_before))
+            last = str(transcript.children[-1].render())
+            check("【记忆】" in last and "记忆已更新" in last, last)
+
+            # 6) ICE 金丝雀：红标一行（阻断，不是提示）。
+            n_before = len(transcript.children)
+            app._on_event(ev(E.ICE_CANARY, where="web_fetch", hits=["k1"]))
+            await pilot.pause()
+            check(len(transcript.children) == n_before + 1,
+                  "金丝雀事件要落一行")
+            rendered = transcript.children[-1].render()
+            last = str(rendered)
+            check("【ICE】金丝雀触发-已阻断" in last, last)
+            styles = [str(s.style) for s in getattr(rendered, "spans", [])]
+            check(any("red" in s for s in styles),
+                  "必须是红标：%r" % (styles,))
+    asyncio.run(scenario())
+
+
+def test_status_bar_labels_and_takeover() -> None:
+    """底栏那三格：常驻 模式/档位，条件 接管/后台/子代理；Esc 挪进活动横幅。"""
+    async def scenario() -> None:
+        app = _App(backend=FakeBackend())         # type: ignore[arg-type]
+        async with app.run_test(size=(120, 20)) as pilot:
+            await pilot.pause()
+            bar = app.query_one(StatusBar)
+            app._mode = "自动"
+            app._effort = "medium"
+            app._statusbar(busy=False)
+            await pilot.pause()
+            state = str(bar.query_one("#state").content)
+            tasks = str(bar.query_one("#tasks").content)
+            check("模式：" in state, f"常驻格子应用中文标签：{state!r}")
+            check("档位：" in state, f"档位标签：{state!r}")
+            check("接管" not in tasks, f"没开接管时不该占位：{tasks!r}")
+
+            app._mode = "完全权限"
+            app._effort = "high"
+            app._takeover = True
+            app._statusbar(busy=True)
+            app._set_takeover_title()
+            await pilot.pause()
+            state = str(bar.query_one("#state").content)
+            tasks = str(bar.query_one("#tasks").content)
+            check("模式：完全" in state, f"完全权限只显示「完全」：{state!r}")
+            check("完全权限" not in state, f"不该写全四个字：{state!r}")
+            check("接管中" not in tasks, f"接管不该再占底栏：{tasks!r}")
+            # 「接管中」在输入框边框的左上角（用户说的"对话框开头"）
+            comp = app.query_one("#composer", Composer)
+            check(str(comp.border_title) == "【接管中】",
+                  f"输入框边框标题应写接管中：{comp.border_title!r}")
+            from textual.color import Color
+            check(comp.styles.border_title_color == Color.parse("yellow"),
+                  f"应为黄色：{comp.styles.border_title_color!r}")
+            app._takeover = False
+            app._set_takeover_title()
+            check(not str(comp.border_title), "关掉接管后标题应清掉")
+
+            hint = str(bar.query_one("#hint").content)
+            check("Esc" not in hint, f"Esc 提示不该留在底栏：{hint!r}")
+            banner_w = app.query_one(StatusLine)
+            banner_w.begin()
+            banner_w._since -= 1.0          # 越过 750ms 的出现延迟
+            banner_w._tokens = 1234
+            banner = str(banner_w._build())
+            check("Esc" in banner and "中断" in banner,
+                  f"Esc 中断应跟到活动横幅：{banner!r}")
+            check("/ 1.2k token" in banner, f"token 读数应在前：{banner!r}")
     asyncio.run(scenario())
 
 
@@ -1448,6 +1524,7 @@ def main() -> int:
     test_btw_window()
     test_btw_defers_approval()
     test_btw_orphan_and_recap()
+    test_status_bar_labels_and_takeover()
     print(f"{_n} checks: {_n} passed, 0 failed")
     return 0
 

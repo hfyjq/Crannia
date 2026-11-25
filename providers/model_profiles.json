@@ -1,0 +1,629 @@
+{
+  "schema": 1,
+  "fetched": "2026-11-24",
+  "source": "official provider docs + local source audit, see 电脑接管-性能考察-2026-11-24.md 17/18",
+  "note": "模型能力差异表。只描述能力本身：能不能调工具、参数禁区、思考预算、wire 兼容位、别名与弃用。上下文窗口与单次输出上限仍由 window_table.json 管，缓存与图预算各有自己的表，不要在这里重复一份。按 provider 分组、模型名精确匹配优先；查不到的模型落 provider 的 _default，provider 也没有就落全局 _default。未知就写 unknown，不许拿相近模型的值填。",
+  "_default": {
+    "tool_call": "unknown",
+    "parallel_tool_call": "unknown",
+    "response_schema": "unknown",
+    "system_message": true,
+    "thinking": {
+      "supported": "unknown",
+      "efforts": [],
+      "budget_min": 0,
+      "budget_max": 0,
+      "budget_default": 0
+    },
+    "parameters": {
+      "temperature": "unknown",
+      "top_p": "unknown",
+      "top_k": "unknown",
+      "max_tokens": true,
+      "stop_sequences": true
+    },
+    "compat": {
+      "reasoning_field": "",
+      "max_tokens_field": "",
+      "cache_format": "",
+      "require_assistant_after_tool": false,
+      "supports_thinking_block_binding": "unknown",
+      "reports_finish_reason": false
+    },
+    "aliases": [],
+    "deprecated": false,
+    "status": "unknown",
+    "on_unsupported": {
+      "tool_call": "error",
+      "media": "degrade",
+      "parameter": "drop"
+    },
+    "note": "工具调用那格默认 error 是产品决定：接管全靠工具调用，不能像某些参照那样只记能力位却照发工具。媒体默认降级成文本并说清楚；不支持的采样参数直接不发，不报错。"
+  },
+  "providers": {
+    "anthropic": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": true,
+        "response_schema": true,
+        "system_message": true,
+        "thinking": {
+          "supported": true,
+          "efforts": [
+            "low",
+            "medium",
+            "high",
+            "max"
+          ],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": false,
+          "max_tokens": true,
+          "stop_sequences": true
+        },
+        "compat": {
+          "reasoning_field": "thinking",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "anthropic",
+          "require_assistant_after_tool": false,
+          "reports_finish_reason": true,
+          "supports_thinking_block_binding": true
+        },
+        "status": "active",
+        "note": "思考块不能单独打缓存标记；跨模型切换时必须清掉 thinking 签名，否则上游 400。"
+      },
+      "models": {
+        "claude-opus-4-7": {
+          "parameters": {
+            "temperature": false,
+            "top_p": false,
+            "top_k": false
+          },
+          "note": "这一代拒绝采样参数，temperature / top_p / top_k 一律不发。"
+        }
+      }
+    },
+    "openai": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": true,
+        "response_schema": true,
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": false,
+          "max_tokens": true,
+          "stop_sequences": true
+        },
+        "compat": {
+          "reasoning_field": "reasoning",
+          "max_tokens_field": "",
+          "cache_format": "openai_native",
+          "require_assistant_after_tool": false,
+          "reports_finish_reason": false,
+          "supports_thinking_block_binding": "unknown"
+        },
+        "status": "active",
+        "note": "新代际用 max_completion_tokens，旧模型用 max_tokens；不要同时发两个。端配置的「其他」卡映射到这一家，但上游未必是 OpenAI，未知字段落 unknown 而不是照抄 true。所以这两格只在 models 里按官方模型逐个给，provider 默认留空/false。"
+      },
+      "models": {
+        "gpt-5": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        },
+        "gpt-4.1": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        },
+        "gpt-4o": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        },
+        "o1": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        },
+        "o3": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        },
+        "o4": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        },
+        "chatgpt": {
+          "compat": {
+            "max_tokens_field": "max_completion_tokens",
+            "reports_finish_reason": true
+          }
+        }
+      }
+    },
+    "azure": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": true,
+        "response_schema": true,
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": false,
+          "max_tokens": true,
+          "stop_sequences": true
+        },
+        "compat": {
+          "reasoning_field": "reasoning",
+          "max_tokens_field": "max_completion_tokens",
+          "cache_format": "openai_native",
+          "require_assistant_after_tool": false,
+          "reports_finish_reason": true,
+          "supports_thinking_block_binding": "unknown"
+        },
+        "status": "active",
+        "note": "与 OpenAI 同族，但需要按部署名判断真实模型；查不到就落未知。"
+      }
+    },
+    "deepseek": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": true,
+          "efforts": [
+            "low",
+            "high"
+          ],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": false,
+          "top_p": false,
+          "top_k": false,
+          "max_tokens": true,
+          "stop_sequences": false
+        },
+        "compat": {
+          "reasoning_field": "reasoning_content",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "推理模型不接受 temperature / top_p / presence_penalty 一类采样参数，发了不报错但不生效；这里落 false 直接不发。思维链字段叫 reasoning_content，且在下一轮不要回传。"
+      }
+    },
+    "qwen": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "reasoning_content",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "alibaba",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "工具定义上的缓存标记会被忽略；tools 的顺序与字段结构必须逐次一致。兼容端点用 enable_thinking 一类开关，不同代际字段名不同，落 unknown 而不是猜。"
+      }
+    },
+    "zhipu": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "这套能力表里有 supportsToolCall 与 supportsJsonSchemaOutput 等字段，但公开文档对具体模型的差异不完整，不按相似模型补。"
+      }
+    },
+    "moonshot": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "兼容端点明确不支持显式的缓存断点，写了会 400。K2 系列即将下线，别按 K3 的能力推 K2。"
+      }
+    },
+    "gemini": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": true,
+        "response_schema": true,
+        "system_message": true,
+        "thinking": {
+          "supported": true,
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": false,
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_output_tokens",
+          "cache_format": "cached_content",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "思考用 thinkingConfig，不是 thinking / reasoning 字段。图像按分块计 token，没有长边硬上限。"
+      },
+      "models": {
+        "gemini-3": {
+          "parameters": {
+            "temperature": false,
+            "top_p": false,
+            "top_k": false
+          },
+          "note": "这一代禁采样参数；匹配按模型名包含关系，见解析器的最长优先规则。"
+        }
+      }
+    },
+    "grok": {
+      "_default": {
+        "tool_call": true,
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": "unknown",
+          "top_p": "unknown",
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "缓存命中不保证，只有会话路由键；没有断点概念。采样参数没有统一公开口径，落 unknown。"
+      }
+    },
+    "minimax": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": "unknown",
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": "unknown",
+          "top_p": "unknown",
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "第一方接口说是全自动缓存，兼容接口参数表里没有缓存标记字段。工具调用没有统一公开口径，落 unknown，按 on_unsupported 处理。"
+      }
+    },
+    "hunyuan": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": "unknown",
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": "unknown",
+          "top_p": "unknown",
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "active",
+        "note": "隐式 KV Cache，用请求体缓存键与会话头复用；最小长度、TTL、能否关闭均未找到口径。"
+      }
+    },
+    "volcengine": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": "unknown",
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": "unknown",
+          "top_p": "unknown",
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": true
+        },
+        "status": "unknown",
+        "note": "按模型区分隐式与显式缓存；旧上下文缓存接口待下线且不支持 tools。关键数值没有公开口径，落 unknown。"
+      }
+    },
+    "siliconflow": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": "unknown",
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": "unknown",
+          "top_p": "unknown",
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": false
+        },
+        "status": "unknown",
+        "note": "聚合平台，能力随底层模型。未公开是否透传上游缓存标记，落 unknown。"
+      }
+    },
+    "openrouter": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": "unknown",
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": "unknown",
+          "top_p": "unknown",
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": false
+        },
+        "status": "unknown",
+        "note": "聚合平台，规则随底层模型，max_tokens 字段名也不能替底层决定，全部落 unknown。"
+      }
+    },
+    "ollama": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": false
+        },
+        "status": "active",
+        "note": "本地运行时，能力随所拉的模型而变；兼容接口不支持缓存块。会话键做路由，窗口默认值有两套官方说法，不在本表决定。"
+      }
+    },
+    "lmstudio": {
+      "_default": {
+        "tool_call": "unknown",
+        "parallel_tool_call": "unknown",
+        "response_schema": "unknown",
+        "system_message": true,
+        "thinking": {
+          "supported": "unknown",
+          "efforts": [],
+          "budget_min": 0,
+          "budget_max": 0,
+          "budget_default": 0
+        },
+        "parameters": {
+          "temperature": true,
+          "top_p": true,
+          "top_k": "unknown",
+          "max_tokens": true,
+          "stop_sequences": "unknown"
+        },
+        "compat": {
+          "reasoning_field": "",
+          "max_tokens_field": "max_tokens",
+          "cache_format": "",
+          "require_assistant_after_tool": false,
+          "supports_thinking_block_binding": "unknown",
+          "reports_finish_reason": false
+        },
+        "status": "active",
+        "note": "本地运行时，token 缓存默认开并在响应里报数；能力随所加载模型而变，落 unknown。"
+      }
+    }
+  }
+}

@@ -464,6 +464,9 @@ class AnthropicProvider(BaseProvider):
         temperature: "float | None" = None,
     ) -> ChatResponse:
         """向 Claude 发一条同步消息。"""
+        from core import model_profiles as _profiles
+        messages = _profiles.sanitize_for_wire(
+            messages, self._provider_name, self._model)
         system_prompt, api_messages = self._to_anthropic_messages(
             messages, system=system
         )
@@ -569,6 +572,9 @@ class AnthropicProvider(BaseProvider):
         temperature: "float | None" = None,
     ) -> AsyncIterator[StreamChunk]:
         """流式接收 Claude 的回复。"""
+        from core import model_profiles as _profiles
+        messages = _profiles.sanitize_for_wire(
+            messages, self._provider_name, self._model)
         system_prompt, api_messages = self._to_anthropic_messages(
             messages, system=system
         )

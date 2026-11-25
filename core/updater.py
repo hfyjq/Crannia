@@ -1438,7 +1438,9 @@ class UpdateInstaller:
 
         if sys.platform != "win32":
             _update_state["status"] = "error"
-            _update_state["error"] = "更新只支持 Windows 安装包。"
+            #: 拒，但要给路线：本平台没有内置换装器，去 Releases 下新版本。
+            _update_state["error"] = (
+                "内置更新只支持 Windows 安装包；本平台请到 Releases 页面下载新版本。")
             _UPDATING = False
             return
 

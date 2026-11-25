@@ -35,7 +35,7 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 //: 仓根（`apps/desktop/` 往上两级）。
@@ -94,6 +94,8 @@ const SHELL_FILES = [
   //:   `path.join(__dirname, "../../crannia.ico")` —— 打包后那正好是
   //:   asar 根的 `crannia.ico`，所以这一条要的是 asar 根，不是 `apps/desktop/`。
   "crannia.ico",
+  //: Linux/macOS 的窗口与托盘图标（`main.cjs::APP_ICON` 按平台选）。
+  "crannia.png",
   //: 前端产物（`npm run build` 出的那个）。不在 git 里，打包前必须先 build。
   "apps/desktop/dist/**/*",
   "package.json",
@@ -110,9 +112,12 @@ export default {
   productName: "Crannia",
   artifactName: "crannia-${version}-${os}-${arch}.${ext}",
 
-  //: 应用图标。不写这一条时，构建日志会出现
-  //:   `default Electron icon is used`（装出来的 exe 是 Electron 默认图标）。
-  icon: join(ROOT, "crannia.ico"),
+  //: 应用图标。用 PNG（512x512）：Linux 的 AppImage 图标工具只认 PNG/SVG，
+  //:   而它会同时拿全局 icon 去生成图标集 —— 指 .ico 时 Linux 打包直接失败
+  //:   （`Unsupported input format ".ico"`）。
+  //:   Windows 的 .ico 由 electron-builder 从这张 PNG 转出来；运行时窗口/托盘
+  //:   图标仍走 `main.cjs::APP_ICON`（Windows 读 asar 里那份 `crannia.ico`）。
+  icon: join(ROOT, "crannia.png"),
 
   //: 产物目录不入库（几十上百 MB）—— `.gitignore` 里有它。
   directories: { output: join(ROOT, "apps", "desktop", "release") },
@@ -152,9 +157,43 @@ export default {
   //:   PATH 目录（`%LOCALAPPDATA%\Microsoft\WindowsApps`）的那一份。
   //:   代码在 `resources/app/tui`、解释器在 `resources/primary-runtime` ——
   //:   启动器自己认这个布局（见 `tui/crannia.cmd` 的 A0 段）。
+  //:   Linux 那份是 `bin/crannia.sh`（同一个布局，同一个启动器判据）。
   extraFiles: [
     { from: join(ROOT, "tui", "crannia.cmd"), to: "bin/crannia.cmd" },
+    { from: join(ROOT, "tui", "crannia.sh"), to: "bin/crannia.sh" },
   ],
+
+  //: 打包前验一眼随包运行时是谁家的（2026-11-23，随 Linux target 进来）。
+  //:
+  //:   为什么必须有这一关：这台开发机是 Windows + WSL 共享一块盘，
+  //:   `prepare_runtime.py` 两个 target 都能组装，产物目录却是同一个 ——
+  //:   后组装的会顶掉先组装的。没有这道闸，Windows 安装包会静默带上
+  //:   一份 Linux 解释器（或反过来），装机后后端起不来，而离根因隔着一整次打包。
+  //:   runtime.json 里那份 `platform` 是组装时按锁写的（不是构建机猜的）。
+  //:   文件不在 = 还没跑过 `prepare_runtime.py` —— 维持原状（那条
+  //:   extraResources 会静默什么都不加，配置头注释里记着），不在这里加码。
+  beforePack: async (context) => {
+    const manifest = join(ROOT, "apps", "desktop", "runtime",
+                          "primary-runtime", "runtime.json");
+    if (!existsSync(manifest)) return;
+    let plat = "";
+    try {
+      plat = String(JSON.parse(readFileSync(manifest, "utf8")).platform || "");
+    } catch {
+      throw new Error(`runtime.json 读不出来：${manifest} —— 先重跑 prepare_runtime.py`);
+    }
+    // `context.electronPlatformName` 是这次打包的目标；`process.platform`
+    //   是构建机自己的平台。交叉打包时两者不同，要判目标。
+    const want = (context && context.electronPlatformName)
+      || (process.platform === "win32" ? "win32"
+        : process.platform === "darwin" ? "darwin" : "linux");
+    if (plat && plat !== want) {
+      throw new Error(
+        `随包运行时是给 ${plat} 组装的，而这次打包目标平台是 ${want}。\n` +
+        `  先跑 .venv/Scripts/python.exe scripts/prepare_runtime.py（win）或 ` +
+        `在 Linux 上跑 … --target linux-x64，再打包。`);
+    }
+  },
 
   //: 只保留中英两个 Chromium 语言包（2026-11-15）。
   //:   判据：`locales/` 解包后 49 MB，而应用只用到 zh-CN / en-US
@@ -165,7 +204,20 @@ export default {
   //: 三个平台都留着（当前只验 Windows）。`nsis` 不做任何定制 —— 见文件头判据 1。
   win: { target: ["nsis"] },
   mac: { target: ["dmg", "zip"], category: "public.app-category.productivity" },
-  linux: { target: ["AppImage"], category: "Utility" },
+  //: Linux 的图标要 PNG（`.ico` 那一份 AppImage 认不了；512×512 是下限），
+  //:   与 `crannia.ico` 同一次绘制（`scripts/make_brand_assets.py`，一处定义）。
+  linux: {
+    target: ["AppImage"],
+    category: "Utility",
+    icon: join(ROOT, "crannia.png"),
+    //: `${arch}` 在 Linux 上是 `x86_64`，而我们的产物命名（与发布链、
+    //:   `make_release.py` 的查找规则）统一用 `x64` —— 在这里钉死，
+    //:   免得同一版在三个平台上长得不一样。
+    artifactName: "crannia-${version}-linux-x64.${ext}",
+    //: `.desktop` 文件名与 `desktopName`（package.json）对齐 —— 否则桌面环境
+    //:   可能不把运行中的窗口关联到这个条目（任务栏图标/分组对不上）。
+    syncDesktopName: true,
+  },
   nsis: {
     oneClick: false,
     perMachine: false,

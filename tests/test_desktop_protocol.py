@@ -427,8 +427,13 @@ URL 那几条只能在 `raw` 上查。
     out.append(("`net` 从 electron 里 require 进来",
                 re.search(r'const\s*\{[^}]*\bnet\b[^}]*\}\s*=\s*require\("electron"\)',
                           body) is not None, ""))
-    out.append(("`backendReady` 在 `/ping` 成功那一支置位",
+    out.append(("`backendReady` 在就绪探测成功那一支置位",
                 re.search(r"backendReady = true", body) is not None, ""))
+    #: 接入已有后端那条路也必须置位。漏了它，页面里所有转发答 503，
+    #:   而外壳资源照常 —— 症状是 logo 裂图、状态值一片空白，什么都不红。
+    out.append(("接入已有后端也置位 `backendReady`",
+                re.search(r"async function attachExistingBackend[\s\S]*?backendReady = true",
+                          body) is not None, ""))
     # 令牌改由壳自己生成（不再从 `/ping` 解析 ——
     #:   审计第 2 条）。这条从"解析那一步"改钉"生成那一步"。
     out.append(("★ 启动令牌由壳自己生成（`crypto.randomBytes`）",

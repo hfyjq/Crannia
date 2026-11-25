@@ -22,6 +22,8 @@ import { activityAnchorIndex, classifyReply, replyAnchorIndex } from "./message-
 import { liveEventBelongs, visibleThreads, viewKeyOf } from "./thread-list.js";
 //: 「还贴着底吗」—— 自动跟随的唯一判据（用户）。
 import { nextStick } from "./scroll.js";
+//:任务浮窗的用时：服务端快照 + 本地走过的这段时间（纯函数，node 有行为读者）。
+import { liveElapsedMs } from "./task-timing.js";
 import { ActivityBlock } from "./ActivityBlock.jsx";
 import { MemoryLibrary } from "./MemoryLibrary.jsx";
 import { SettingsTransfer } from "./SettingsTransfer.jsx";
@@ -195,7 +197,7 @@ function _tokenLabel(n) {
 //:这一格的任务对象不许叫 `t`：`t` 是本模块的翻译函数，
 //:   参数遮住它之后 `t("点一下收起")` 就变成"拿一个对象当函数调"
 //:，渲染即抛 `TypeError: t is not a function`（浮窗一打开整页崩）。
-function TaskRow({ task, expandable }) {
+function TaskRow({ task, expandable, fetchedAt, now }) {
   const [open, setOpen] = useState(false);
   const label = task.description || task.command || task.task_id || "";
   const clickable = expandable && !!(task.command || task.description);
@@ -205,7 +207,7 @@ function TaskRow({ task, expandable }) {
          title={clickable ? (open ? t("点一下收起") : t("点一下看完整命令")) : ""}>
       <div className="task-row-head">
         <span className={"task-row-name" + (open ? " open" : "")}>{label}</span>
-        <span className="task-row-ms">{_elapsedLabel(task.elapsed_ms)}</span>
+        <span className="task-row-ms">{_elapsedLabel(liveElapsedMs(task, fetchedAt, now))}</span>
         {task.output_tokens > 0 ? (
           <span className="task-row-ms task-row-tokens">{_tokenLabel(task.output_tokens)}</span>
         ) : null}
@@ -224,6 +226,15 @@ function TaskPanel({ which, tasks, onClose }) {
   const list = which === "bg" ? ((tasks && tasks.background) || [])
                               : ((tasks && tasks.subagents) || []);
   const title = which === "bg" ? t("后台任务") : t("子代理");
+  //:面板开着时本地走钟：服务端那份 `elapsed_ms` 是拉取那一刻的读数，
+  //:  不推的话开着的面板整个冻住（点开一次，时间就停在那里）。
+  //:每秒只重画这个浮窗，不重新请求 `/api/tasks` —— 列表由事件驱动刷新。
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);   // 关掉浮窗即停，不留后台定时器
+  }, []);
+  const fetchedAt = tasks && tasks.fetched_at;
   return (
     <section className="ctx-panel task-panel">
       <div className="ctx-panel-head">
@@ -236,7 +247,10 @@ function TaskPanel({ which, tasks, onClose }) {
         <p className="ctx-menu-note">{t("现在没有在跑的{title}", { "title": title })}</p>
       ) : (
         <div className="ctx-panel-body">
-          {list.map((task) => <TaskRow key={task.task_id} task={task} expandable={which === "bg"} />)}
+          {list.map((task) => (
+            <TaskRow key={task.task_id} task={task} expandable={which === "bg"}
+                     fetchedAt={fetchedAt} now={now} />
+          ))}
         </div>
       )}
     </section>
@@ -1728,6 +1742,27 @@ function AppInner({ client }) {
                                      role: "recap", content: text }]));
     }));
 
+    // 后台记忆动过：在本轮那条回复的脚注上挂一行深绿小字。
+    //   两条事件（抽取写入 / 巩固改动）说的是同一件事：用户要知道的是
+    //   "记忆更新过"，不是"哪一道工序" —— 同一句，重复事件不叠字。
+    //   只画正在看的那一段：`d.session` 是存储 id，别的对话的记忆不该长在这屏。
+    const markMemoryUpdated = (d) => {
+      if (!d || !d.session) return;
+      if (String(d.session) !== String(viewKeyRef.current)) return;
+      setMessages((x) => {
+        for (let i = x.length - 1; i >= 0; i -= 1) {
+          if (x[i].role !== "assistant") continue;
+          if (x[i].memUpdated) return x;
+          const next = x.slice();
+          next[i] = { ...x[i], memUpdated: true };
+          return next;
+        }
+        return x;
+      });
+    };
+    offs.push(client.subscribe("memory.saved", markMemoryUpdated));
+    offs.push(client.subscribe("memory.organized", markMemoryUpdated));
+
     //:面板开着时，每轮收尾刷一次（判据同 WebUI：`if (_ctxPanelOpen) loadContextReport();`）。
     //:关着就不刷 —— 那是纯税：面板不在屏上，读出来的数没人看。
     offs.push(client.subscribe("task.end", () => { if (ctxOpenRef.current) loadCtxReport(); }));
@@ -2482,7 +2517,10 @@ function AppInner({ client }) {
     try {
       const gid = chatGroupRef.current ? chatGroupRef.current.id : "";
       const url = gid ? `/api/tasks?group=${encodeURIComponent(gid)}` : "/api/tasks";
-      setTasks(await client.call(url));
+      const data = await client.call(url);
+      //:基准时刻 = 响应到达这一刻；浮窗据此把 `elapsed_ms` 往后推。
+      //:不记它的话，面板开着时那个数就冻在快照上。
+      setTasks({ ...data, fetched_at: Date.now() });
     } catch (e) {
       setTasks({ error: (e && e.message) || t("取不到任务列表") });
     }
@@ -3686,6 +3724,11 @@ function Message({ data, star, logo, avatar, client, group, onWithdraw }) {
                   }}>
             <Copy size={13} />{copyNote || t("复制")}
           </button>
+        ) : null}
+        {/* 后台记忆动过的回执：与时间 / 收藏 / 复制同一排，深绿小字。
+            挂在脚注里而不是另起一行 —— 它是一条轻回执，不值得占一整行。 */}
+        {data.memUpdated ? (
+          <span className="msg-memory">{t("【记忆已更新】")}</span>
         ) : null}
       </div>
     </div>

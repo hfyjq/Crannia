@@ -96,7 +96,10 @@ EVT_APPROVAL_REQUEST = "approval.request"    # 有新的待审批：{request_id,
 EVT_APPROVAL_RESOLVED = "approval.resolved"  # 已结算/已失效：{request_id,choice}
 
 # 异常
-EVT_RETRY = "retry"               # 通用重试（仍未用；LLM 连接重试走下面那一对）
+#
+# `retry` 这个常量已删（2026-11-24，接线复核的 C 组）：它从写下那天起零 emit 点，
+# 唯一的重试通道是下面 `llm.retry` 那一对。删掉而不是留着，是判据本身的要求 ——
+# 一个声明了却永远不会发生的事件类型，会让读事件流的人以为这条路上有东西。
 EVT_ERROR = "error"               # 阶段抛异常
 EVT_RESYNC = "resync"             # 客户端 seq 缺口过大，必须重建
 
@@ -357,7 +360,6 @@ DURABLE_TYPES: frozenset[str] = frozenset({
     EVT_SAY,
     EVT_TOOL_START,
     EVT_TOOL_END,
-    EVT_RETRY,
     EVT_ERROR,
     # 审批：进 DURABLE_TYPES 是因为它们成对出现
     # （request/resolved）。落盘之后"有 request 无 resolved"是可检测的孤儿 ——
@@ -551,7 +553,11 @@ class _DurableWriter(threading.Thread):
         self._fp = None
         self._day = ""
         self.dropped = 0
-        self._stop = threading.Event()
+        # 不能叫 `_stop`：那是 threading.Thread 的私有方法。3.11 的
+        # `join()` 会经由 `_wait_for_tstate_lock` 调它，被 Event 实例盖掉
+        # 之后 join 直接抛 TypeError —— 而那时正在收尾，队列里还剩事件。
+        # 3.12 起 threading 重写过，不再调这个方法，所以这个坑只在旧版踩得到。
+        self._stop_flag = threading.Event()
 
     def offer(self, ev: Event) -> None:
         if self._q.qsize() >= self.MAX_QUEUED:
@@ -560,14 +566,14 @@ class _DurableWriter(threading.Thread):
         self._q.put_nowait(ev)
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_flag.set()
         self._q.put_nowait(None)
 
     # -- thread body ------------------------------------------------
 
     def run(self) -> None:
         self._prune_old()
-        # 注意：不要用 while not self._stop.is_set() 做循环条件。
+        # 注意：不要用 while not self._stop_flag.is_set() 做循环条件。
         # 那样 stop() 一置位就会立刻跳出，把队列里还没落盘的事件全丢掉。
         # 正确做法是靠哨兵值退出 —— Queue 是 FIFO 的，所以哨兵之前入队的
         # 事件必定已经处理完。
@@ -701,8 +707,11 @@ class EventBus:
                 if writer is not None:
                     writer.offer(ev)
         except Exception as exc:                 # noqa: BLE001 — 兜底是刻意的
+            # 不许写 `type(exc)`：本函数的参数就叫 `type`（事件类型串），
+            # Python 会先绑参数，`type` 是个 str，这句自己抛 TypeError，
+            # 兜底反而把 emit 的调用方弄挂（Pyright 照出来的）。
             print(f"[events] emit failed for {type!r}: "
-                  f"{type(exc).__name__}: {exc}")
+                  f"{exc.__class__.__name__}: {exc}")
 
     def _get_writer(self) -> _DurableWriter | None:
         """懒启动落盘线程。没有 durable 事件就永远不启动。"""
@@ -893,7 +902,7 @@ __all__ = [
     "EVT_TASK_START", "EVT_TASK_END", "EVT_STEP_START", "EVT_STEP_END",
     "EVT_TURN_START", "EVT_TURN_END", "EVT_THINKING", "EVT_SAY",
     "EVT_TOOL_START", "EVT_TOOL_END", "EVT_DELTA",
-    "EVT_RETRY", "EVT_ERROR", "EVT_RESYNC",
+    "EVT_ERROR", "EVT_RESYNC",
     "EVT_LLM_RETRY", "EVT_LLM_RETRY_OK",
     "EVT_APPROVAL_REQUEST", "EVT_APPROVAL_RESOLVED",
     "EVT_CONTEXT_STATE",

@@ -32,11 +32,11 @@ from . import clipboard
 from . import events as E
 from .backend import Backend, BackendError
 from .client import EventStream
-from .commands import parse_command, short_path
+from .commands import model_command, parse_command, short_path, targets_full_access
 from .i18n import t
-from .ui import (ApprovalPanel, BtwPanel, Composer, HeaderBar, StatusBar,
-                 StatusLine, SuggestBar, TaskDetail, ToolCard, Transcript,
-                 UpdateHint, retry_label, services_label)
+from .ui import (ApprovalPanel, BtwPanel, Composer, HeaderBar, ModelEditPanel,
+                 StatusBar, StatusLine, SuggestBar, TaskDetail, ToolCard,
+                 Transcript, UpdateHint, retry_label, services_label)
 
 def _fmt_pct(v: float) -> str:
     """百分比：保留一位小数，整数就省掉 `.0`。
@@ -154,15 +154,29 @@ class CranniaApp(App):
         self._btw_orphan = False
         #: 这一轮是 `/recap`：回答按「recap/回顾：」那一行渲染。
         self._recap_pending = False
+        #: 本轮已经打过「记忆已更新」那一行了（存 `_turn_t0`）。
+        #: 抽取与巩固两条事件说的是同一件事，叠两行像出了两次问题。
+        self._memory_note_seen = 0.0
         #: 状态栏左半的档位。`show(busy=...)` 每轮都要重画右侧提示，
         #: 档位不能跟着清空 —— 它们不是这轮的属性。
         self._mode = ""
+        #: 模式的**键**（`manual` / `auto` / `plan` / `full_access`）。
+        #: 显示用中文名（`_mode`），判定必须用键 —— 英文界面里名字是英文。
+        self._mode_key = ""
         self._effort = ""
+        #: 等安全提示回答的那条 `/mode …`（非空 = 面板正占着那个槽）。
+        self._safety_cmd = ""
+        #: 本次运行里选过「开启，且不再询问」。不落盘：它是这一次运行的让步，
+        #: 重启之后重新问一次（完全权限的确认不该变成永久静音）。
+        self._safety_skip = False
         #: 底栏那格后台服务读数：文案 + 要不要染黄（关着 = 黄）。
         #: 由 `/api/status` 的 `background_services` / `channels_running` /
         #: `cron_jobs` 算出来，不在这边猜。
         self._services = ""
         self._services_warn = False
+        #: 接管开着没有。真相源在后端（`/api/computer-use/status`），
+        #: 这里只是每 5 秒同步一次的影子 —— 不许拿它当判据。
+        self._takeover = False
         #: 顶栏那行模型标签（"model（配置名）"）—— 轮末刷新时比对用。
         self._model_label = ""
         #: 顶栏那行档位 —— 与上面同理，变了才重画抬头。
@@ -223,6 +237,7 @@ class CranniaApp(App):
         yield StatusLine(id="status")
         yield SuggestBar("", id="suggest")
         yield TaskDetail(id="task-detail")
+        yield ModelEditPanel(id="model-edit")
         yield ApprovalPanel(id="approval")
         yield UpdateHint(id="update-hint")
         yield BtwPanel(id="btw-panel")
@@ -277,8 +292,14 @@ class CranniaApp(App):
         # 配置名只是给用户区分"哪一套 key"的，和模型名重复时纯属噪声。
         label = f"{model}（{name}）" if name and name.lower() not in model.lower() else model
         self._model_label = label
-        self._mode = str(status.get("mode_name") or "").strip()
-        self._effort = str(status.get("effort_name") or "").strip()
+        # 会话已冻结的那一档优先：`mode_name` / `effort_name` 是设置里写着的
+        #   默认值，用户 `/mode` `/effort` 换过之后它不会变（「标签在说谎」）。
+        self._mode = str(status.get("mode_session_name")
+                         or status.get("mode_name") or "").strip()
+        self._mode_key = str(status.get("mode_session")
+                             or status.get("mode_configured") or "")
+        self._effort = str(status.get("effort_session_name")
+                           or status.get("effort_name") or "").strip()
         self.query_one(HeaderBar).show(
             title="Crannia",
             version=str(status.get("version") or "").strip(),
@@ -414,6 +435,16 @@ class CranniaApp(App):
             text = ev.s("recap").strip()
             if text:
                 self._add_recap(text)
+            return
+
+        if ev.type in (E.MEMORY_SAVED, E.MEMORY_ORGANIZED):
+            # 后台记忆动过（写了几条 / 巩固改了几条）—— 同一句回执，一轮最多一行。
+            self._add_memory_note()
+            return
+
+        if ev.type == E.ICE_CANARY:
+            # 出站金丝雀被拦下：安全事实，红标一行（与「自动审查拦截」同一种标）。
+            self._add_ice_canary()
             return
 
         if ev.type == E.ERROR:
@@ -560,6 +591,10 @@ class CranniaApp(App):
         if self._btw_active:
             self._approval_deferred = True
             return
+        # 安全提示也占着输入框那个槽 —— 压到它答完再弹（同一套延后机制）。
+        if self._safety_cmd:
+            self._approval_deferred = True
+            return
         # 审批要占输入框那个槽；底栏详细页先收起来，别叠在一起。
         if self._nav:
             self._close_nav()
@@ -601,6 +636,11 @@ class CranniaApp(App):
             composer.focus()
 
     def on_approval_panel_answer(self, event: ApprovalPanel.Answer) -> None:
+        # 安全提示复用同一张面板，但回答归本地 —— 不许发到后端
+        #   （它没有对应的 `request_id`，发出去只会被当成一次不存在的审批）。
+        if self._safety_cmd:
+            self._resolve_safety_notice(event.choice)
+            return
         self._submit_approval(choice=event.choice, text=event.text)
 
     def _submit_approval(self, *, choice: str = "", text: str = "") -> None:
@@ -647,16 +687,33 @@ class CranniaApp(App):
             status = self.backend.get_json("/api/status")
         except Exception:                                # noqa: BLE001
             return
-        self.call_from_thread(self._apply_status, status or {})
+        # 接管状态是另一个端点（唯一真相源在那儿）。读不到就当"没开"——
+        #   它只影响底栏那一格，不影响任何授权判定。
+        takeover = False
+        try:
+            cu = self.backend.get_json("/api/computer-use/status") or {}
+            takeover = bool(cu.get("enabled"))
+        except Exception:                                # noqa: BLE001
+            takeover = False
+        self.call_from_thread(self._apply_status, status or {}, takeover)
 
-    def _apply_status(self, status: dict) -> None:
-        mode = str(status.get("mode_name") or "").strip()
-        effort = str(status.get("effort_name") or "").strip()
+    def _apply_status(self, status: dict, takeover: bool = False) -> None:
+        mode = str(status.get("mode_session_name")
+                   or status.get("mode_name") or "").strip()
+        self._mode_key = str(status.get("mode_session")
+                             or status.get("mode_configured") or "")
+        effort = str(status.get("effort_session_name")
+                     or status.get("effort_name") or "").strip()
         services, warn = services_label(status)
         services_changed = (services, warn) != (self._services,
                                                 self._services_warn)
         self._services, self._services_warn = services, warn
-        if mode != self._mode or effort != self._effort or services_changed:
+        takeover_changed = takeover != self._takeover
+        self._takeover = takeover
+        if takeover_changed:
+            self._set_takeover_title()
+        if (mode != self._mode or effort != self._effort or services_changed
+                or takeover_changed):
             self._mode, self._effort = mode, effort
             self._statusbar(busy=self._busy)
         # 顶栏的模型与档位也一样：在 GUI 里换了，这里不跟就是一直报旧值。
@@ -702,6 +759,9 @@ class CranniaApp(App):
         审批挂着的时候不响应 —— 那时"停下来"的语义是模糊的（停的是工具
         还是那轮对话？），而后端的中断只保证"下一次调模型之前停下"。
         """
+        if self.query_one(ModelEditPanel).is_open:
+            self._close_model_edit()
+            return
         if self._btw_active:
             self._close_btw()
             return
@@ -776,6 +836,32 @@ class CranniaApp(App):
         line.append((text or "").strip() or t("（没有内容）"))
         self.query_one(Transcript).add(line, classes="note")
 
+    def _add_memory_note(self) -> None:
+        """后台记忆动过 —— 单独一行，橙色。
+
+        一轮最多一行：`memory.saved`（写了几条）与 `memory.organized`
+        （巩固改了几条）说的是同一件事，各打一行会读成"出了两次问题"。
+        """
+        if self._memory_note_seen and self._memory_note_seen == self._turn_t0:
+            return
+        self._memory_note_seen = self._turn_t0
+        line = Text()
+        line.append(t("【记忆】"), style="#ff9800")
+        line.append(t("记忆已更新") + " · " + time.strftime("%H:%M"),
+                    style="#ff9800")
+        self.query_one(Transcript).add(line, classes="note")
+
+    def _add_ice_canary(self) -> None:
+        """出站金丝雀被拦下 —— 红标一行，与「自动审查拦截」同一种标。
+
+        判据：安全事实必须看得见（旧 WebUI 那一份走的是同一条：
+        `[ICE] 金丝雀触发 —— 已阻断`）。它是阻断，不是提示，所以点也染红。
+        """
+        line = Text()
+        line.append("● ", style="red")
+        line.append(t("【ICE】金丝雀触发-已阻断"), style="red")
+        self.query_one(Transcript).add(line, classes="note")
+
     def _note(self, text: str) -> None:
         self.query_one(Transcript).add(Text(text), classes="note")
 
@@ -814,6 +900,14 @@ class CranniaApp(App):
         if action == "desktop":
             self._note(t("这条命令在桌面端使用：TUI 不重画切换后的对话。"))
             return
+        if action == "chat":
+            _kind, _ref = model_command(payload)
+            if _kind == "set":
+                if self._busy:
+                    self._note(t("不可使用，上一轮回答尚未完成。"))
+                    return
+                self._open_model_edit(_ref)
+                return
         if action == "chat" and payload.lower().startswith("/btw"):
             # 题外话走一个独立窗口：不进转写区、也不占它的位置。
             # 跑着的时候不开 —— 那一问会被排到后面，窗口会在等别人的活。
@@ -829,8 +923,115 @@ class CranniaApp(App):
             self._recap_pending = True
         # 本地的 `/exit` `/cls` `/new` 上面就返回了；走到这里的是要交给后端的
         # 文本（普通消息，或者 `/skill` `/effort` 这类框架命令）。
+        #
+        # 切「完全权限」要先过一次安全提示（与 GUI 的 `SafetyNotice` 同义）。
+        # 只拦发送、不另实现切换 —— 命令本身仍由后端的 `_cmd_mode` 执行，
+        # 两条路不许有两套语义。
+        if (action == "chat" and targets_full_access(payload)
+                and not self._safety_skip and self._mode_key != "full_access"):
+            self._safety_cmd = payload
+            self._show_safety_notice()
+            return
         self._send(payload, new=self._pending_new, images=images)
         self._pending_new = False
+
+    def _show_safety_notice(self) -> None:
+        """切「完全权限」前的那一屏 —— 形状与审批面板一致，警告同 GUI。
+
+        默认落在「取消」上（回车不会误开）；数字键选、回车确认，
+        与审批表同一套键位。
+        """
+        from .approval import Option, Prompt
+
+        body = (t("安全提示") + "\n\n"
+                + t("您正在将框架运行模式切换至") + " " + t("完全权限")
+                + t("，此模式下 agent 将获得最大权限能力。 agent 的行动将不再询问您，"
+                    "仅有部分硬性边界生效。 请注意，您仍然是您的生产安全第一负责人。"))
+        prompt = Prompt(
+            request_id="local-full-access",
+            kind="safety",
+            body=body,
+            options=(Option("1", t("启用")),
+                     Option("2", t("启用，且不再询问")),
+                     Option("3", t("取消"))),
+            default_key="3",
+        )
+        self.query_one(ApprovalPanel).show_prompt(prompt)
+
+    def _resolve_safety_notice(self, choice: str) -> None:
+        """安全提示的回答：1 开 / 2 开且本次不再问 / 3 取消。"""
+        cmd = self._safety_cmd
+        self._safety_cmd = ""
+        self.query_one(ApprovalPanel).clear()
+        composer = self.query_one("#composer", Composer)
+        composer.display = True
+        if not composer.disabled:
+            composer.focus()
+        if not cmd or choice == "3":
+            self._note(t("已取消切换到完全权限"))
+            if cmd:
+                # 放回输入框 —— 取消不是"把你的命令吃掉"，改完还能再发。
+                composer.text = cmd
+                composer.move_cursor(composer.document.end)
+            return
+        if choice == "2":
+            self._safety_skip = True
+        self._send(cmd, new=self._pending_new, images=[])
+        self._pending_new = False
+        if self._approval_deferred:
+            self._approval_deferred = False
+            self._approval_requested()
+
+    # -- 模型配置编辑（`/model set`）-------------------------------
+
+    def _open_model_edit(self, ref: str) -> None:
+        """解析条目并弹出编辑面板。
+
+        密钥只从面板收：命令正文会进聊天记录，打错一个字就不再是命令。
+        """
+        ref = (ref or "").strip()
+        if not ref:
+            self._note(t("使用 /model set <编号|配置名|id> 修改现有配置。"))
+            return
+        try:
+            payload = self.backend.get_json("/api/model-configs")
+        except Exception as exc:                             # noqa: BLE001
+            self._note(t("读取模型配置失败：%s") % type(exc).__name__)
+            return
+        from . import profile
+
+        entries = profile._entries_from_cards(payload)
+        hit, why = profile._resolve(entries, ref)
+        if hit is None:
+            self._note(why or t("没有找到此配置"))
+            return
+        self.query_one("#composer", Composer).display = False
+        self.query_one(ModelEditPanel).show(hit)
+
+    def _close_model_edit(self) -> None:
+        self.query_one(ModelEditPanel).clear()
+        composer = self.query_one("#composer", Composer)
+        composer.display = True
+        composer.focus()
+
+    def on_model_edit_panel_submitted(self, event) -> None:
+        panel = self.query_one(ModelEditPanel)
+        body = {"id": event.entry_id}
+        body.update(event.values)
+        try:
+            code, text = self.backend.post_json(
+                "/api/model-configs/update", body)
+            data = json.loads(text or "{}")
+        except Exception as exc:                             # noqa: BLE001
+            panel.fail(type(exc).__name__)
+            return
+        if code == 200 and isinstance(data, dict) and data.get("ok"):
+            panel.finish()
+        else:
+            panel.fail(str((data or {}).get("error") or t("后端无应答")))
+
+    def on_model_edit_panel_closed(self, event) -> None:
+        self._close_model_edit()
 
     def on_composer_complete(self, event: Composer.Complete) -> None:
         """Tab：选择下移一格（与 ↓ 等价，给不习惯用方向键的人）。"""
@@ -938,10 +1139,26 @@ class CranniaApp(App):
             if not alive:
                 self._close_nav()
                 return
-        self.query_one(StatusBar).show_tasks(bg=len(bg), sub=len(sub),
-                                             focus=self._pill if self._nav else "")
+        self._refresh_task_cell()
         if self._nav == "detail":
             self._show_detail()
+
+    def _refresh_task_cell(self) -> None:
+        """重画底栏中间那两格（后台 / 子代理）—— 唯一一处。"""
+        bg = len(self._tasks.get("background") or [])
+        sub = len(self._tasks.get("subagents") or [])
+        self.query_one(StatusBar).show_tasks(
+            bg=bg, sub=sub, focus=self._pill if self._nav else "")
+
+    def _set_takeover_title(self) -> None:
+        """接管开着时，在输入框边框左上角写黄色的「【接管中】」。
+
+        放这里而不是底栏：底栏那三格在窄终端里会被挤掉（80 列时正好贴边），
+        而输入框的边框本来就空着 —— 它出现本身就是"正在接管"。
+        """
+        composer = self.query_one_optional("#composer", Composer)
+        if composer is not None:
+            composer.border_title = t("【接管中】") if self._takeover else ""
 
     def on_composer_nav(self, event: Composer.Nav) -> None:
         act, arg = event.action, event.arg
@@ -954,7 +1171,8 @@ class CranniaApp(App):
             self._nav = "pills"
             self._pill = "bg" if bg else "sub"
             composer.nav = "pills"
-            self.query_one(StatusBar).show_tasks(bg=bg, sub=sub, focus=self._pill)
+            self.query_one(StatusBar).show_tasks(
+                bg=bg, sub=sub, focus=self._pill)
             return
         if act == "switch":
             if not self._nav:
@@ -962,7 +1180,8 @@ class CranniaApp(App):
             self._pill = "sub" if self._pill == "bg" else "bg"
             if not (sub if self._pill == "sub" else bg):
                 self._pill = "bg" if self._pill == "sub" else "sub"
-            self.query_one(StatusBar).show_tasks(bg=bg, sub=sub, focus=self._pill)
+            self.query_one(StatusBar).show_tasks(
+                bg=bg, sub=sub, focus=self._pill)
             return
         if act == "leave" or act == "close":
             self._close_nav()
@@ -1148,8 +1367,12 @@ class CranniaApp(App):
 
     def _statusbar(self, *, busy: bool) -> None:
         pct = "—" if self._ctx_pct is None else f"{_fmt_pct(self._ctx_pct)}%"
+        # 「完全权限」在底栏只写「完全」—— 四个字那一格太宽，而这一格是常驻的。
+        mode = self._mode
+        if mode == "完全权限":
+            mode = t("完全")
         self.query_one(StatusBar).show(
-            mode=self._mode, effort=self._effort, busy=busy,
+            mode=mode, effort=self._effort, busy=busy,
             ctx=t("上下文：") + f"{pct}/{_fmt_pct(self._ctx_thr)}%",
             ctx_armed=self._ctx_armed,
             services=self._services, services_warn=self._services_warn)

@@ -210,6 +210,32 @@ def test_launcher_honours_the_pointer() -> None:
           "启动器没把更新根传下去")
 
 
+def test_launcher_sh_honours_the_pointer() -> None:
+    """Linux 启动器与 `.cmd` 同一套判据，外加一条换行检查。
+
+    CRLF 是这里唯一"看着没事、跑起来全错"的形态：bash 把行尾的 \\r 当成
+    命令的一部分，报错是 "No such file or directory"，而那个路径明明存在。
+    在 Windows 上编辑这个文件很容易把它变成 CRLF。
+    """
+    raw = (HERE / "crannia.sh").read_bytes()
+    if sys.platform == "win32" and b"\r\n" in raw:
+        #: Windows 检出会把工作区副本换成 CRLF（`core.autocrlf=true`），仓库里的
+        #: 字节仍是 LF。产物行尾由打包步骤兜（`make_tui_package._copy_posix_script`
+        #: 归一 + `verify()` 拦）—— 这里只对内容做断言，跳过也要出声。
+        print("SKIP  CRLF 检查：Windows 检出的工作区副本（core.autocrlf），"
+              "产物行尾由 make_tui_package 保证")
+    else:
+        check(b"\r\n" not in raw, "启动器用了 CRLF，bash 会把行尾的 \\r 当成命令")
+    sh = raw.replace(b"\r\n", b"\n").decode("utf-8")
+    check('if [ -f "$HERE/current" ]' in sh, "启动器没读 current")
+    check('RUN="$HERE/releases/$CUR"' in sh, "启动器没拼 release 目录")
+    check('cd -- "$RUN"' in sh, "启动器没切到 release 目录")
+    check('export CRANNIA_LAUNCH_ROOT=$HERE' in sh, "启动器没把更新根传下去")
+    check('export CRANNIA_LAUNCH_CWD' in sh, "启动器没把调用目录传下去")
+    check('export CRANNIA_INSTALLED=1' in sh, "独立包没标安装形态")
+    check('exec "$PY" -m crannia_tui' in sh, "启动器没 exec 到入口")
+
+
 def test_update_root_prefers_the_launcher_root() -> None:
     """更新根 = 启动器所在目录（有 releases/ 或 current 时），否则落回代码根。"""
     import os
@@ -374,12 +400,47 @@ def test_bundled_tui_refuses_to_self_update() -> None:
         check(rc == 1 and "随桌面端一起更新" in buf.getvalue(), buf.getvalue())
 
 
+def test_interrupt_during_install_leaves_no_incoming() -> None:
+    """Ctrl+C（BaseException）也要把 `.incoming-*` 清掉。
+
+    一次更新可能在拷几个 GB；只兜 `Exception` 的话，打断后整包暂存区留在盘上
+    （真机 2026-11-21：3 个共 8.7 GB）。
+    """
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "root"
+        (root / "releases").mkdir(parents=True)
+        payload = Path(td) / "pkg"
+        payload.mkdir()
+        (payload / "crannia_tui").mkdir()
+
+        orig = U._extract
+
+        def boom(src, dest):
+            raise KeyboardInterrupt()
+
+        U._extract = boom
+        try:
+            try:
+                U.install(payload, root=root, version="2.0.0")
+            except KeyboardInterrupt:
+                pass
+            else:
+                check(False, "KeyboardInterrupt should pass through")
+            left = [p.name for p in (root / "releases").iterdir()]
+            check(not any(n.startswith(".incoming-") for n in left),
+                  "no .incoming left after interrupt: %r" % left)
+        finally:
+            U._extract = orig
+
+
 def main() -> int:
     for fn in [test_dir_payload_install, test_zip_payload_and_sha,
+               test_interrupt_during_install_leaves_no_incoming,
                test_missing_markers_refused, test_same_version_needs_force,
                test_previous_is_recorded, test_retention_keeps_two,
                test_bad_current_name_is_ignored, test_command_surface,
                test_launcher_honours_the_pointer,
+               test_launcher_sh_honours_the_pointer,
                test_update_root_prefers_the_launcher_root,
                test_auto_update_installs_under_the_install_root,
                test_should_auto_update_only_for_the_standalone_layout,

@@ -30,14 +30,17 @@ _n = 0
 
 CARDS = [
     {"id": "gpt", "label": "GPT", "provider": "openai",
-     "base_url": "https://api.openai.com/v1", "default_model": "gpt-5"},
+     "base_url": "https://api.openai.com/v1", "default_model": "gpt-5",
+     "needs_key": True},
     # Anthropic 原生 SDK 自己补地址 —— manifest 里就是空串。
     {"id": "claude", "label": "Claude", "provider": "anthropic",
-     "base_url": "", "default_model": "claude-sonnet-4-5"},
+     "base_url": "", "default_model": "claude-sonnet-4-5",
+     "needs_key": True},
     {"id": "deepseek", "label": "Deepseek", "provider": "deepseek",
-     "base_url": "https://api.deepseek.com/v1", "default_model": "deepseek-flash"},
+     "base_url": "https://api.deepseek.com/v1",
+     "default_model": "deepseek-flash", "needs_key": True},
     {"id": "other", "label": "其他", "provider": "openai",
-     "base_url": "", "default_model": ""},
+     "base_url": "", "default_model": "", "needs_key": False},
 ]
 
 
@@ -320,6 +323,143 @@ def test_running_backend_is_written_through_the_endpoint() -> None:
     check(calls[1][1].get("id") == "cid-9", "默认那条用端点回的 id：%r" % (calls[1][1],))
 
 
+def test_missing_key_is_asked_again() -> None:
+    """`getpass` 回空串时要再问一次，别带着空 key 往下走。
+
+    真机上的形状：粘贴没接住 → 配置建出来但凭据是空的 → 联通测试带着
+    `not-needed` 占位串出门 → 上游回 "your api key ****eded is invalid"，
+    用户以为自己填错了，其实一个字符都没存。
+    """
+    run, seen = make_query()
+    keys = iter(["", "  sk-second  "])
+
+    def secret(_prompt: str) -> str:
+        try:
+            return next(keys)
+        except StopIteration:
+            return ""
+
+    ask = answers(["", "1", "", ""])
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = S.setup_command(python=Path("py"), home=Path("."),
+                             query_fn=run, ask=ask, secret=secret,
+                             interactive=True)
+    out = buf.getvalue()
+    check(rc == 0, out)
+    check("没读到输入" in out, "要说出来（不静默继续）：" + out)
+    code = [c for c in seen if "mc.create(" in c][0]
+    check("'sk-second'" in code,
+          "★ 第二次读到的 key 才是落库的那个（两端空白要去掉）：" + code)
+
+
+def test_missing_key_can_be_abandoned() -> None:
+    """第二次仍然是空 -> 问"要不要就这么存"；答 n 就一个字节都不落。"""
+    run, seen = make_query()
+    ask = answers(["", "1", "", "", "n"])
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = S.setup_command(python=Path("py"), home=Path("."),
+                             query_fn=run, ask=ask,
+                             secret=lambda _p: "", interactive=True)
+    out = buf.getvalue()
+    check(rc == 1, out)
+    check(not any("mc.create(" in c for c in seen),
+          "没保存就不该建配置：" + repr(seen))
+    check("没有保存" in out, out)
+
+
+def test_failed_probe_does_not_claim_confirmation() -> None:
+    """联通测试没通过时，结尾不许印"已确认"。
+
+    原来这条路上两句都印（"已保留，联通测试未通过" 紧跟 "已确认…"），
+    看上去像过了 —— 真机上就是这么误判成"测试通过了"的。
+    """
+    run, _ = make_query(probe_results=[False])
+    ask = answers(["", "1", "", "", "0"])
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = S.setup_command(python=Path("py"), home=Path("."),
+                             query_fn=run, ask=ask,
+                             secret=lambda p: "sk", interactive=True)
+    out = buf.getvalue()
+    check(rc == 0, out)
+    check("已保留" in out, out)
+    check("已确认" not in out, "★★ 没测通就不许说「已确认」：" + out)
+    check("联通测试没通过" in out and "crannia setup" in out,
+          "要说清保存了什么、下一步怎么重试：" + out)
+
+
+def test_card_labels_follow_the_interface_language() -> None:
+    """四张带中文的卡（火山引擎 / 腾讯混元 / Ollama（本地）/ 其他）要跟着界面语言走。
+
+    卡名来自后端 `model_configs.CARDS`，界面不抄一份 —— 所以漏翻时屏幕上就是
+    中文混在英文里，正是这一条要钉住的形态。品牌名（GPT / Claude）查不到译文，
+    原样显示也不算漏。
+    """
+    from crannia_tui import i18n as I
+
+    cards = CARDS + [
+        {"id": "volcengine", "label": "火山引擎", "provider": "volcengine",
+         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+         "default_model": "doubao-seed-1-6"},
+        {"id": "hunyuan", "label": "腾讯混元", "provider": "hunyuan",
+         "base_url": "https://api.hunyuan.cloud.tencent.com/v1",
+         "default_model": "hunyuan-turbos-latest"},
+    ]
+
+    seen: list[str] = []
+
+    def run(code: str, timeout: float = 25.0) -> str:
+        seen.append(code)
+        if "mc.card_defaults" in code:
+            return json.dumps(cards, ensure_ascii=False)
+        if "mc.default_id()" in code:
+            return json.dumps({"default": "", "name": "", "model": ""},
+                              ensure_ascii=False)
+        if "mc.create(" in code:
+            return json.dumps({"ok": True, "id": "m12345678"})
+        if "mc.set_default(" in code:
+            return json.dumps({"ok": True})
+        if "mc.probe(" in code:
+            return json.dumps({"ok": True, "kind": "", "error": ""},
+                              ensure_ascii=False)
+        raise AssertionError("没有预料到的子进程调用：" + code)
+
+    I.configure("en", home=HERE.parent)
+    try:
+        check(S._card_label({"label": "火山引擎"}) == "Volcengine",
+              "卡名要过译文表：%r" % (S._card_label({"label": "火山引擎"}),))
+        asked: list[str] = []
+
+        def pick_ask(prompt: str) -> str:
+            asked.append(prompt)
+            if len(asked) > 1:
+                raise AssertionError("按译名选不中，又问了一遍：" + prompt)
+            return "Tencent Hunyuan"
+
+        picked = S._pick_card(cards, pick_ask)
+        check(picked.get("id") == "hunyuan", "按译名要能选中：" + repr(picked))
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            #: 走一遍完整引导，选卡也用译名（`Tencent Hunyuan`）。它的 id 是
+            #: `hunyuan`、原文是 `腾讯混元` —— 不认译名就选不中。
+            rc = S.setup_command(python=Path("py"), home=Path("."),
+                                 query_fn=run,
+                                 ask=answers(["", "Tencent Hunyuan", "", ""]),
+                                 secret=lambda p: "sk", interactive=True)
+        out = buf.getvalue()
+    finally:
+        I.configure(None)
+    check(rc == 0, out)
+    check("Volcengine" in out, "列表要印译名：" + out)
+    check("火山引擎" not in out, "英文界面上不该留中文卡名：" + out)
+    code = [c for c in seen if "mc.create(" in c][0]
+    check("'hunyuan'" in code, "选中的是混元那张卡：" + code)
+    check("'Tencent Hunyuan'" in code, "配置名默认也用译名：" + code)
+
+
 def main() -> int:
     S._live_endpoint = lambda *_a: None   # 测试不联网、不探测端点
     for fn in [test_needs_setup, test_plain_card_flow,
@@ -331,6 +471,10 @@ def main() -> int:
                test_probe_failure_skip_keeps_and_defaults,
                test_existing_default_can_be_kept,
                test_non_interactive_refuses,
+               test_missing_key_is_asked_again,
+               test_missing_key_can_be_abandoned,
+               test_failed_probe_does_not_claim_confirmation,
+               test_card_labels_follow_the_interface_language,
                test_running_backend_is_written_through_the_endpoint,
                test_snippets_prepare_the_data_root]:
         fn()

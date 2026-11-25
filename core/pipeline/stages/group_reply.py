@@ -42,22 +42,10 @@ def _log(msg: str) -> None:
     print("[group] " + msg)
 
 
-#: 上 wire 的字段白名单。 `kind` / `speaker` / `avatar` 是我们给界面看的，
-#: 不是给上游 API 的 —— 严格一点的 OpenAI 兼容端点会对未知消息字段报错。
-#: `tool_calls` / `tool_call_id` / `reasoning_content` 必须留（它们是协议/思考回传）。
-_WIRE_FIELDS = frozenset({
-    "role", "content", "tool_calls", "tool_call_id", "name", "reasoning_content",
-})
-
-
 def _wire_messages(messages: list[dict]) -> list[dict]:
-    """历史副本 → 只带协议字段（不把 `speaker` / `avatar` 发给上游）。"""
-    out: list[dict] = []
-    for m in messages or []:
-        if not isinstance(m, dict):
-            continue
-        out.append({k: v for k, v in m.items() if k in _WIRE_FIELDS})
-    return out
+    """历史副本 → 四家成员同形的协议形状（判据在 `group_reply.normalize_history`）。"""
+    from core import group_reply as _gr
+    return _gr.normalize_history(messages)
 
 
 @register_stage
@@ -171,6 +159,7 @@ class GroupReplyStage(Stage):
         from core.tiers import current_spec
         from core.prompt_assembler import assemble_system_prompt, model_name_of
         from core.events import make_emitter
+        from core import model_profiles as _profiles
 
         spec = current_spec(ctx.session_id)
         active = get_active_tool_names(ctx.session_id)
@@ -229,8 +218,12 @@ class GroupReplyStage(Stage):
                     tool_result_max_chars=spec.tool_result_max_chars,
                     max_turns=spec.max_turns,
                     session_id=ctx.session_id,
-                    _tools=schemas,
-                    _tool_allowlist=frozenset(allowed),
+                    _tools=(schemas if _profiles.accepts_tools(
+                        str(getattr(item["provider"], "_provider_name", "") or ""),
+                        model_name_of(item["provider"])) else []),
+                    _tool_allowlist=(frozenset(allowed) if _profiles.accepts_tools(
+                        str(getattr(item["provider"], "_provider_name", "") or ""),
+                        model_name_of(item["provider"])) else frozenset()),
                     _system=system,
                     _emit=emit,
                     thinking=spec.thinking,
@@ -338,6 +331,9 @@ class GroupReplyStage(Stage):
                 "kind": "group_speaker",
                 "speaker": r["name"],
                 "avatar": r["avatar"],
+                # 记下是哪个模型说的：换模型后回看这段历史，
+                # 才知道 reasoning / 工具形状来自哪一家。
+                "model": str(r.get("model") or ""),
             }
             # 成员自己的产物挂在自己的回复上（没有就不设键 ——
             #   读不到 ≠ 空）。落库走 `extra_json`，刷新后照样在。
@@ -375,6 +371,7 @@ class GroupReplyStage(Stage):
           ② 自动接力 —— 下一位由一次小 LLM 调用决定；
           ③ `@点名` = 只让被点的人说（显式控制，不接力）。
         """
+        from core import model_profiles as _profiles
         from core import group_digest, group_reply
         from core.session_key import session_key_of_ctx
         from core.group_dispatch import ensure_provider
@@ -502,8 +499,12 @@ class GroupReplyStage(Stage):
                     tool_result_max_chars=spec.tool_result_max_chars,
                     max_turns=spec.max_turns,
                     session_id=ctx.session_id,
-                    _tools=schemas,
-                    _tool_allowlist=frozenset(allowed),
+                    _tools=(schemas if _profiles.accepts_tools(
+                        str(getattr(prov, "_provider_name", "") or ""),
+                        model_name_of(prov)) else []),
+                    _tool_allowlist=(frozenset(allowed) if _profiles.accepts_tools(
+                        str(getattr(prov, "_provider_name", "") or ""),
+                        model_name_of(prov)) else frozenset()),
                     _system=system,
                     _emit=emit,
                     thinking=spec.thinking,
@@ -566,7 +567,8 @@ class GroupReplyStage(Stage):
             msg = {"role": "assistant",
                    "content": group_reply.member_reply_content(r["name"], r["content"]),
                    "kind": "group_speaker", "speaker": r["name"],
-                   "avatar": r["avatar"]}
+                   "avatar": r["avatar"],
+                   "model": str(r.get("model") or "")}
             if r.get("artifacts"):
                 msg["artifacts"] = r["artifacts"]
             ctx.messages.append(msg)

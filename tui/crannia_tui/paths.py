@@ -174,8 +174,11 @@ def python_exe() -> Path:
             if cand.exists() and _has_flask(cand):
                 return cand
 
+    #: 提示里那条路径按平台给。在 Linux 上写 `Scripts/python.exe`，等于让
+    #: 人去找一个不存在的文件。
+    rel = "Scripts/python.exe" if os.name == "nt" else "bin/python"
     raise RuntimeError(
         t("找不到运行所需 Python：当前解释器没有 flask，"
           "crannia 目录下也没有可用的 .venv。\n"
           "设 CRANNIA_PYTHON 指向一个装了 crannia 依赖的解释器"
-          "（通常是 `crannia/.venv/Scripts/python.exe`）。"))
+          "（通常是 `crannia/.venv/%s`）。") % rel)

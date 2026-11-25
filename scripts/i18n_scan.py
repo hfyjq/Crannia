@@ -104,7 +104,9 @@ BLOCKS: dict[str, dict] = {
              #: 并不都叫 `_handle_*`（第一次手写名单就漏了三个）。
              "func_prefixes": ["_cmd_", "_handle_", "_settle_", "_switch_",
                                "_render_", "_describe_", "_validate_",
-                               "_restore_", "_answer_ask", "_leave_plan_mode"],
+                               "_restore_", "_answer_ask", "_leave_plan_mode",
+                               "_model_"],
+             "funcs": ["_edit_model_guidance", "_list_all_models"],
              #: 斜杠命令的说明（`/` 候选列表里给用户看的那一句）。
              "names": ["_COMMANDS"]},
             {"file": "core/modes.py", "funcs": ["set_mode"]},

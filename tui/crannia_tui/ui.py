@@ -969,6 +969,9 @@ class StatusLine(Static):
         meta = fmt_elapsed(elapsed)
         if self._tokens and not compacting:
             meta += f" / {fmt_count(self._tokens)} token"
+        # 「Esc 中断」跟着这一行走：它只在跑着的时候有意义，而这一行就是
+        #   "在跑"的那一格。放在底栏会跟上下文读数抢同一行的宽度。
+        meta += " · Esc " + t("中断")
         line.append("  " + meta)
         return line
 
@@ -1015,24 +1018,30 @@ class StatusBar(Widget):
             yield Static("", id="hint")
 
     def show_tasks(self, *, bg: int, sub: int, focus: str = "") -> None:
-        """底栏中间那两格。计数为 0 的整格不画（照 GUI：它们是状态不是入口）。
+        """底栏中间那两格：后台 / 子代理。
 
-        *focus* 是当前被选中的那一格（`bg` / `sub` / 空）：
-        选中绿、未选中黄。
+        两格都是**状态不是入口** —— 没有就不画（不占位）。
+        「接管中」不在这里：它挪到输入框的边框标题上了（`App` 设置
+        `composer.border_title`），底栏因此不再被三格挤满。
+        *focus* 是当前被选中的那一格（`bg` / `sub` / 空）：选中绿、未选中黄。
         """
         cell = self.query_one("#tasks", Static)
         if not bg and not sub:
             cell.update(Text(""))
             return
         line = Text()
+
+        def _add(seg: str, style: str = "") -> None:
+            if line.plain:
+                line.append("  ")
+            line.append(seg, style=style)
+
         if bg:
-            line.append(t("%s个后台") % bg,
-                        style="green" if focus == "bg" else "yellow")
+            _add(t("后台：") + str(bg),
+                "green" if focus == "bg" else "yellow")
         if sub:
-            if bg:
-                line.append("    ")
-            line.append(t("%s个子代理") % sub,
-                        style="green" if focus == "sub" else "yellow")
+            _add(t("子代理：") + str(sub),
+                 "green" if focus == "sub" else "yellow")
         cell.update(line)
 
     def show(self, *, mode: str, effort: str, busy: bool = False,
@@ -1040,9 +1049,9 @@ class StatusBar(Widget):
              services: str = "", services_warn: bool = False) -> None:
         parts = []
         if mode:
-            parts.append(f"mode: {mode}")
+            parts.append(t("模式：") + mode)
         if effort:
-            parts.append(f"effort: {effort}")
+            parts.append(t("档位：") + effort)
         state = Text(" · ".join(parts))
         # 后台服务那格只在有话可说时出现（关着 / 有通道 / 有定时任务）；
         #   全都没有就不占位置 —— 它是一格状态，不是入口。
@@ -1052,11 +1061,8 @@ class StatusBar(Widget):
             state.append(services, style="yellow" if services_warn else "dim")
         self.query_one("#state", Static).update(state)
         hint = Text()
-        if busy:
-            # 中断是跑着的时候才存在的操作 —— 空闲时提示它，是在教人按一个
-            # 没有用的键。
-            hint.append("Esc", style="bold")
-            hint.append(t(" 中断") + "   ")
+        # 「Esc 中断」已挪到活动横幅的 token 后面（只在跑着时存在的那一格）；
+        #   `busy` 参数留着是为了不改九个调用点的形状。
         # 右下角是上下文读数（原来是 /help 入口，那条命令已取消）。
         # `armed`（已进预警区、还没到阈值）追加一句，黄色 —— 与 GUI 同一格
         # 语义（那边 `.ctx-readout.armed` 只改颜色）。这是提醒，不是错误，
@@ -1097,6 +1103,140 @@ class TaskDetail(Static):
         self.update(out)
 
     def clear(self) -> None:
+        self.display = False
+
+
+class ModelEditPanel(Vertical):
+    """`/model set` 的编辑面板：小框、三个输入，密钥掩码。
+
+    密钥只能从这里收：后端没有掩码输入口，把它当命令参数收会让它
+      经过聊天正文（打错一个字就不再是命令，会落库并送往模型）。
+    三个输入都留空 = 什么都没改；不调后端、不假装改过。
+    """
+
+    can_focus = True
+    #: 成功后整框自动关闭的等待时间（用户定的 1.25 秒）。
+    AUTO_CLOSE_SECONDS = 1.25
+    FIELDS = ("name", "model", "api")
+
+    class Submitted(Message):
+        def __init__(self, *, entry_id: str, values: dict) -> None:
+            self.entry_id = entry_id
+            self.values = values
+            super().__init__()
+
+    class Closed(Message):
+        pass
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.is_open = False
+        self._done = False
+        self._entry: dict = {}
+        self._timer = None
+
+    def compose(self) -> ComposeResult:
+        yield Static("", id="model-edit-body")
+        yield Input(id="model-edit-name",
+                    placeholder=t("条目名（输入后回车以更改，直接回车以跳过）："))
+        yield Input(id="model-edit-model",
+                    placeholder=t("模型名（输入后回车以更改，直接回车以跳过）："))
+        yield Input(id="model-edit-api", password=True,
+                    placeholder=t("API key（此字段已隐藏，请直接粘贴后回车以更改，直接回车以跳过）："))
+
+    def on_mount(self) -> None:
+        self.display = False
+        self._hide_inputs()
+
+    def _inputs(self) -> list:
+        return [self.query_one("#model-edit-" + name, Input)
+                for name in self.FIELDS]
+
+    def _hide_inputs(self) -> None:
+        for inp in self._inputs():
+            inp.value = ""
+            inp.display = False
+
+    def show(self, entry: dict) -> None:
+        self._entry = dict(entry or {})
+        self.is_open = True
+        self._done = False
+        self.display = True
+        name = self._entry.get("name") or self._entry.get("id") or ""
+        self.query_one("#model-edit-body", Static).update(
+            Text(t("当前条目：%s，回车以继续更改，Esc以退出") % name,
+                 style="bold"))
+        for inp in self._inputs():
+            inp.value = ""
+            inp.display = True
+        self.focus()
+
+    def on_key(self, event) -> None:
+        if not self.is_open:
+            return
+        if event.key == "escape":
+            event.stop()
+            event.prevent_default()
+            self.post_message(self.Closed())
+            return
+        if (event.key == "enter" and not self._done
+                and not any(inp.has_focus for inp in self._inputs())):
+            event.stop()
+            event.prevent_default()
+            self._inputs()[0].focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if not self.is_open or self._done:
+            return
+        event.stop()
+        inputs = self._inputs()
+        idx = next((i for i, inp in enumerate(inputs)
+                    if inp is event.input), -1)
+        if idx < 0:
+            return
+        if idx + 1 < len(inputs):
+            inputs[idx + 1].focus()
+            return
+        values = {}
+        for name, inp in zip(self.FIELDS, inputs):
+            value = inp.value.strip()
+            if value:
+                values[name] = value
+        if not values:
+            #: 三格全空 = 用户按了三次回车；这不是"改好了"。
+            self.finish(t("未做更改"))
+            return
+        self.post_message(self.Submitted(entry_id=str(self._entry.get("id") or ""),
+                                         values=values))
+
+    def finish(self, message: str = "") -> None:
+        """收尾：藏起输入、给出结论，1.25 秒后整框关闭。"""
+        self._done = True
+        self._hide_inputs()
+        self.query_one("#model-edit-body", Static).update(
+            Text(message or t("配置更改完成！"), style="green"))
+        self.focus()
+        if self._timer is not None:
+            self._timer.stop()
+        self._timer = self.set_timer(self.AUTO_CLOSE_SECONDS,
+                                     lambda: self.post_message(self.Closed()))
+
+    def fail(self, message: str) -> None:
+        """失败留在框里，由用户按 Esc 关 —— 不自动关掉一个报错。"""
+        self._done = True
+        self._hide_inputs()
+        self.query_one("#model-edit-body", Static).update(
+            Text(t("更改失败：%s") % message, style="red"))
+        self.focus()
+
+    def clear(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self.is_open = False
+        self._done = False
+        self._entry = {}
+        self._hide_inputs()
         self.display = False
 
 

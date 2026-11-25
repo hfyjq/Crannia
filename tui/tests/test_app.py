@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rich.cells import cell_len
 
-from crannia_tui.commands import parse_command, short_path
+from crannia_tui.commands import (model_command, parse_command, short_path,
+                                  targets_full_access)
 
 _PASS = 0
 _FAIL = 0
@@ -73,6 +74,42 @@ def test_similar_but_not_commands() -> None:
         check(f"{s!r} -> chat", parse_command(s)[0] == "chat", str(parse_command(s)))
 
 
+def test_full_access_detection() -> None:
+    """切「完全权限」的两种写法都得认出来（安全提示靠它拦）。"""
+    print("\n完全权限：/mode 的中英文两种写法")
+    for s in ("/mode full_access", "/mode 完全权限",
+              "  /mode   完全权限  "):
+        check(f"{s!r} -> 要提示", targets_full_access(s), repr(s))
+    # 大写不算：后端的命令匹配是大小写敏感的，这里放宽就会
+    #   「提示了一次、命令却没被当成命令执行」。
+    for s in ("/mode", "/mode auto", "/mode 自动", "/mode full_access 一下",
+              "/btw 完全权限是什么", "完全权限", "/modes full_access",
+              "/MODE full_access"):
+        check(f"{s!r} -> 不提示", not targets_full_access(s), repr(s))
+
+
+def test_model_subcommands() -> None:
+    """`/model` 的三个子命令：TUI 只拦 set，其余原样交给后端。"""
+    print("\n/model 子命令")
+    check("/model -> status", model_command("/model") == ("status", ""),
+          repr(model_command("/model")))
+    check("/model 1 -> switch", model_command("/model 1") == ("switch", "1"),
+          repr(model_command("/model 1")))
+    check("/model more -> more", model_command("/model more") == ("more", ""),
+          repr(model_command("/model more")))
+    check("/model set 2 -> set/2", model_command("/model set 2") == ("set", "2"),
+          repr(model_command("/model set 2")))
+    check("/model set -> set/空", model_command("/model set") == ("set", ""),
+          repr(model_command("/model set")))
+    check("带空格的配置名整段保留",
+          model_command("/model 我的 中转站") == ("switch", "我的 中转站"),
+          repr(model_command("/model 我的 中转站")))
+    check("不是 /model 的不认", model_command("/modes 1") == ("", ""),
+          repr(model_command("/modes 1")))
+    check("大小写敏感（与后端一致）", model_command("/MODEL 1") == ("", ""),
+          repr(model_command("/MODEL 1")))
+
+
 def test_short_path_never_overflows() -> None:
     """抬头里的路径必须压进给定列数。
 
@@ -107,6 +144,8 @@ def main() -> int:
     test_plain_text()
     test_empty()
     test_similar_but_not_commands()
+    test_full_access_detection()
+    test_model_subcommands()
     test_short_path_never_overflows()
 
     print("\n" + "=" * 54)

@@ -1,9 +1,11 @@
-"""把文件送进 Windows 系统回收站。
+"""把文件送进系统回收站（Windows / Linux）。
 
 ## 它是什么，不是什么
 
-是什么：一个薄壳，`ctypes` 直接调 `shell32!SHFileOperationW` +
-`FOF_ALLOWUNDO` —— 零依赖。用户在资源管理器里自己还原，我们零新界面。
+是什么：两个平台各一个薄壳，都零依赖 —— Windows 用 `ctypes` 直调
+`shell32!SHFileOperationW` + `FOF_ALLOWUNDO`；Linux 按 freedesktop 的 Trash
+规范写 `.trashinfo` 再搬进 `Trash/files`。用户在文件管理器里自己还原，
+我们零新界面。
 
 不是什么：它不是一道闸。 `run_command` 的 `rm -rf` 照旧直接删，
 「bash 的写权限不受 `validate_path` 约束」对回收站同样成立。
@@ -47,7 +49,11 @@
 from __future__ import annotations
 
 import ctypes
+import os
+import stat
 import sys
+import time
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -121,15 +127,26 @@ def _lib():
         return None
 
 
+_xdg_error = ""
+
+
 def available() -> bool:
     """这台机器上能不能用系统回收站。"""
-    return _lib() is not None
+    if sys.platform == "win32":
+        return _lib() is not None
+    if sys.platform.startswith("linux"):
+        return _xdg_available()
+    return False
 
 
 def unavailable_reason() -> str:
     """为什么用不了 —— 给回执用的一句话（拿不到原因时给空串）。"""
-    _lib()
-    return _load_error
+    if sys.platform == "win32":
+        _lib()
+        return _load_error
+    if sys.platform.startswith("linux"):
+        return "" if _xdg_available() else (_xdg_error or "回收站目录不可用")
+    return "本平台没有接入系统回收站（目前 Windows 与 Linux）"
 
 
 # 回收站条目数（判据 ③：进出前后比一比）
@@ -213,13 +230,8 @@ class RecycleOutcome:
         return self.bin_delta < len(self.moved)
 
 
-def send_to_recycle_bin(paths: Iterable[str | Path]) -> RecycleOutcome:
-    """把 *paths* 逐个送进系统回收站。逐条调（见模块 docstring 判据 ②）。
-
-    [!] 这个函数只负责送：送不成的它不动（不替调用方决定要不要硬删）。
-    "送不进就退回首删"是调用方的策略，而且必须出声。
-    """
-    items = [str(p) for p in paths]
+def _win_send_to_trash(items: list[str]) -> RecycleOutcome:
+    """Windows 那半：逐条交给 `SHFileOperationW`（判据见模块 docstring）。"""
     out = RecycleOutcome()
     lib = _lib()
     if lib is None:
@@ -239,6 +251,204 @@ def send_to_recycle_bin(paths: Iterable[str | Path]) -> RecycleOutcome:
         after = bin_item_count(_drive_root(out.moved[0]))
         if before is not None and after is not None:
             out.bin_delta = after - before
+    return out
+
+
+# ---------------------------------------------------------------- Linux (XDG)
+#
+# freedesktop.org 的 Trash 规范。为什么自己实现、不调 `gio trash`：`gio` 是
+# GLib 的命令行工具，精简镜像不一定有；而这条能力挂在"删文件"这条路上，
+# 缺一个工具就退回永久删 —— 与 Windows 那半"零依赖"同一条判据。
+#
+# 规范里两处承重：
+#   · 回收站必须与文件在同一个文件系统里（跨设备是拷贝不是移动，语义就变了）；
+#     家目录回收站收不了别的挂载点，那就退到那个挂载点的 `.Trash-$uid`。
+#   · `info/<名字>.trashinfo` 里写原始绝对路径（URL 编码）与删除时间 ——
+#     文件管理器就是靠它还原。所以"写进 files/ 了"不等于"能还原"：
+#     两样都在，才算。
+
+
+def _xdg_data_home() -> Path:
+    env = (os.environ.get("XDG_DATA_HOME") or "").strip()
+    return Path(env) if env else Path.home() / ".local" / "share"
+
+
+def _xdg_home_trash(data_home: Path | None = None) -> Path:
+    return (data_home or _xdg_data_home()) / "Trash"
+
+
+def _dev_of(p: Path) -> int | None:
+    """*p* 所在文件系统的设备号；路径还不存在就沿父级往上找（读不到给 `None`）。"""
+    cur = p
+    while True:
+        try:
+            return cur.stat().st_dev
+        except OSError:
+            if cur.parent == cur:
+                return None
+            cur = cur.parent
+
+
+def _mount_topdir(path: Path) -> Path:
+    """*path* 所在挂载点（规范里的 topdir）：往上走，直到 `st_dev` 变了。"""
+    start = path if path.is_dir() else path.parent
+    dev = _dev_of(start)
+    if dev is None:
+        return start
+    cur = start
+    while cur.parent != cur and _dev_of(cur.parent) == dev:
+        cur = cur.parent
+    return cur
+
+
+def _xdg_uid() -> int:
+    return os.getuid() if hasattr(os, "getuid") else 0
+
+
+def _topdir_trash(topdir: Path) -> Path | None:
+    """挂载点上的回收站：优先共享的 `.Trash/$uid`（须 sticky），否则 `.Trash-$uid`。"""
+    shared = topdir / ".Trash"
+    try:
+        st = shared.lstat()
+    except OSError:
+        st = None
+    if (st is not None and stat.S_ISDIR(st.st_mode)
+            and not stat.S_ISLNK(st.st_mode)
+            and st.st_mode & stat.S_ISVTX):
+        mine = shared / str(_xdg_uid())
+        try:
+            mine.mkdir(exist_ok=True)
+            return mine
+        except OSError:
+            return None
+    mine = topdir / (".Trash-%d" % _xdg_uid())
+    try:
+        mine.mkdir(exist_ok=True)
+        return mine
+    except OSError:
+        return None
+
+
+def _xdg_trash_for(path: Path, *, data_home: Path | None = None) -> tuple[Path | None, str]:
+    """这个文件该进哪个回收站：家目录的，还是它所在挂载点的。"""
+    home = _xdg_home_trash(data_home)
+    p_dev = _dev_of(path)
+    if p_dev is not None and _dev_of(home) == p_dev:
+        return home, ""
+    top = _mount_topdir(path)
+    got = _topdir_trash(top)
+    if got is None:
+        return None, "这个挂载点（%s）不允许建回收站目录" % top
+    return got, ""
+
+
+def _xdg_unique_name(base: str, trash: Path) -> str:
+    name = base
+    n = 0
+    while ((trash / "files" / name).exists()
+           or (trash / "info" / (name + ".trashinfo")).exists()):
+        n += 1
+        name = "%s.%d" % (base, n)
+    return name
+
+
+def _xdg_send_one(src: Path, *, trash: Path, name: str) -> tuple[bool, str]:
+    """先写 `.trashinfo`、再搬文件；搬失败就把那份 info 收回来。
+
+    顺序是有意的：info 先落，文件管理器才不会看到一个没有出生证明的条目；
+    而搬之前文件还在原处，失败也只丢一份 info。
+    """
+    info = trash / "info" / (name + ".trashinfo")
+    dest = trash / "files" / name
+    body = ("[Trash Info]\nPath=%s\nDeletionDate=%s\n"
+            % (urllib.parse.quote(os.path.abspath(src), safe="/"),
+               time.strftime("%Y-%m-%dT%H:%M:%S")))
+    try:
+        with open(info, "x", encoding="utf-8", newline="\n") as fh:
+            fh.write(body)
+    except OSError as exc:
+        return False, "%s: %s" % (type(exc).__name__, exc)
+    try:
+        os.rename(src, dest)
+    except OSError as exc:
+        try:
+            info.unlink()
+        except OSError:
+            pass
+        return False, "%s: %s" % (type(exc).__name__, exc)
+    return True, ""
+
+
+def _xdg_send_to_trash(items: list[str], *,
+                       data_home: Path | None = None) -> RecycleOutcome:
+    """Linux 那半：按 XDG Trash 规范逐条搬（`data_home` 只为测试留口）。"""
+    out = RecycleOutcome()
+    home = _xdg_home_trash(data_home)
+    try:
+        (home / "files").mkdir(parents=True, exist_ok=True)
+        (home / "info").mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        out.unavailable = True
+        out.reason = "建不了回收站目录（%s）" % exc
+        out.failed = ["%s: %s" % (p, out.reason) for p in items]
+        return out
+
+    moved = 0
+    for raw in items:
+        src = Path(raw)
+        if not src.exists() and not src.is_symlink():
+            out.failed.append("%s: 不存在" % raw)
+            continue
+        trash, why = _xdg_trash_for(src, data_home=data_home)
+        if trash is None:
+            out.failed.append("%s: %s" % (raw, why))
+            continue
+        try:
+            (trash / "files").mkdir(parents=True, exist_ok=True)
+            (trash / "info").mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            out.failed.append("%s: %s" % (raw, exc))
+            continue
+        name = _xdg_unique_name(src.name, trash)
+        ok, why = _xdg_send_one(src, trash=trash, name=name)
+        if ok:
+            out.moved.append(raw)
+            moved += 1
+        else:
+            out.failed.append("%s: %s" % (raw, why))
+    if items:
+        #: 与 Windows 的"条目数净增"同义：确认能还原的个数。
+        #: info 与 files 两样都在才算 —— 只有文件没有 info 是还原不了的。
+        out.bin_delta = moved
+    return out
+
+
+def _xdg_available() -> bool:
+    global _xdg_error
+    try:
+        (_xdg_home_trash() / "files").mkdir(parents=True, exist_ok=True)
+        (_xdg_home_trash() / "info").mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError as exc:
+        _xdg_error = "建不了回收站目录（%s）" % exc
+        return False
+
+
+def send_to_recycle_bin(paths: Iterable[str | Path]) -> RecycleOutcome:
+    """把 *paths* 逐个送进系统回收站。逐条调（见模块 docstring 判据 ②）。
+
+    [!] 这个函数只负责送：送不成的它不动（不替调用方决定要不要硬删）。
+    "送不进就退回首删"是调用方的策略，而且必须出声。
+    """
+    items = [str(p) for p in paths]
+    if sys.platform == "win32":
+        return _win_send_to_trash(items)
+    if sys.platform.startswith("linux"):
+        return _xdg_send_to_trash(items)
+    out = RecycleOutcome()
+    out.unavailable = True
+    out.reason = "本平台没有接入系统回收站（目前 Windows 与 Linux）"
+    out.failed = ["%s: %s" % (p, out.reason) for p in items]
     return out
 
 
@@ -280,12 +490,13 @@ def explain(outcome: RecycleOutcome, *, permanent_ok: int = 0) -> str:
         parts.append("已把 %d 个文件送进系统回收站，但**读不到回收站的条目数**，"
                      "所以**无法确认**它们能不能还原。" % n)
     elif n and outcome.bin_delta < n:
-        parts.append("[!] 送进去 %d 个，而回收站条目只多了 %d 个 —— "
-                     "**有 %d 个没能进回收站**（多半是回收站配额满了），"
+        parts.append("[!] 送进去 %d 个，而回收站只确认了 %d 个 —— "
+                     "**有 %d 个没能进回收站**（配额满了，或这一步失败了），"
                      "那些是**永久删除**，**还原不了**。"
                      % (n, outcome.bin_delta, n - outcome.bin_delta))
     elif n:
-        parts.append("已把 %d 个文件送进**系统回收站**（可从资源管理器还原）。" % n)
+        where = "资源管理器" if sys.platform == "win32" else "文件管理器"
+        parts.append("已把 %d 个文件送进**系统回收站**（可从%s还原）。" % (n, where))
     else:
         parts.append("没有文件被送进回收站。")
 

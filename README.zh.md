@@ -8,7 +8,7 @@
   </p>
   <p>
     <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
-    <img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue">
+    <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   </p>
 </div>
@@ -27,7 +27,7 @@ Crannia 是一个开源的通用型 Agent，可以协助完成事项，或构筑
 
 ### 方式二：从源码运行
 
-要求：Windows 10/11，Python **3.12+**，Node.js。
+要求：Windows 10/11，Python **3.11+**，Node.js。
 
 ```powershell
 git clone https://github.com/hfyjq/Crannia.git
@@ -49,6 +49,34 @@ npm run dev
 模型可以不改 `config.yaml`，直接在设置页的端配置里添加。
 
 > 框架不会把 API key 写进仓库。key 放在 `.env`，或放在端配置页使用的凭据存储里。
+
+### Linux
+
+要求：Linux x64，Python **3.11+**（只有桌面 GUI 需要 Node.js）。
+
+```bash
+git clone https://github.com/hfyjq/Crannia.git
+cd Crannia
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cp .env.example .env
+# 编辑 .env，至少填一个 provider key
+
+# 终端界面
+cd tui && ../.venv/bin/python -m crannia_tui
+
+# Web UI（在仓库根目录跑）
+.venv/bin/python -m web
+```
+
+TUI 独立包（`crannia-tui-*-linux-x64.tar.gz`）自带运行时，不需要系统 Python：
+解压后运行 `./install.sh`，之后直接敲 `crannia`。它装到
+`${XDG_DATA_HOME:-~/.local/share}/crannia-tui`，把命令链接到 `~/.local/bin`；
+用户数据在 `${XDG_DATA_HOME:-~/.local/share}/crannia`。
+
+中文界面与中文文档需要 `fonts-noto-cjk`（精简 / 服务器镜像常常没有；缺了会显示方框）。
+办公文档相关的可选依赖：LibreOffice（格式转换）。
+在 TUI 里粘贴图片需要 Wayland 的 `wl-clipboard` 或 X11 的 `xclip`。
 
 ## 互操作
 

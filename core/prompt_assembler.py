@@ -284,7 +284,6 @@ def _runtime_line() -> str:
 # ------------------------------------------------------------------
 
 _CORE_INSTRUCTIONS = r"""{IDENTITY}
-{TODAY}
 {RUNTIME}
 {WORKSPACE}
 
@@ -580,8 +579,8 @@ def assemble_system_prompt(memory_context: str = "",
 
     # 1. Core behavioural instructions (framework-agnostic)
     core = _CORE_INSTRUCTIONS.replace("{IDENTITY}", _identity_line(model_name))
-    # 日期每请求重算（不是常量、不进缓存）—— 见 `_today_line` 上面那段。
-    core = core.replace("{TODAY}", _today_line())
+    # 日期那一行挪到整段 system 的末尾（见本函数结尾那一段）——
+    #   它是前缀里唯一每天会变的东西，放在核心指令里会让稳定段每天断一次缓存。
     # 环境那一行：也每请求替换，但值本身是进程内常量 ——
     #   所以它不违反前缀稳定性（只有 `{TODAY}` 那种真会变的东西才要小心）。
     core = core.replace("{RUNTIME}",
@@ -676,5 +675,15 @@ def assemble_system_prompt(memory_context: str = "",
     #    带着 `<background_context>` 包裹进来，再打会把包裹自己转义掉。
     if memory_context:
         sections.append(memory_context)
+
+    # 7. 当前日期 —— 唯一每天会变的一行，放在最后。
+    #
+    # 它原来在核心指令第二段（紧挨身份行），跨天一个字节的变化会让整个
+    # 稳定 system 前缀断掉。挪到这里之后，变点在最末尾：稳定段照命中，
+    # 只有它自己与之后的内容需要重算。对所有供应商都安全，不依赖某家的缓存规则。
+    # 仍然每次组装现取（`_today_line` -> `date_line`），不冻成模块常量。
+    date_section = _today_line()
+    if date_section:
+        sections.append(date_section)
 
     return "\n\n".join(sections)

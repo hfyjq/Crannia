@@ -148,32 +148,51 @@ _FONT_AVAIL_WARNED: list = []
 def _installed_font_families():
     """本机真有的字体族（小写）；读不到，`None`（不是空集）。
 
-    仪器 = Windows 注册表
-    `HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts`
-    —— 与 `tests/test_font_family_fallback.py` 那台同名同形状，但各读一份
-    （测试要有自己的仪器才当得了独立裁判）。
+    仪器按平台走：Windows 读注册表
+    `HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts`；
+    Linux/macOS 读 fontconfig（`fc-list : family`）。
+    两台仪器各读一份、与 `tests/test_font_family_fallback.py` 同形，
+    但（测试要有自己的仪器才当得了独立裁判）。
     不能按文件名判：`msyh.ttc` 不叫 `Microsoft YaHei`；而且一个值里
     可能塞着两个族（`"Microsoft YaHei & Microsoft YaHei UI (TrueType)"`）
 按 `&` 切、剥掉尾部 `(…)`、去掉竖排的 `@` 前缀。
-    非 Windows / 读不到，`None` —— 调用方据此保持原样（读不到 ≠ 0）。
+    读不到（非上述平台 / 没装 fontconfig），`None` —— 调用方据此保持原样
+    （读不到 ≠ 0）。
     """
     if _FONT_AVAIL_CACHE:
         return _FONT_AVAIL_CACHE[0]
     fams = None
     try:
-        import winreg
-        key = winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
-        fams = set()
-        for i in range(winreg.QueryInfoKey(key)[1]):
-            name = winreg.EnumValue(key, i)[0]
-            name = re.sub(r"\s*\((TrueType|OpenType|All res|[^()]*)\)\s*$", "",
-                          name)
-            for part in name.split("&"):        # `A & A UI (TrueType)`
-                part = part.strip().lstrip("@").strip()
-                if part:
-                    fams.add(part.lower())
+        import sys
+        if sys.platform == "win32":
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
+            fams = set()
+            for i in range(winreg.QueryInfoKey(key)[1]):
+                name = winreg.EnumValue(key, i)[0]
+                name = re.sub(r"\s*\((TrueType|OpenType|All res|[^()]*)\)\s*$", "",
+                              name)
+                for part in name.split("&"):    # `A & A UI (TrueType)`
+                    part = part.strip().lstrip("@").strip()
+                    if part:
+                        fams.add(part.lower())
+        else:
+            import shutil
+            import subprocess
+            fc = shutil.which("fc-list")
+            if fc:
+                r = subprocess.run([fc, ":", "family"], capture_output=True,
+                                   text=True, encoding="utf-8",
+                                   errors="replace", timeout=30)
+                if r.returncode == 0:
+                    fams = set()
+                    for line in (r.stdout or "").splitlines():
+                        for part in line.split(","):
+                            part = part.strip()
+                            if part:
+                                fams.add(part.lower())
     except Exception:                # noqa: BLE001 —— 读不到 ⇒ None（不是空集）
         fams = None
     _FONT_AVAIL_CACHE.append(fams)
@@ -208,8 +227,8 @@ def _warn_fonts_unreadable_once() -> None:
     if _FONT_AVAIL_WARNED:
         return
     _FONT_AVAIL_WARNED.append(True)
-    print("  [font] 本机字体清单读不到（非 Windows？）-- 表外的字体族按**原样**"
-          "写进产物，字体替换那一层今天**没生效**")
+    print("  [font] 本机字体清单读不到（非 Windows 且没有 fontconfig？）--"
+          "表外的字体族按原样写进产物，字体替换那一层今天没生效")
 
 
 def _note_font_substitution(original: str, replacement: str) -> None:

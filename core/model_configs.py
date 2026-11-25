@@ -96,6 +96,17 @@ CARD_IDS: tuple[str, ...] = tuple(c[0] for c in CARDS)
 CARD_LABEL: dict[str, str] = {c[0]: c[1] for c in CARDS}
 CARD_PROVIDER: dict[str, str] = {c[0]: c[2] for c in CARDS}
 
+#: 可以不带 key 的那两张卡。
+#:
+#: `ollama` 是本地端点（`providers/ollama/manifest.yaml` 自带 localhost 地址），
+#: `other` 指向用户自建/中转的服务，可能压根不验 key。其余十张都要 key。
+#:
+#: 这个集合只回答"建的时候允不允许空着"，不改变建的动作 ——
+#: `api` 留空依然是合法的（见 `_api_of`）。它挡的是拿空 key 去联网：
+#: 那一次请求会带着 `not-needed` 占位串出门（`providers/openai_compat.py`），
+#: 上游回一句"你的 key 末四位 eded 无效"，而用户手里那把 key 一个字符都没存进去。
+KEYLESS_CARDS: frozenset[str] = frozenset({"ollama", "other"})
+
 #: 判据 1。每张卡各自一条上限（不是全局）。
 MAX_PER_CARD = 10
 
@@ -900,7 +911,10 @@ def card_defaults() -> list[dict]:
         except Exception:                            # noqa: BLE001
             pass
         out.append({"id": cid, "label": label, "provider": dirname,
-                    "base_url": base, "default_model": model})
+                    "base_url": base, "default_model": model,
+                    #: 引导那边要据此拦一次"没读到 key 就往下走"。
+                    #: 判据留在这里（一处定义），界面不自己抄一张卡名表。
+                    "needs_key": cid not in KEYLESS_CARDS})
     return out
 
 
@@ -946,6 +960,15 @@ def probe(cid: str) -> tuple[bool, str, str]:
     entry = get(cid)
     if not entry:
         return False, "unknown", "没有这条配置"
+    #: 要 key 的卡而这条没存 key —— 别出门。
+    #:
+    #: 出门的话 provider 会带上 `not-needed` 占位串（`openai_compat` 的
+    #:   `_KEYLESS_PLACEHOLDER`），上游回一句 "your api key ...eded is
+    #:   invalid"（末四位取自那个占位串）—— 用户手里那把 key 却
+    #:   一个字符都没进过账本。这句人话比那串谜语省一整轮排查。
+    if (str(entry.get("card") or "") not in KEYLESS_CARDS
+            and not api_for(cid)):
+        return False, "auth", "这条配置没有填 API Key"
     dirname = CARD_PROVIDER.get(str(entry.get("card") or ""))
     if not dirname:
         return False, "install", "这张卡不认识（%r）" % entry.get("card")

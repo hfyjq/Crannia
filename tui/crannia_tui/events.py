@@ -30,6 +30,12 @@ STEER_DELIVERED = "steer.delivered"
 LLM_RETRY = "llm.retry"
 LLM_RETRY_OK = "llm.retry_ok"
 RECAP = "recap"
+#: 后台记忆动过（抽取写入 / 巩固改动）。两条说的是同一件事：
+#: 用户要知道的是"记忆更新过"，不是"哪一道工序"。
+MEMORY_SAVED = "memory.saved"
+MEMORY_ORGANIZED = "memory.organized"
+#: ICE 出站金丝雀被拦下（安全事实）。只在 TUI 画红标 —— GUI 那边不做。
+ICE_CANARY = "ice.canary"
 
 
 @dataclass(frozen=True)
