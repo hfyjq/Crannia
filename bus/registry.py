@@ -123,6 +123,10 @@ _EXPLICIT_PERMS: dict[str, str] = {
     # 工具发现 / 执行 / 子 agent / 造包 / 清单
     "search_tools": "read",   # 检索工具目录，零副作用
     "run_command":  "admin",  # 全仓唯一能执行任意命令的东西（不是沙箱）
+    # 带自定义头的 HTTP 请求：能发 POST 这类有副作用的方法，按 write。
+    "web_request":  "write",
+    # 技能配置写入口：改的是持久安全配置，按 write。
+    "skill_config_write": "write",
     # 接管 —— 它直接控制用户的鼠标键盘。
     #   `admin` 同时让它进并发判定的串行那一支（输入必须串行，没有并发可言）。
     "computer":     "admin",
@@ -231,6 +235,15 @@ _EXPLICIT_DESTRUCTIVE: dict[str, bool] = {
     # 工具发现 / 执行 / 子 agent / 造包 / 清单
     "search_tools": False,
     "run_command":  True,  # 全仓唯一能执行任意命令的东西（不是沙箱）
+    # POST 一类请求能改动远端状态，但改的不是本机、也没有"删掉回不来"的对象；
+    #   按「改得回来吗」判 False。纯只读 GET 还能被分类器自动放行（见
+    #   `core.egress_channels.auto_allowed_for_call`），写方法则永远要问。
+    "web_request":  False,
+    # 技能配置写：写的是持久安全配置（口令/密码）。按「改得回来吗」它可改，
+    #   但它没有自己的审批发射点 —— 要它"先问一次"，只能是 destructive=True
+    #   让兜底闸接住（设计 P3 明写"审批"）。代价是它每次调用都问；
+    #   这是有意的：改安全配置本来就该每次问。
+    "skill_config_write": True,
     # 接管能做出不可逆的事（删数据 / 付款）。
     #   判据「改得回来吗」，True。它不会因此每次调用都被问：
     #     它已经在 `core/agent_loop._APPROVAL_CAPABLE_TOOLS` 里
@@ -361,6 +374,9 @@ _EXPLICIT_CONCURRENCY: dict[str, bool] = {
 _EXPLICIT_REVIEW_INPUT: dict[str, str] = {
     "run_command":   "要执行的命令原文",
     "run_program":   "要执行的编排脚本",
+    # 出网请求：分类器要看的是"往哪发、用什么方法、带什么头与体"。
+    "web_request":   "URL、方法、自定义请求头与请求体",
+    "skill_config_write": "要写的技能、条目与字段（秘密字段只写名字）",
     # 出站：分类器要看的是"发给谁、发了什么"。
     #   它本来就是 `destructive`（收不回来），所以不要 `none` ——
     #   给 `none` 等于把一次对外发送从分类器眼前拿掉。
@@ -500,8 +516,7 @@ def _note_undeclared(tool_name: str, perm: str, source: str) -> None:
     if source not in (_TP.SOURCE_PREFIX, _TP.SOURCE_DEFAULT):
         return
     if perm == _TP.PERM_READ:
-        print(f"[perm] 未声明 -> 猜成 read: {tool_name}"
-              f"（并发与只读子 agent 拿它当真闸）")
+        print(f"[perm] undeclared -> guessed read: {tool_name} (concurrency and read-only subagents treat it as a real gate)")
 
 
 def undeclared_report() -> str:
@@ -582,7 +597,7 @@ def _note_schema_size(name: str, tool_def: dict) -> None:
         return
     if size <= TOOL_SCHEMA_BYTE_CAP:
         return
-    print("[schema] WARNING: 工具 '%s' 字节超限 —— 可能存在请求拒绝的运行情况。"
+    print("[schema] WARNING: tool '%s' exceeds byte limit - requests may be rejected."
           % (name,))
 
 
@@ -708,10 +723,8 @@ def _refuse_duplicate(name: str, prev_owner: str | None, owner: str) -> None:
     而换来的保护是零（框架代码要作恶，根本不需要走这条路）。
     """
     who = prev_owner or "（未知来源）"
-    print(f"[bus] 拒绝注册工具 '{name}'：这个名字已经被 {who} 占着，"
-          f"而 '{owner}' 是另一个来源。")
-    print(f"[bus]   -> 换个名字，或把 manifest 里这一条删掉。"
-          f"框架保留的名字不许被第三方覆盖。")
+    print(f"[bus] refused to register tool '{name}': the name is already taken by {who}, and '{owner}' is a different source.")
+    print(f"[bus]   -> rename it, or remove this entry from the manifest. Framework-reserved names cannot be overridden by third parties.")
 
 
 def reserved_tool_names() -> set[str]:
@@ -865,9 +878,7 @@ def get_tool_schemas_filtered(names: list[str] | None = None) -> list[dict]:
         seen.add(nm)
         out.append(td)
     if dropped:
-        print(f"[registry] WARNING: wire 上有 {dropped} 个重名工具被丢掉 —— "
-              f"注册表里出现了重复注册（`register_tool` 应当幂等，去核 "
-              f"`/api/restart` 那条路），否则上游会 400 `Tool names must be unique`")
+        print(f"[registry] WARNING: {dropped} duplicate tool names dropped from wire - registry has duplicate registrations (register_tool should be idempotent; check the /api/restart path), otherwise upstream returns 400 `Tool names must be unique`")
     # 出口一律是 wire 序（常驻在前 + 其余追加在后）。
     # 见 `_core_first` —— 发现一个工具只许延长前缀，不许改写它。
     return _core_first(out)
@@ -1054,6 +1065,29 @@ _CORE_TOOLS: set[str] = {
 #: session_id → 模型已通过 search_tools 发现的工具名
 _discovered: dict[str, set[str]] = {}
 
+#: 同时保留多少条会话的发现集。
+#:
+#: 判据与 `core/context_report.py::_MAX_SESSIONS` 同款：按会话键长，而
+#:   `/clear` 只清当前那一条 —— 跑得越久、见过的会话越多，表只增不减。
+#: 每一格很小（一组工具名），但要有个界。512 在桌面单用户（几十条线程）
+#: 永远碰不到；被淘汰的会话下一轮再 `search_tools` 就重新拿回来，
+#: 而执行闸的拒绝本来就带路线 —— 代价是一次重新检索，不是"工具消失"。
+MAX_DISCOVERED_SESSIONS = 512
+
+
+def _evict_discovered_over_cap(current: str) -> None:
+    """超上限时淘汰最久没发现新工具的会话（当前会话不动）。"""
+    extra = len(_discovered) - MAX_DISCOVERED_SESSIONS
+    if extra <= 0:
+        return
+    for key in list(_discovered):
+        if extra <= 0:
+            break
+        if key == current:
+            continue
+        _discovered.pop(key, None)
+        extra -= 1
+
 #: 被屏蔽的插件 —— 键是归属（`skill:<目录名>` /
 #: `mcp:<服务器名>`），不是工具名。
 #:
@@ -1108,6 +1142,7 @@ def note_discovered(session_id: str, names) -> int:
     bucket = _discovered.setdefault(session_id, set())
     before = len(bucket)
     bucket.update(n for n in names if n not in hidden)
+    _evict_discovered_over_cap(session_id)
     return len(bucket) - before
 
 
@@ -1630,7 +1665,7 @@ def register_subagent_tool() -> None:
         from core import subagent_defs
         schema = subagent_defs.tool_schema(SUBAGENT_TOOL_SCHEMA)
     except Exception as exc:                              # noqa: BLE001
-        print("[bus] 读取子 agent 定义失败：%s: %s" % (type(exc).__name__, exc))
+        print("[bus] failed to read subagent definitions: %s: %s" % (type(exc).__name__, exc))
 
     def _not_dispatched(**kwargs) -> dict:
         return {
@@ -1749,7 +1784,7 @@ def _session_extra_tools(session_id: str) -> set[str]:
                 if groups.get(gid):
                     out.add("ask_member")
         except Exception as exc:                                # noqa: BLE001
-            print(f"[registry] 算群工具失败（{type(exc).__name__}: {exc}）—— 这一轮不发它")
+            print(f"[registry] failed to compute group tools ({type(exc).__name__}: {exc}) - not sent this turn")
     if "request_compaction" in _registry["tools"]:
         # 只在压力窗口（≥80%）里发；读数由上一次请求记下（一步滞后，可接受）。
         #   判据：常驻 = 所有人替它付 schema 税，而它一年用不了几次。
@@ -1758,8 +1793,7 @@ def _session_extra_tools(session_id: str) -> set[str]:
             if context_pressure.armed(session_id):
                 out.add("request_compaction")
         except Exception as exc:                                # noqa: BLE001
-            print(f"[registry] 算压缩工具失败（{type(exc).__name__}: {exc}）"
-                  f" —— 这一轮不发它")
+            print(f"[registry] failed to compute compression tools ({type(exc).__name__}: {exc}) - not sent this turn")
     if "computer" in _registry["tools"]:
         # 接管工具只发给持有接管的那个会话。
         #   判据与上面两条同一条（"按会话算、且在会话内稳定"）：
@@ -1770,8 +1804,7 @@ def _session_extra_tools(session_id: str) -> set[str]:
             if _cu.enabled_for(session_id):
                 out.add("computer")
         except Exception as exc:                                # noqa: BLE001
-            print(f"[registry] 算接管工具失败（{type(exc).__name__}: {exc}）"
-                  f" —— 这一轮不发它")
+            print(f"[registry] failed to compute takeover tools ({type(exc).__name__}: {exc}) - not sent this turn")
     if "browser" in _registry["tools"]:
         # 浏览器接管与 `computer` 同一个持有者 ——
         #   同一次接管里的另一条通道，不是第二个开关。
@@ -1780,8 +1813,7 @@ def _session_extra_tools(session_id: str) -> set[str]:
             if _cu.enabled_for(session_id):
                 out.add("browser")
         except Exception as exc:                                # noqa: BLE001
-            print(f"[registry] 算浏览器工具失败（{type(exc).__name__}: {exc}）"
-                  f" —— 这一轮不发它")
+            print(f"[registry] failed to compute browser tools ({type(exc).__name__}: {exc}) - not sent this turn")
     if "run_workflow" in _registry["tools"]:
         try:
             from core import tiers
@@ -1790,8 +1822,7 @@ def _session_extra_tools(session_id: str) -> set[str]:
             if tiers.current_spec(session_id).level >= 6:
                 out.add("run_workflow")
         except Exception as exc:                                # noqa: BLE001
-            print(f"[registry] 算工作流工具失败（{type(exc).__name__}: {exc}）"
-                  f" —— 这一轮不发它")
+            print(f"[registry] failed to compute workflow tools ({type(exc).__name__}: {exc}) - not sent this turn")
     return out
 
 
@@ -2034,7 +2065,7 @@ def register_code_intel_tool() -> None:
     if code_intel.config_present():
         print("[bus] code intelligence registered (code_intel)")
     else:
-        print("[bus] code_intel 已注册但**不发给模型**（没有配置语言服务器）")
+        print("[bus] code_intel registered but not sent to the model (no language server configured)")
 
 
 def register_skill_factory_tool() -> None:

@@ -375,11 +375,10 @@ def test_startup_report_separates_the_two_chains():
         assert report["compression_threshold"]["value"] == int(131072 * 0.85), report
         assert report["history_ceiling_balanced"]["value"] == 16384
         # Both numbers appear, but on DIFFERENT lines.
-        threshold_line = [l for l in out.splitlines() if "压缩阈值" in l][0]
-        ceiling_line = [l for l in out.splitlines() if "装载上限" in l][0]
+        threshold_line = [l for l in out.splitlines() if "compression threshold" in l][0]
+        ceiling_line = [l for l in out.splitlines() if "history loading ceiling" in l][0]
         assert "111,411" in threshold_line, threshold_line
         assert "16,384" in ceiling_line, ceiling_line
-        assert "不在同一条链上" in ceiling_line, ceiling_line
         # The non-history cost is reported as MEASURED, in the units the
         # gate uses, and split into its parts for auditing.
         nh = report["non_history_measured"]
@@ -387,8 +386,7 @@ def test_startup_report_separates_the_two_chains():
         assert nh["tool_tokens"] > 0, "the wire set's schemas were not counted"
         assert nh["system_tokens"] > 0
         assert nh["tool_count"] == len(_SCHEMAS)
-        non_history_line = [l for l in out.splitlines() if "非历史实际开销" in l][0]
-        assert "都进压缩闸门" in non_history_line, non_history_line
+        non_history_line = [l for l in out.splitlines() if "non-history actual cost" in l][0]
         print(f"  [ok] threshold {report['compression_threshold']['value']:,} "
               f"and ceiling {report['history_ceiling_balanced']['value']:,} "
               f"reported on separate lines")

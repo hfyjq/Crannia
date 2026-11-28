@@ -386,7 +386,7 @@ def send_email(
             from core import mail_config as _mc
             _cfg = _mc.resolve() or {}
         except Exception as _exc:  # noqa: BLE001
-            print(f"[mail] 读邮箱配置失败：{type(_exc).__name__}: {_exc}")
+            print(f"[mail] failed to read mail config: {type(_exc).__name__}: {_exc}")
             _cfg = {}
         smtp_server = smtp_server or str(_cfg.get("smtp_server") or "")
         email_address = email_address or str(_cfg.get("email_address") or "")

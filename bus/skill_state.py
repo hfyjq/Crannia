@@ -39,7 +39,7 @@ def _read() -> dict:
     except FileNotFoundError:
         return {}
     except Exception as exc:                                    # noqa: BLE001
-        print("[skill_state] 设置读不出来（%s: %s），按全部启用处理"
+        print("[skill_state] settings unreadable (%s: %s), treating all enabled"
               % (type(exc).__name__, exc))
         return {}
     return raw if isinstance(raw, dict) else {}

@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from core.i18n import t as tr
+
 __all__ = ["MARK", "HEADLINES", "headline", "explain", "strip_mark", "is_marked"]
 
 #: 进程内标记 —— 不是给用户看的。`AgentLoopStage` 见到它就把正文剥掉、
@@ -137,7 +139,7 @@ def headline(err, *, kind: str = "", exc_name: str = "") -> str:
     """
     k = kind_of(err, kind=kind, exc_name=exc_name)
     if k in HEADLINES:
-        return HEADLINES[k]
+        return tr(HEADLINES[k])
     return ""
 
 
@@ -170,33 +172,37 @@ def explain(err, *, kind: str = "", model: str = "", base_url: str = "",
     k = kind_of(err, kind=kind, exc_name=exc_name)
 
     where = _host_of(base_url)
-    tail = "\n\n原始错误：%s" % (text[:300] if text else "（上游没给原文）")
+    tail = tr("\n\n原始错误：{raw}").format(
+        raw=text[:300] if text else tr("（上游没给原文）"))
 
     if k == "connection":
-        head = ("⚠️ **没能连上模型服务**" + ("（%s）" % where if where else "")
-                + ("，模型 `%s`" % model if model else "") + "。\n\n"
-                "**这一轮没有产生任何结果** —— 没有调用工具，也没有花掉模型额度。\n\n"
-                "可能原因：网络断开 / 代理或 VPN / 上游临时故障。")
-        steps = ("\n- 直接**重发这条消息**重试（客户端已经自动重试过几轮了）；"
-                 "\n- 连续失败：先看网络，或在「端配置」换一条模型。")
+        where_txt = (tr("（{host}）").format(host=where)) if where else ""
+        model_txt = (tr("，模型 `{model}`").format(model=model)) if model else ""
+        head = tr("⚠️ **没能连上模型服务**{where}{model}。\n\n"
+                  "**这一轮没有产生任何结果** —— 没有调用工具，也没有花掉模型额度。\n\n"
+                  "可能原因：网络断开 / 代理或 VPN / 上游临时故障。").format(
+            where=where_txt, model=model_txt)
+        steps = tr("\n- 直接**重发这条消息**重试（客户端已经自动重试过几轮了）；"
+                   "\n- 连续失败：先看网络，或在「端配置」换一条模型。")
         return head + steps + tail
 
     if k == "timeout":
-        head = ("⚠️ **模型服务超时**" + ("（%s）" % where if where else "") + "。\n\n"
-                "**这一轮没有产生任何结果。**")
-        steps = ("\n- 直接重发一次；连续超时：检查网络 / 代理，"
-                 "或在「端配置」换一条模型。")
+        where_txt = (tr("（{host}）").format(host=where)) if where else ""
+        head = tr("⚠️ **模型服务超时**{where}。\n\n"
+                  "**这一轮没有产生任何结果。**").format(where=where_txt)
+        steps = tr("\n- 直接重发一次；连续超时：检查网络 / 代理，"
+                   "或在「端配置」换一条模型。")
         return head + steps + tail
 
     if k == "context_overflow":
-        return ("⚠️ **这次的请求太长了** —— 上游拒绝处理（不是网络、也不是配额）。\n\n"
-                "**这一轮没有产生结果。** 可以：把需求拆小一点、先 `/compact` "
-                "压缩上下文，或换一个窗口更大的模型。" + tail)
+        return tr("⚠️ **这次的请求太长了** —— 上游拒绝处理（不是网络、也不是配额）。\n\n"
+                  "**这一轮没有产生结果。** 可以：把需求拆小一点、先 `/compact` "
+                  "压缩上下文，或换一个窗口更大的模型。") + tail
 
     #: 其余每一类都是一句话（`HEADLINES`）+ 原文 —— 那句话就是用户要的
     #:   "下一步"：充值 / 等一会儿 / 换 key / 压缩 / 换个说法。
     if k in HEADLINES:
-        return HEADLINES[k] + tail
+        return tr(HEADLINES[k]) + tail
 
     if "400" in text or name == "BadRequestError":
         #: 先试着把上游那句话抠出来。整段 JSON 倒给用户是噪音：
@@ -209,19 +215,22 @@ def explain(err, *, kind: str = "", model: str = "", base_url: str = "",
             _model = _model_name_mismatch(reason)
             if _model:
                 supported, passed = _model
-                return ("⚠️ **模型名不对** —— 上游只支持 %s，你配置的是 `%s`。\n\n"
-                        "到「端配置页」把「模型名」改成上面其中一个，再发一次。"
-                        % (supported, passed))
-            return "上游拒绝了这次请求（400）：\n%s" % reason[:300]
+                return tr("⚠️ **模型名不对** —— 上游只支持 {supported}，"
+                          "你配置的是 `{passed}`。\n\n"
+                          "到「端配置页」把「模型名」改成上面其中一个，再发一次。"
+                          ).format(supported=supported, passed=passed)
+            return tr("上游拒绝了这次请求（400）：\n{reason}").format(
+                reason=reason[:300])
         #: 原文是「检查模型名称和参数配置」—— 会误导（400 的真因也可能是
         #: 工具表重名）。带上游原文，让真因自己说话。
-        return ("模型请求被上游拒绝（400）。上游原文：\n%s\n\n"
-                "⚠️ 不一定是配置问题 —— 400 也可能来自请求本身"
-                "（例如工具表重名、消息格式）。" % (text[:800] or "（没有原文）"))
+        return tr("模型请求被上游拒绝（400）。上游原文：\n{raw}\n\n"
+                  "⚠️ 不一定是配置问题 —— 400 也可能来自请求本身"
+                  "（例如工具表重名、消息格式）。").format(
+            raw=text[:800] or tr("（没有原文）"))
 
     #: 其它 —— 不装懂：说清是哪一层炸的，把原文交出去。
     where2 = (" [%s]" % stage) if stage else ""
-    return ("⚠️ 这一轮出错了%s（%s）。\n\n"
-            "**这一轮可能没有产生完整结果。** 可以重发一次；"
-            "同一症状反复出现就带上下面这段原文反馈。%s"
-            % (where2, name or "未知错误", tail))
+    return tr("⚠️ 这一轮出错了{where}（{name}）。\n\n"
+              "**这一轮可能没有产生完整结果。** 可以重发一次；"
+              "同一症状反复出现就带上下面这段原文反馈。{tail}").format(
+        where=where2, name=name or tr("未知错误"), tail=tail)

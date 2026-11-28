@@ -89,8 +89,8 @@ def _read() -> bool:
     on = value is True
     if value is not None and not isinstance(value, bool) and not _bad_noted:
         _bad_noted = True
-        print("[unlock] 设置项 %r 不是布尔（收到 %r）—— 按**关**处理。"
-              "改 data/settings.json 里的 true/false。" % (SETTING_KEY, value))
+        print("[unlock] setting %r is not a boolean (got %r) - treating as off. "
+              "Fix true/false in data/settings.json." % (SETTING_KEY, value))
     with _lock:
         _cache, _cache_value = key, on
     return on
@@ -120,8 +120,8 @@ def pin(session_id: str = "") -> bool:
     on = active(session_id)
     _BYPASS.set(on)
     if on:
-        print("[unlock] 权限解禁生效：完全权限 + 开关打开 —— "
-              "审批 / deny 档 / 受保护路径 / 批量删除熔断**都不再拦**")
+        print("[unlock] unlock active: full access + switch on - "
+              "approvals / deny tier / protected paths / bulk-delete breaker no longer block")
     return on
 
 

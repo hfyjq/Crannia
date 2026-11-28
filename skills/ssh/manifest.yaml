@@ -1,0 +1,182 @@
+kind: skill
+name: ssh
+version: "0.2.0"
+draft: false
+load_strategy: on_demand
+description: "SSH 客户端 —— 远端执行命令、SFTP 传文件、探活；凭据只在设置页配，模型看不到"
+summary: "SSH连接器"
+
+api: 1
+requires:
+  - workspace
+
+# 与 github 同构：登记 BUILTIN_SKILLS（随包发布），但因为有 config:
+# web/server.py 会让技能页显示它并给「配置」按钮——这正是 SSH 要的。
+requires_config:
+  - ssh
+
+config:
+  named: true
+  fields:
+    - key: key_path
+      title: 私钥路径
+      description: "本机私钥文件路径（~/.ssh/id_ed25519 等）；不会进工具参数"
+    - key: passphrase
+      title: 私钥口令
+      format: password
+      x-secret: true
+      description: "可选；私钥加密时填"
+    - key: user
+      title: 默认用户名
+      description: "可选；工具参数里的 user 优先。空着时用 default 记授权"
+    - key: password
+      title: 密码
+      format: password
+      x-secret: true
+      description: "可选；只有密码、没有私钥的机器填这一格（新树莓派常见）。优先用私钥"
+    - key: sudo_password
+      title: sudo 密码
+      format: password
+      x-secret: true
+      description: "可选；远端 sudo 没有免密时填。命令以 sudo 开头时经 stdin 送入"
+
+tools:
+  - name: ssh_exec
+    permission: write
+    destructive: true
+    output_kind: structured
+    review_input: "要连的主机与要执行的远端命令；远端命令能改配置、删文件、装东西"
+    description: >
+      在远端主机执行一条命令，回 stdout/stderr/退出码（输出有上限）。
+      凭据从设置里的 SSH 配置读，绝不在参数里传。
+      ★ 先过出网审批（目标 = user@host）；第一次连接还要确认主机密钥指纹。
+      ★ 长任务（apt upgrade / 编译）请用 nohup 起、再轮询日志。
+    egress:
+      channel: ssh
+      target: host
+      route_for: [ssh, scp, sftp]
+      auto: false
+      audit: true
+      note: "与 scp/sftp 同族：远端执行属最高风险，分类器不得代答"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        host: {type: string}
+        command: {type: string}
+        port: {type: integer, default: 22}
+        user: {type: string, description: "不填用配置里的默认用户"}
+        key_name: {type: string, description: "配置里的条目名；不填用默认"}
+        timeout_s: {type: number, default: 20}
+      required: [host, command]
+
+  - name: ssh_upload
+    permission: write
+    destructive: true
+    output_kind: structured
+    review_input: "要上传的本地文件与远端目标路径；本地文件会离开这台机器"
+    description: >
+      本地文件经 SFTP 传到远端；远端目录不会自动创建。
+      ★ 本地源过路径三级分类（.env 一族读不到）；先过出网审批。
+    egress:
+      channel: ssh
+      target: host
+      route_for: [rsync]
+      auto: false
+      audit: true
+      note: "读本地文件外发 = 敏感数据外发那一类，分类器不得代答"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        host: {type: string}
+        local_path: {type: string}
+        remote_path: {type: string}
+        port: {type: integer, default: 22}
+        user: {type: string}
+        key_name: {type: string}
+        timeout_s: {type: number, default: 20}
+      required: [host, local_path, remote_path]
+
+  - name: ssh_download
+    permission: write
+    destructive: true
+    output_kind: structured
+    review_input: "远端文件与本地落点；会覆盖本地同名文件"
+    description: >
+      远端文件经 SFTP 取到本地；落点必须在工作区（相对路径落在本段对话的
+      默认输出目录）。会覆盖本地同名文件，所以按不可逆操作登记。
+    egress:
+      channel: ssh
+      target: host
+      route_for: [rsync]
+      auto: false
+      audit: true
+      note: "会覆盖本地文件；不退化成自动放行"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        host: {type: string}
+        remote_path: {type: string}
+        local_path: {type: string}
+        port: {type: integer, default: 22}
+        user: {type: string}
+        key_name: {type: string}
+        timeout_s: {type: number, default: 20}
+      required: [host, remote_path, local_path]
+
+  - name: ssh_forward
+    permission: write
+    destructive: true
+    output_kind: structured
+    review_input: "要经哪台主机建隧道，以及本地/远端端口"
+    description: >
+      本地端口转发：127.0.0.1:local_port -> remote_host:remote_port（经 SSH）。
+      立刻返回 task_id，隧道在后台跑（30 分钟寿限，task 工具可查可停）；
+      这是 nc / socat 的 relay 那一路的正规替身。
+    egress:
+      channel: ssh
+      target: host
+      route_for: [nc, netcat, ncat, socat]
+      auto: false
+      audit: true
+      note: "新增能力：隧道（socat 的 relay 只由这一条提供）"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        host: {type: string, description: "SSH 跳板/目标主机"}
+        remote_host: {type: string, description: "从 SSH 主机看过去的目的地址"}
+        remote_port: {type: integer}
+        local_port: {type: integer, default: 0,
+                     description: "本地监听端口；0 = 由系统挑一个空闲端口"}
+        port: {type: integer, default: 22}
+        user: {type: string}
+        key_name: {type: string}
+        timeout_s: {type: number, default: 20}
+      required: [host, remote_host, remote_port]
+
+  - name: ssh_probe
+    permission: read
+    destructive: false
+    output_kind: structured
+    review_input: "要探测的主机与端口（只建 TCP 连接、读 banner）"
+    description: >
+      探主机端口是否可达并读 SSH banner；不需要凭据配置。
+      ★ 这是一条出网通路：目标过审批（`ssh:default@host`）。
+    egress:
+      channel: ssh
+      target: host
+      route_for: []
+      auto: true
+      audit: true
+      note: "新增能力：端口探活的轻量版（不替代 net_ports 的多端口扫描）"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        host: {type: string}
+        port: {type: integer, default: 22}
+        timeout_s: {type: number, default: 5}
+      required: [host]

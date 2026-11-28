@@ -36,6 +36,21 @@ export async function copyText(text, doc, nav) {
   const d = doc || (typeof document !== "undefined" ? document : null);
   const n = nav || (typeof navigator !== "undefined" ? navigator : null);
 
+  // ⓪ 桌面壳的主进程路（只在桥暴露时才存在；WebUI / node 测试没有）。
+  //   `navigator.clipboard.writeText` 在窗口失焦时可能静默 resolve 而不真写，
+  //   而 `execCommand` 已废弃 —— 主进程那条不受渲染进程权限/焦点影响，
+  //   Windows 与 Linux 是同一条实现。失败就照旧落到下面的两条路。
+  if (!doc && !nav && typeof window !== "undefined") {
+    const bridge = window.crannia;
+    if (bridge && typeof bridge.copyToClipboard === "function") {
+      try {
+        if (await bridge.copyToClipboard(s) === true) return true;
+      } catch {
+        // 落到 ① —— 这是一条会走到下一步的失败，不是结论。
+      }
+    }
+  }
+
   // ① 标准路
   try {
     if (n && n.clipboard && typeof n.clipboard.writeText === "function") {

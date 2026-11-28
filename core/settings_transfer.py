@@ -75,7 +75,9 @@ CRED_FILES: tuple = (
     ("data/wechat_credentials.json", "wechat_credentials"),
     ("data/media_gen_credentials.json", "media_gen_credentials"),
     ("data/media_gen_key.txt", "media_gen_key"),
-    ("data/runtime/provider_credentials.json", "provider_credentials"),
+    #: 模型配置的密钥不在这里 —— 它与账本同一份文件，
+    #:   整份搬会把非密字段也塞进加密段、导入时还会覆盖账本。
+    #:   走 `collect_credentials` 里那条 `model_config_api`（按 id 取明文）。
     # MCP 服务器的 `env` / `headers` 里通常就是令牌，归凭据，绝不进默认包。
     ("data/mcp_servers.json", "mcp_servers"),
 )
@@ -152,6 +154,19 @@ def collect_credentials(settings: Optional[dict] = None) -> dict:
         text = _read_text(path)
         if text:
             out[name] = text
+    #: 模型配置的密钥（单文件存储之后与账本同一份文件）——
+    #:   按 id 逐条取明文，不整份搬：整份会把非密字段也加密，
+    #:   导入时还会覆盖账本（账本那段走 `merge_ledger`，与这条分开）。
+    try:
+        from core import model_configs as _MC
+        apis = {cid: _MC.api_for(cid)
+                for cid in (_MC.all_entries().get("configs") or {})}
+        apis = {k: v for k, v in apis.items() if v}
+        if apis:
+            out["model_config_api"] = apis
+    except Exception as exc:                                    # noqa: BLE001
+        # 收不起来就不带这一段（明确不出声地少一块 = 用户以为包里全了）。
+        print(f"[settings_transfer] model config secrets not collected ({type(exc).__name__}: {exc})")
     for k in CRED_SETTINGS:
         if isinstance(settings, dict) and k in settings:
             out[k] = settings[k]
@@ -489,6 +504,15 @@ def apply_import(bundle, plan: dict, current: Optional[dict] = None, *,
                     new_settings[k] = payload[k]
                     written.append(k)
                     n += 1
+            #: 模型配置的密钥按 id 并回账本（只认已有 id）。
+            apis = payload.get("model_config_api")
+            if isinstance(apis, dict) and apis:
+                try:
+                    from core import model_configs as _MC
+                    n += _MC.import_apis(apis)
+                except Exception as exc:                    # noqa: BLE001
+                    applied["model_config_api_error"] = "%s: %s" % (
+                        type(exc).__name__, exc)
             applied["credentials"] = n
         except ValueError as exc:
             applied["credentials_error"] = str(exc)

@@ -298,13 +298,12 @@ def _init_framework() -> None:
                 _old = getattr(_cron_runner, "_runner", None)
                 if _old is not None and _old.running:
                     _old.stop()
-                print("[cron] 后台服务开关关着 —— 定时任务不启动"
-                      "（设置里打开 background_services 后重启生效）")
+                print("[cron] background_services is off -- cron tasks not started")
             else:
                 _cr = _cron_runner.configure(_scheduler)
-                print("[cron] 周期任务调度器已启动（%d 条任务）" % _cr.job_count())
+                print("[cron] periodic scheduler started (%d jobs)" % _cr.job_count())
         except Exception as _exc:  # noqa: BLE001
-            print("[cron] 起调度器失败（不影响其他功能）：%s: %s"
+            print("[cron] failed to start scheduler (other features unaffected): %s: %s"
                   % (type(_exc).__name__, _exc))
 
         # 外部事件入口：插件投递消息时要用到调度器。
@@ -312,7 +311,7 @@ def _init_framework() -> None:
             from core import inbound as _inbound
             _inbound.configure(_scheduler)
         except Exception as _exc:  # noqa: BLE001
-            print("[inbound] 事件入口没接上（不影响启动）：%s: %s"
+            print("[inbound] event entry not wired (startup unaffected): %s: %s"
                   % (type(_exc).__name__, _exc))
 
         # 后台任务的完成通知：空闲起一轮 / 忙则排队。
@@ -320,9 +319,9 @@ def _init_framework() -> None:
         try:
             from core import tasks_notify as _tasks_notify
             _tasks_notify.install(_scheduler)
-            print("[jobs] 后台任务完成通知已接通")
+            print("[jobs] background task completion notifications wired")
         except Exception as _exc:  # noqa: BLE001
-            print("[jobs] 后台通知没接上（不影响启动）：%s: %s"
+            print("[jobs] background notifications not wired (startup unaffected): %s: %s"
                   % (type(_exc).__name__, _exc))
 
         # `task.started/finished/failed/cancelled` ——
@@ -332,7 +331,7 @@ def _init_framework() -> None:
             from core import task_events as _task_events
             _task_events.install()
         except Exception as _exc:  # noqa: BLE001
-            print("[jobs] 任务事件没接上（不影响启动）：%s: %s"
+            print("[jobs] task events not wired (startup unaffected): %s: %s"
                   % (type(_exc).__name__, _exc))
 
         import time
@@ -355,7 +354,7 @@ def _init_framework() -> None:
             from core import last_good as _lg
             _lg.mark_good()
         except Exception as exc:                            # noqa: BLE001
-            print("[last_good] 记录失败（不影响启动）：%s: %s"
+            print("[last_good] failed to record (startup unaffected): %s: %s"
                   % (type(exc).__name__, exc))
         print(f"[web] Framework initialised (provider={provider_name}, "
               f"model={_provider._model if _provider else '?'})")
@@ -1232,7 +1231,7 @@ def api_skill_install():
         invalidate_command_map()
         reloaded = True
     except Exception as exc:                                  # noqa: BLE001
-        print("[skills] 装好了但热加载失败（重启后生效）：%s: %s"
+        print("[skills] installed but hot reload failed (effective after restart): %s: %s"
               % (type(exc).__name__, exc))
 
     return jsonify({"ok": True, "name": name, "path": str(dst),
@@ -1259,8 +1258,7 @@ def _skill_config_payload(name: str, reveal: bool = False) -> dict:
             return {"name": name, "config": cfg, "schema": _ss.schema_for(name)}
     except Exception as e:                                # noqa: BLE001
         # 这条闸自己不许拦路：读不出来就退回老路（下面那些分支）
-        print(f"[skill-config] 声明式配置读不出来（{type(e).__name__}: {e}）"
-              f" —— '{name}' 走旧路径")
+        print(f"[skill-config] failed to read declarative config ({type(e).__name__}: {e})")
     settings = _read_settings()
     saved = settings.get("skill_configs", {}).get(name, {})
     # Auto-migrate old single-account mail config to multi-account structure
@@ -1324,6 +1322,38 @@ def api_get_skill_config_by_name():
     return jsonify(_skill_config_payload(name, reveal=reveal))
 
 
+@app.route("/api/web-request/credentials", methods=["GET", "POST"])
+def api_web_request_credentials():
+    """网络请求（web_request）的凭据条目。
+
+    GET  ：只给名字与头名，值一律不回显。
+    POST ：`{name, headers: {"Header": "value"}}`；空值表示不修改那一格
+           （界面读不到旧值，不可能"原样送回"，空当清空等于每次保存都清光）。
+    """
+    if not _check_token():
+        return jsonify({"error": "unauthorized"}), 403
+    from core import web_request as _wr
+    if request.method == "GET":
+        return jsonify({"entries": _wr.credentials_public()})
+    data = request.get_json(silent=True) or {}
+    ok, why = _wr.save_credential(data.get("name"), data.get("headers") or {})
+    if not ok:
+        return jsonify({"ok": False, "error": tr(why)}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/api/web-request/credentials", methods=["DELETE"])
+def api_web_request_credentials_delete():
+    """删一条凭据（名字走 query）。"""
+    if not _check_token():
+        return jsonify({"error": "unauthorized"}), 403
+    from core import web_request as _wr
+    name = str(request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": tr("缺少 name")}), 400
+    return jsonify({"ok": _wr.delete_credential(name)})
+
+
 @app.route("/api/skills/<name>/config", methods=["POST"])
 def api_save_skill_config(name: str):
     """Save configuration for a specific skill.
@@ -1348,8 +1378,7 @@ def _save_skill_config(name: str, data: dict):
                 return jsonify({"error": err}), 400
             return jsonify({"ok": True, "name": name})
     except Exception as e:                                # noqa: BLE001
-        print(f"[skill-config] 声明式配置写不进去（{type(e).__name__}: {e}）"
-              f" —— '{name}' 走旧路径")
+        print(f"[skill-config] failed to write declarative config ({type(e).__name__}: {e})")
 
     settings = _read_settings()
     if "skill_configs" not in settings:
@@ -1744,7 +1773,7 @@ def api_groups():
             from core import model_configs as _mc
             model_options = _mc.names_payload()
         except Exception as _e:                                 # noqa: BLE001
-            print(f"[groups] 模型选项拉不到（{type(_e).__name__}: {_e}）—— 空表下发")
+            print(f"[groups] failed to get model options ({type(_e).__name__}: {_e})")
             model_options = []
         return jsonify({"groups": rows, "count": len(rows),
                         #: 上限由后端给 —— 前端不自己写死一个 5 / 一个 8 / 一个 40
@@ -2012,6 +2041,37 @@ def api_model_configs_default():
         return jsonify({"ok": False, "error": "%s: %s" % (type(e).__name__, e)}), 500
 
 
+#: HTTP 状态 → `core.llm_errors` 的类别名。0 = 没拿到响应（连不上）。
+_PROBE_KIND = {
+    0: "connection", 401: "auth", 403: "auth", 429: "rate_limit",
+    500: "server_fault", 502: "server_busy", 503: "server_busy",
+    504: "timeout",
+}
+
+
+def _probe_message(ok: bool, status, tried: str, excerpt: str,
+                   model: str, base_url: str) -> str:
+    """连通测试的结论。失败时走 `llm_errors.explain` —— 与聊天里
+    "上游报错"共用同一个产者（一处定义，用户在两处看到的是同一套说法）。
+
+    404 单列：它是"地址不对"，不是"上游出错"，而这一条恰恰是配置页最常撞的
+    （默认地址写错、少写 `/v1`）。`explain` 的类别表里没有它。
+    """
+    from core import llm_errors
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        code = 0
+    if ok:
+        return tr("已联通（HTTP {status}）").format(status=code)
+    if code == 404:
+        return tr("这个地址找不到接口（HTTP 404）—— 检查 Request URL："
+                  "多数服务商的 API 根以 /v1 结尾。")
+    raw = "%s\n%s" % (tried, excerpt[:300]) if tried else excerpt[:300]
+    return llm_errors.explain(raw, kind=_PROBE_KIND.get(code, ""),
+                              model=model, base_url=base_url)
+
+
 def _probe_url(base_url: str, path: str) -> str:
     return base_url.rstrip("/") + path
 
@@ -2168,9 +2228,7 @@ def api_model_configs_test():
             #: `status == 0` = 没有 HTTP 状态（连不上：解析 / 端口 / 超时 /
             #:   代理死了）。不许说成「上游回了 HTTP 0」—— 那是一句看了
             #:   更糊涂的话，而它恰恰是"真请求也连不上"的那种情形。
-            "message": ("已联通（HTTP %d）" % status) if ok
-                       else ((excerpt[:200] or tr("连接失败")) if int(status) == 0
-                             else ("上游回了 HTTP %d" % status)),
+            "message": _probe_message(ok, status, tried, excerpt, model, base_url),
         })
     except Exception as e:                                       # noqa: BLE001
         return jsonify({"ok": False, "error": "%s: %s" % (type(e).__name__, e)}), 500
@@ -3001,7 +3059,7 @@ def _replace_yaml_scalar(text: str, key: str, value, section: str = "") -> str:
                 header = i
                 break
         if header is None:
-            print(f"[config] 找不到 `{section}:` 段 —— 文件未改（不猜）")
+            print(f"[config] section `{section}:` not found -- file unchanged")
             return text
         lo = header + 1
         for j in range(lo, len(lines)):
@@ -3019,15 +3077,15 @@ def _replace_yaml_scalar(text: str, key: str, value, section: str = "") -> str:
             lines[i] = f"{m.group(1)}{key}: {_yaml_scalar(value)}{eol}"
             if lines[i] != before:
                 print(f"[config] {section + '.' if section else ''}{key} -> "
-                      f"{_yaml_scalar(value)}（只改了这一行）")
+                      f"{_yaml_scalar(value)}")
             return "".join(lines)
 
     if not section:
-        print(f"[config] 没有 `{key}:` 这一行且未给 section —— 文件未改（不猜）")
+        print(f"[config] no `{key}:` line and no section given -- file unchanged")
         return text
     eol = "\r\n" if "\r\n" in text else "\n"
     lines.insert(lo, f"  {key}: {_yaml_scalar(value)}{eol}")
-    print(f"[config] {section}.{key} 不存在，已插入一行")
+    print(f"[config] {section}.{key} not present, inserted one line")
     return "".join(lines)
 
 
@@ -3233,8 +3291,8 @@ def _stop_channel(channel_id: str, *, wait_s: float = 5.0,
             try:
                 await channel.terminate()
             except Exception as exc:                             # noqa: BLE001
-                print(f"[channel] {channel_id} terminate 抛了"
-                      f"（{type(exc).__name__}: {exc}）")
+                print(f"[channel] {channel_id} terminate raised"
+                      f" ({type(exc).__name__}: {exc})")
         try:
             asyncio.run_coroutine_threadsafe(_terminate(), loop)
         except Exception as exc:                                 # noqa: BLE001
@@ -3754,7 +3812,7 @@ def _image_components(images) -> list:
         if isinstance(item, str):
             item = {"data_url": item}
         if not isinstance(item, dict):
-            print("[web] images 里有一个认不出的条目（%s），已跳过"
+            print("[web] unrecognized images entry (%s), skipped"
                   % type(item).__name__)
             continue
         url = str(item.get("data_url") or "")
@@ -3765,7 +3823,7 @@ def _image_components(images) -> list:
                              mime_type=str(item.get("media_type")
                                            or "image/png")))
         else:
-            print("[web] images 条目既没有 data_url 也没有 data，已跳过")
+            print("[web] images entry has neither data_url nor data, skipped")
     return out
 
 
@@ -4321,7 +4379,7 @@ def start_webui(port: int = 5000, open_browser: bool = True) -> None:
         _endpoint.write(_ep_root, port=port, token=_LAUNCH_TOKEN,
                         version=__version__)
     except OSError as exc:
-        print(f"[web] 端点文件写不进去（{exc}）—— 单后端保护失效，继续启动",
+        print(f"[web] failed to write endpoint file ({exc}) -- single-backend protection disabled, starting anyway",
               flush=True)
     from waitress import serve
     # threads 12，并显式设置 channel_timeout。
@@ -4363,12 +4421,12 @@ def start_webui(port: int = 5000, open_browser: bool = True) -> None:
             # 只打控制台，不进 UI / 不落盘 —— 这是排障信息，不是功能。
             # 干净退出（不 re-raise）：traceback 只会是 serve -> run -> asyncore.loop，
             # 一条有用信息都没有，反而盖住上面那行结论。
-            print("\n[web] 收到 Ctrl+C -- WebUI 主动退出（不是崩溃）。", flush=True)
-            print("[web] 注：Ctrl+C 发给整个控制台进程组；"
-                  "若别的程序也跑在这个窗口里，它会一起收到。", flush=True)
+            print("\n[web] Ctrl+C received -- WebUI exiting (not a crash).", flush=True)
+            print("[web] note: Ctrl+C goes to the whole console process group;"
+                  " any other program in this window gets it too.", flush=True)
             return
         except Exception:
-            print("\n[web] WebUI 异常退出 -- 这次是真的崩了，原因见下：", flush=True)
+            print("\n[web] WebUI crashed -- reason below:", flush=True)
             raise
     finally:
         # 只删自己那份：退出期间别的后端已经接管的话（pid 变了），
@@ -5154,7 +5212,7 @@ def api_reveal():
             cands = _candidates(decoded)
             hit = next((c for c in cands if c.exists()), None)
             if hit is not None:
-                print(f"[reveal] 路径是 URL 编码的 —— 按解码后的解析：{decoded}")
+                print(f"[reveal] path is URL-encoded -- resolving decoded: {decoded}")
                 raw = decoded
     if hit is None:
         #: 如实说（别让用户以为点了）——
@@ -5685,7 +5743,7 @@ def api_save_settings():
         if _want not in NAMES:
             #: 界面上那排只列得出合法值，这条正常点不出来（
             #:   「这条通知不要了」），人话只留一句，收到的值进控制台。
-            print("[settings] framework_preset 不合法：%r（可选 %s）"
+            print("[settings] invalid framework_preset: %r (options %s)"
                   % (_want, " / ".join(NAMES)))
             return jsonify({"ok": False, "error": tr("预设无效")}), 400
         settings.update(values_of(_want))
@@ -5920,7 +5978,7 @@ def api_save_settings():
         if (isinstance(_at, bool) or not isinstance(_at, int)
                 or not (0 <= _at <= 3600)):
             #: 用户拿到一句人话；收到的值进控制台（排障要它，界面不要它）。
-            print("[settings] approval_timeout_seconds 不合法：%r" % (_at,))
+            print("[settings] invalid approval_timeout_seconds: %r" % (_at,))
             return jsonify({"ok": False, "error":
                             tr("审批等待时间为 0 到 3600 之间的整数秒")}), 400
         settings["approval_timeout_seconds"] = _at
@@ -8047,7 +8105,7 @@ def _save_qq_credentials(fields: dict) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(current, f, ensure_ascii=False, indent=2)
     except OSError as exc:
-        print("[channel] 写 QQ 凭据失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[channel] failed to write QQ credentials (%s: %s)" % (type(exc).__name__, exc))
 
 
 #: 通道 id ↔ 配置条目里的平台名。表外的一律没有条目（微信走扫码、CLI 不需要）。
@@ -8119,7 +8177,7 @@ def _save_channel_config(data: dict) -> None:
     channel_id = str(data.get("channel_id") or "")
     platform = _channel_platform(channel_id)
     if platform not in _cc.PLATFORMS:
-        print("[channel] %s 没有凭据表单，不保存" % (channel_id or "?"))
+        print("[channel] %s has no credential form, not saving" % (channel_id or "?"))
         return
     fields = data.get("fields") or {}
     cid = _cc.default_id(platform)

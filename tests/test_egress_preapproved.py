@@ -158,6 +158,63 @@ def test_path_scoped_entries_need_a_path_boundary():
 # 4. 预批准表接进 `is_granted`（三层）
 # ----------------------------------------------------------------------
 
+def test_system_and_hardware_docs_group():
+    print("\n-- 4b. 表 9（系统与硬件文档）：逐条在表，且第三方站不蹭进来 --")
+    M = _pp()
+    f = M.is_preapproved
+    # 用户点名要的：驱动三家的国际+中文站、树莓派、Adobe、开发文档、Steam
+    wanted = (
+        "nvidia.com", "nvidia.cn", "amd.com", "intel.com", "intel.cn",
+        "raspberrypi.com",
+        "adobe.com", "helpx.adobe.com",
+        "kernel.org", "man7.org", "gnu.org", "source.android.com",
+        "harmonyos.com",
+        "partner.steamgames.com", "developer.valvesoftware.com",
+        # 嵌入式 / 开发板（用户追加）
+        "docs.nvidia.com", "developer.nvidia.com",
+        "arduino.cc", "docs.arduino.cc",
+        "st.com", "www.st.com",
+        "beagleboard.org", "www.beagleboard.org", "beaglebone.org",
+        "pjrc.com", "www.pjrc.com",
+    )
+    for host in wanted:
+        check("在表: " + host, host in M.PREAPPROVED_HOSTS, "")
+        check("命中: " + host, f(host) is True, "")
+    # 已有条目没被挤掉
+    check("developer.android.com 仍在（表 6）",
+          "developer.android.com" in M.PREAPPROVED_HOSTS)
+    check("developer.apple.com 仍在（表 6）",
+          "developer.apple.com" in M.PREAPPROVED_HOSTS)
+    check("developer.huawei.com 仍在（表 6）",
+          "developer.huawei.com" in M.PREAPPROVED_HOSTS)
+    # IM 平台开发者文档（用户追加：微信/飞书/钉钉/企微/Telegram）
+    im_hosts = (
+        "open.feishu.cn", "open.larksuite.com", "open.dingtalk.com",
+        "developer.work.weixin.qq.com", "developers.weixin.qq.com",
+        "open.weixin.qq.com", "core.telegram.org",
+    )
+    for host in im_hosts:
+        check("IM docs: " + host, f(host) is True, "")
+    for bad_im in ("open.wechat.com", "developers.telegram.org",
+                   "telegram.org.cn", "larksuite.cn"):
+        check("IM 负对照: " + bad_im, f(bad_im) is False, "")
+    # 地图与国外宏观（用户追加：出行规划 / 金融数据）
+    for host in ("openstreetmap.org", "project-osrm.org",
+                 "router.project-osrm.org", "fred.stlouisfed.org"):
+        check("地图/金融: " + host, f(host) is True, "")
+    # 地图界面是 JS 壳 + 人机验证，抓不到正文 —— 不进表
+    for bad_map in ("map.baidu.com", "lbsyun.baidu.com", "maps.google.com",
+                    "finance.yahoo.com", "www.investing.com"):
+        check("地图/金融负对照: " + bad_map, f(bad_map) is False, "")
+    # 负对照：第三方驱动站 / 内容农场不命中
+    for bad in ("driver-easy.com", "www.nvidia.com.cn", "3dmdrivers.com",
+                "steamcommunity.com", "adobe.com.cn", "gitee.com",
+                "arduino.cc.cn", "st.com.cn", "teensy.com", "nvidia.com.cn"):
+        check("不在表（不放宽）: " + bad, f(bad) is False, "")
+    check("★ 新组没有重复条目",
+          len(M.PREAPPROVED_HOSTS) == len(set(M.PREAPPROVED_HOSTS)))
+
+
 def test_the_preapproved_table_is_wired_into_is_granted():
     print("\n-- 4. 预批准表真的接进 `is_granted` 了（不是写了个没人调的表）--")
     check("★★ ③ 预批准表命中 -> 放行（① 什么都没批过）",
@@ -206,31 +263,34 @@ def _settle(key, kind, tmp: Path, subject="stats.gov.cn"):
         R.get_workspace_manager, WL._PATH = saved_g, saved_p
 
 
-def test_option_6_writes_the_persistent_allowlist():
-    print("\n-- 6. 选项 6「信任此站点」：落盘，而且**只给 egress** --")
+def test_option_3_writes_the_persistent_allowlist():
+    print("\n-- 6. 选项 3「信任此目标（永久）」：落盘，而且只给 egress --")
     from core.approval import EGRESS_OPTIONS, GRANT_PERSIST
-    opt6 = [o for o in EGRESS_OPTIONS if o.key == "6"]
-    check("EGRESS_OPTIONS 里有键位 6", len(opt6) == 1,
+    # 起出网是四选项：3 = 永久信任、4 = 不同意（旧键 6 退场）。
+    opt3 = [o for o in EGRESS_OPTIONS if o.key == "3"]
+    check("EGRESS_OPTIONS 里有键位 3", len(opt3) == 1,
           repr([o.key for o in EGRESS_OPTIONS]))
-    check("它的 grant 是**持久档**", bool(opt6) and opt6[0].grant == GRANT_PERSIST,
-          repr(opt6[0].grant) if opt6 else "")
-    check("★★ **第一次问就给**（`escalate_at == 0`）—— 用户明示"
-          "「就第一次，这个和其他命令不一样」",
-          bool(opt6) and opt6[0].escalate_at == 0,
-          repr(opt6[0].escalate_at) if opt6 else "")
-    check("★★ 负对照：键位 `3` **还是**「不同意」（**没有为它重排** —— 重排会让老习惯点错）",
-          [o.label for o in EGRESS_OPTIONS if o.key == "3"] == ["不同意"],
-          repr([o.label for o in EGRESS_OPTIONS if o.key == "3"]))
+    check("它的 grant 是持久档", bool(opt3) and opt3[0].grant == GRANT_PERSIST,
+          repr(opt3[0].grant) if opt3 else "")
+    check("第一次问就给（escalate_at == 0）",
+          bool(opt3) and opt3[0].escalate_at == 0,
+          repr(opt3[0].escalate_at) if opt3 else "")
+    check("负对照：键位 6 不在了",
+          not [o for o in EGRESS_OPTIONS if o.key == "6"],
+          repr([o.key for o in EGRESS_OPTIONS]))
+    check("负对照：键位 4 是「不同意」",
+          [o.label for o in EGRESS_OPTIONS if o.key == "4"] == ["不同意"],
+          repr([o.label for o in EGRESS_OPTIONS if o.key == "4"]))
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        got = _settle("6", "egress", tmp)
-        check("★★ 结算之后它**真的在白名单里了**（这就是「以后不再询问」）",
+        got = _settle("3", "egress", tmp)
+        check("结算之后它真的在白名单里了（这就是「以后不再询问」）",
               got == ["stats.gov.cn"], repr(got))
-        #: 负对照：换成别的 kind —— 今天的选项表里只有 egress 挂了 6
-        #:别处收到它是配置错误，必须什么都不记（fail-closed）。
-        got2 = _settle("6", "destructive", tmp)
-        check("★★ 负对照：别的 kind 收到 6 -> **一个字节都不写**（fail-closed）",
+        #: 负对照：同样的键位换到别的 kind 上，什么都不记 - 各表键位语义
+        #: 不同（destructive 的 3 是"不同意"），结算按选项表分派。
+        got2 = _settle("3", "destructive", tmp)
+        check("负对照：别的 kind 收到 3 -> 一个字节都不写（那是它的'不同意'）",
               got2 == ["stats.gov.cn"], repr(got2))
 
 

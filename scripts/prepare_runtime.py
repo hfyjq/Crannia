@@ -763,10 +763,11 @@ SMOKE_IMPORTS = ("flask", "waitress", "yaml", "httpx", "openai", "anthropic",
                  "openpyxl", "docx", "pptx", "pypdf", "pdfplumber", "jieba",
                  "tiktoken", "rank_bm25", "numpy", "PIL", "dotenv", "psutil",
                  "resvg_py",
-                 #:  补的三条 —— 它们正是"开发机有、锁里没有"的那一类：
+                 #:  补的几条 —— 它们正是"开发机有、锁里没有"的那一类：
                  #:   `matplotlib`（`plot_excel_data`）· `curl_cffi`（`web_search`
-                 #:   传输层）· `tzdata`（`ZoneInfo` 的数据，见上面 `SMOKE_CODE`）。
-                 "matplotlib", "curl_cffi")
+                 #:   传输层）· `tzdata`（`ZoneInfo` 的数据，见上面 `SMOKE_CODE`）·
+                 #:   `graph_layout`（diagram 的两种布局）。
+                 "matplotlib", "curl_cffi", "graph_layout")
 
 
 def runtime_dir(target: str) -> Path:

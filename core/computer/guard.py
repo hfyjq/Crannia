@@ -137,7 +137,10 @@ def combo_decision(tokens: list[str]) -> Decision:
         return deny("Windows 键不允许由 agent 注入（会打开开始菜单 / 系统界面）")
     # 不拒绝注入 Esc —— 物理 Esc 仍是急停（watch 的 LL 钩子
     #   只对物理按键触发 stop）；注入 Esc 只是关弹窗/搜索框的正常动作。
-    if {"ctrl", "control"} & lowered and "alt" in lowered and "del" in lowered:
+    # parse_combo 把 del 归一成 delete，两种写法都要认——
+    # 只判 del 会让 Ctrl+Alt+Del 这个安全序列静默漏过去。
+    if ({"ctrl", "control"} & lowered and "alt" in lowered
+            and {"del", "delete"} & lowered):
         return deny("Ctrl+Alt+Del 是安全序列，不能注入")
     return OK
 
@@ -175,13 +178,13 @@ def launch_decision(target: str) -> Decision:
 def preflight(target_pid: int) -> Decision:
     """锁屏 / 完整性级别。在真正注入之前跑。"""
     if win32.is_locked():
-        return deny("桌面已锁屏 —— 接管立即停止（不许去点锁屏界面）")
+        return deny("[SESSION_LOCKED] 桌面已锁屏 —— 接管立即停止（不许去点锁屏界面）")
     if target_pid:
         theirs = win32.integrity_rid(target_pid)
         ours = win32.current_integrity_rid()
         if theirs is not None and ours is not None and theirs > ours:
-            return deny("目标进程的权限比我们高（提权窗口）—— Windows 会**静默**挡掉注入，"
-                        "所以这里直接说够不到")
+            return deny("[ELEVATED_TARGET] 目标进程的权限比我们高（提权窗口）—— "
+                        "Windows 会**静默**挡掉注入，所以这里直接说够不到")
     return OK
 
 

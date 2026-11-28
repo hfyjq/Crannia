@@ -129,13 +129,18 @@ export function parseBlocks(text) {
     const fence = _FENCE.exec(line);
     if (fence) {
       const mark = fence[1];
+      const closeRe = new RegExp("^\\s*" + mark + "\\s*$");
       const body = [];
       i += 1;
-      while (i < lines.length && !new RegExp("^\\s*" + mark + "\\s*$").test(lines[i])) {
+      let closed = false;
+      while (i < lines.length && !closeRe.test(lines[i])) {
         body.push(lines[i]); i += 1;
       }
-      i += 1;                                     // 吃掉收尾那行（没有也算闭合）
-      blocks.push({ type: "code", lang: fence[2] || "", text: body.join("\n") });
+      // 闭合了就吃掉收尾那行；流式途中还没闭合时 `i` 已经在末尾，
+      // 不能傻吃 —— 记下 closed，让渲染层别把半截当成完成的块给人复制。
+      if (i < lines.length) { i += 1; closed = true; }
+      blocks.push({ type: "code", lang: fence[2] || "", text: body.join("\n"),
+                    closed });
       continue;
     }
 

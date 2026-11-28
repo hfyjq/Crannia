@@ -23,7 +23,8 @@ from core.session_key import session_key_for, session_key_of_ctx
 from core.pipeline.stage import Stage, StageContext, register_stage
 # 所有"审批没有发生"的文案头。放在模块顶是因为七个结算器每一条拒绝路径
 # 都要用它，而 `core/approval.py` 只 import `re`/`dataclasses`，不会成环。
-from core.approval import outcome_line
+from core.approval import (GRANT_NONE, GRANT_ONCE, GRANT_PERSIST,
+                           GRANT_SESSION, outcome_line)
 # 投入档的唯一入口与它的"拒"。放在模块顶是因为守卫每轮都要跑
 # （`/clear` 分支里的 `reset_tier_cache` 仍是就地 import —— 它只在那条路上用得到）。
 from core.tiers import TierUnsupported, current_spec
@@ -91,7 +92,7 @@ class PreProcessStage(Stage):
                     "下面这条是用户的新消息。）\n\n" + ctx.user_message)
                 user_input = ctx.user_message.strip()
         except Exception as exc:                      # noqa: BLE001
-            print("[cancel] 读『上一轮被打断』标记失败（不影响这一轮）：%s: %s"
+            print("[cancel] failed to read the 'previous turn interrupted' marker (does not affect this turn): %s: %s"
                   % (type(exc).__name__, exc))
 
         # ---- 轮首清掉上一轮的 ICE 放行 ----
@@ -107,7 +108,7 @@ class PreProcessStage(Stage):
             from core.ice import reveal as _ice_reveal
             _ice_reveal.clear_exempt(session_key)
         except Exception as exc:  # noqa: BLE001
-            print("[ice] 放行表清理失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[ice] failed to clean allow table (%s: %s)" % (type(exc).__name__, exc))
 
         # 审批回答的唯一入口
         # 跨区 / 删除 / 计划三块几乎一样的代码，各自判 `active`、各自用精确
@@ -141,7 +142,7 @@ class PreProcessStage(Stage):
                 ctx.metadata["dedup_skipped"] = True
                 # 不许静默：这条消息被丢掉了，用户那边看见的是"没有回复"。
                 #   一行日志是"重复投递"与"它没收到"唯一的区别。
-                print("[dedup] 重复投递，跳过这一条（platform=%s scope=%s id=%s）"
+                print("[dedup] duplicate delivery, skipping this one (platform=%s scope=%s id=%s)"
                       % (platform, _dedup_args["scope"], message_id))
                 return ctx
             #: 轮末要用同一组参数落账 / 放位（`post_process` 与调度器读这一格）。
@@ -177,7 +178,7 @@ class PreProcessStage(Stage):
                 if _exp.get("context"):
                     _block = _block + "\n\n" + _exp["context"]
             except Exception as _exc:                          # noqa: BLE001
-                print("[hooks] UserPromptExpansion 失败（忽略）：%s: %s"
+                print("[hooks] UserPromptExpansion failed (ignored): %s: %s"
                       % (type(_exc).__name__, _exc))
             user_input = _block
             ctx.user_message = _block
@@ -278,7 +279,7 @@ class PreProcessStage(Stage):
             _recap = recap_for(session_key)
         except Exception as exc:                     # noqa: BLE001
                 # 回顾是锦上添花 —— 绝不能因此弄挂这一轮。
-            print("[recap] 生成失败（%s: %s）—— 这一轮没有回顾"
+            print("[recap] generation failed (%s: %s) - no recap this turn"
                   % (type(exc).__name__, exc))
             _recap = None
         if _recap:
@@ -295,7 +296,7 @@ class PreProcessStage(Stage):
                     ctx.events.emit(EVT_RECAP, session_key=session_key,
                                     recap=_recap)
             except Exception as exc:                 # noqa: BLE001
-                print("[recap] 事件发失败（%s: %s）—— 回顾这次看不到"
+                print("[recap] failed to emit event (%s: %s) - recap not shown"
                       % (type(exc).__name__, exc))
 
         # 档位读取：设置读不出来，在这一轮开始前拒
@@ -318,7 +319,7 @@ class PreProcessStage(Stage):
                 f"{exc}\n\n"
                 "改 `data/settings.json` 的 `effort_level`（1–5 档），或在设置页里改。"
             )
-            print(f"[tier] 拒了这一轮：{exc}")
+            print(f"[tier] rejected this turn: {exc}")
             return ctx
 
         # 工作区热重载检测
@@ -379,7 +380,7 @@ class PreProcessStage(Stage):
                              "content": "[hook] " + _up["context"],
                              "kind": "hook_context"})
         except Exception as _he:  # noqa: BLE001
-            print("[hooks] 本轮钩子失败（不影响对话）：%s: %s"
+            print("[hooks] hook failed this turn (does not affect the conversation): %s: %s"
                   % (type(_he).__name__, _he))
         # 这一段对话的工作目录
         #
@@ -404,10 +405,10 @@ class PreProcessStage(Stage):
                 if _ok:
                     _sw.set_for(sid, _ws_req)
                 else:
-                    print("[workspace] 这一轮带的工作目录用不了（按未选处理）：%s"
+                    print("[workspace] this turn's workspace dir unusable (treated as not selected): %s"
                           % _why)
         except Exception as _wse:  # noqa: BLE001
-            print("[workspace] 写本轮工作目录失败（按未选处理）：%s: %s"
+            print("[workspace] failed to write this turn's workspace dir (treated as not selected): %s: %s"
                   % (type(_wse).__name__, _wse))
         # 把解析出的段写回事件 —— 唯一的读者是 `core/cron/runner.py`，
         # 它要记下"这一次落在哪一段"。
@@ -2395,6 +2396,8 @@ _APPROVAL_KINDS = (
     # 出网与命令执行共用同一套派发/结算代码 —— 这正是重点：走现成的路，
     # 而不是各长一套流程。
     ("egress", "pending_egress"),
+    # SSH 主机密钥信任（TOFU）- 自己一格（一格只许一个 kind 用）。
+    ("ssh_hostkey", "pending_ssh_hostkey"),
     ("command", "pending_command"),
     # 兜底闸：不可逆、而自身没有审批发射点的工具。
     ("destructive", "pending_destructive"),
@@ -2532,10 +2535,10 @@ def _audit_approval(kind: str, subject: str, key: str, ask_index: int,
         guard = _security_guard_or_none()
         if guard is not None:
             guard.record_approval(kind, subject, str(key), outcome, rule)
-        print("[approval] %s %s（subject=%s key=%s rule=%s）"
+        print("[approval] %s %s (subject=%s key=%s rule=%s)"
               % (kind, outcome, subject[:60] or "-", key, rule or "none"))
     except Exception as exc:                                 # noqa: BLE001
-        print("[approval] 审批审计写入失败（%s: %s）—— 结算本身已发生"
+        print("[approval] approval audit write failed (%s: %s) - settlement already happened"
               % (type(exc).__name__, exc))
 
 
@@ -3077,16 +3080,40 @@ def _settle_delete_bulk(key: str, pend: dict, ctx):
 # 被审批物在 `pend["subject"]` 里（域名 / 收件人 / 命令文本）。两半授权都是
 # 按目标的；见 `WorkspaceManager.grant_target_once`。
 
+def _option_for_pend(kind: str, key: str, pend: dict):
+    """用户回的那个键，在这一次真给出的选项表里是哪一项。
+
+    取不到返回 None（那个键不存在 - 什么都不结算，退回重问）。
+    ask_index / rule 都从载荷里取：升级项按当时那个下标才出现过。
+    """
+    from core.approval import find_option
+    n = max(1, int(pend.get("ask_index") or 1))
+    rule = str(pend.get("rule") or "")
+    return find_option(kind, str(key), n, rule=rule)
+
+
 def _settle_target(kind: str, key: str, pend: dict, ctx, *,
                    approve_msg: str, deny_msg: str, all_msg: str = ""):
     subject = str(pend.get("subject") or "")
-    # 规则也必须在 `_drop_pending` 之前抓取 —— 那是 `pend.clear()`，
+    # 规则也必须在 `_drop_pending` 之前抓取 - 那是 `pend.clear()`，
     #    读晚了就是空串（与下面的 `_replay` 同一个坑）。
     _rule = str(pend.get("rule") or "")
     # 在 `_drop_pending`（`pend.clear()`）之前抓取。
     _replay = _replay_of(pend)
 
-    if key == "1":
+    # 键 -> 这一次真给出的那一项。按语义分派，不按数字 -
+    # 各表的键位含义不同（出网四选项的 3 是"永久信任"，命令表的是"不同意"）。
+    _opt = _option_for_pend(kind, key, pend)
+    if _opt is None:
+        return None
+
+    if _opt.stage:
+        pend["stage"] = _opt.stage
+        ctx.metadata["stop"] = True
+        ctx.response = tr("有什么需要告诉 Crannia 的？")
+        return ctx
+
+    if _opt.grant == GRANT_ONCE:
         _drop_pending(pend)
         _grant_target(ctx, kind, subject)
         ctx.user_message = approve_msg
@@ -3095,8 +3122,8 @@ def _settle_target(kind: str, key: str, pend: dict, ctx, *,
         ctx.approval_replay = dict(_replay, fallback=approve_msg)
         return None
 
-    if key == "2":
-        # "本对话内不再询问这个目标" —— 只加这一个（不是 `"*"`）。
+    if _opt.grant == GRANT_SESSION and not _opt.session_all:
+        # "本对话内不再询问这个目标" - 只加这一个（不是 "*"）。
         #
         # 对命令域来说，"这一个"是一条规则。两半有意不同，
         #    不要合并：
@@ -3113,22 +3140,19 @@ def _settle_target(kind: str, key: str, pend: dict, ctx, *,
         ctx.approval_replay = dict(_replay, fallback=approve_msg)
         return None
 
-    if key == "3":
-        # 这是唯一接上"用户拒绝"头的地方 —— 出网 / 命令 / 兜底闸共用
+    if _opt.grant == GRANT_NONE:
+        # 这是唯一接上"用户拒绝"头的地方 - 出网 / 命令 / 兜底闸共用
         # 这个分支；它们的 `deny_msg` 动词不同，头是同一句。
         _drop_pending(pend)
         ctx.user_message = "[系统] " + outcome_line("rejected", deny_msg)
         ctx.approval_replay = _deny_of(_replay, ctx.user_message)
         return None
 
-    if key == "4":
-        pend["stage"] = "await_other"
-        ctx.metadata["stop"] = True
-        ctx.response = tr("有什么需要告诉 Crannia 的？")
-        return ctx
+    # 自由文本那一支（stage=await_other）在上面统一处理 -
+    # 这里不再按键位分支（出网四选项里没有这一项，命令表里有）。
 
-    if key == "5":
-        # 升级项："本对话内所有目标自动放行" —— 存成通配符 `"*"`。
+    if _opt.session_all:
+        # 升级项："本对话内所有目标自动放行" - 存成通配符 "*"。
         #
         # 会话级，绝不落盘。
         #
@@ -3158,21 +3182,20 @@ def _settle_target(kind: str, key: str, pend: dict, ctx, *,
         ctx.approval_replay = dict(_replay, fallback=ctx.user_message)
         return None
 
-    if key == "6":
-        # "信任此站点，不再询问" —— 全仓唯一一处由弹窗写入
-        #    `data/allowlist.json` 的地方。
+    if _opt.grant == GRANT_PERSIST:
+        # "信任此目标（永久）" - 全仓唯一一处由弹窗写入 data/allowlist.json
+        # 的地方（出网四选项的第 3 项）。
         #
         # 这是对一条旧规则的例外（"对话里点出来的东西不写那个文件"）。
-        #    理由必须有正式记录，不能只留在代码注释中。
+        # 理由必须有正式记录，不能只留在代码注释中。
         #
-        # fail-closed：只许 `egress`。其他 kind 走到这一支，说明
-        #    选项表配错了（今天只有 `egress` 有键 6），拒掉这一次，
-        #    什么都不记。宁可退化成"再问一次"，也不要持久放行一个从未被
-        #    设计为可持久的东西（对 `command` 来说，持久化等于一张空头
-        #    支票：它按整条命令精确匹配）。
+        # fail-closed：只许 egress。其他 kind 走到这一支，说明选项表配错了，
+        # 拒掉这一次，什么都不记。宁可退化成"再问一次"，也不要持久放行一个
+        # 从未被设计为可持久的东西（命令那张表按整条精确匹配，持久化等于
+        # 一张空头支票）。
         if kind != "egress":
-            print(f"[approval] kind={kind!r} 收到选项 6（信任此站点）—— "
-                  f"**只有 egress 有这一档**，这次不记，退回重问")
+            print(f"[approval] kind={kind!r} got persistent trust tier - "
+                  f"only egress has it; not recording, asking again")
             return None
         _drop_pending(pend)
         # 两半都发（与选项 2 同一条规矩）：本轮重新提交能过 + 下一轮起生效。
@@ -3184,12 +3207,12 @@ def _settle_target(kind: str, key: str, pend: dict, ctx, *,
             _ok = _wl_add("egress", subject)
             # 没写进去也要出声：`add` 是幂等的（已存在返回 False），
             #   而"点了信任、下次还问"必须能一眼看出是哪种情况。
-            print(f"[approval] 信任此站点：{subject} —— "
-                  + ("已写进 data/allowlist.json" if _ok else "本来就在白名单里"))
+            print(f"[approval] trusting this site: {subject} - "
+                  + ("written to data/allowlist.json" if _ok else "already in allowlist"))
         except Exception as exc:                                            # noqa: BLE001
             # 写盘失败不回滚：两半已经发出，用户这一下是有效的；
             #   回滚只会让他再点一次，而那次同样会失败。如实报告就够了。
-            print(f"[approval] 信任此站点写盘失败（本次仍放行，但下次还会问）："
+            print(f"[approval] failed to persist site trust (allowed this time, will ask again): "
                   f"{type(exc).__name__}: {exc}")
         ctx.user_message = approve_msg
         ctx.approval_replay = dict(_replay, fallback=approve_msg)
@@ -3199,11 +3222,12 @@ def _settle_target(kind: str, key: str, pend: dict, ctx, *,
 
 
 def _settle_egress(key: str, pend: dict, ctx):
-    """出网：1 同意 / 2 本对话内不再问此目标 / 3 不同意 / 4 我有话说 /
-    5 全部放行 / 6 信任此站点（落盘）。
+    """出网：四选项（core/approval.py 的 EGRESS_OPTIONS）-
+    1 同意本次 / 2 本对话内不再问此目标 / 3 永久信任此目标 / 4 不同意。
 
-    `cross_zone` 的键含义不同（`2` = 缩小范围，`3` = 不同意）——
-    不要跨表照抄 `1/2/3`；各表的定义在 `core/approval.py`。
+    结算走 _settle_target，但按选项语义分派（见那里）：出网表的 3 与
+    命令表的 3 含义相反，按数字推断会把拒绝记成同意。
+    cross_zone 的键含义又不同（2 = 缩小范围，3 = 不同意）- 不要跨表照抄。
     """
     return _settle_target(
         "egress", key, pend, ctx,
@@ -3220,6 +3244,48 @@ def _settle_egress(key: str, pend: dict, ctx):
                  "⚠️ 这是**会话级**的 —— 换一段对话（`/clear`）就失效，"
                  "**没有**写进设置页的白名单。"),
     )
+
+
+def _settle_ssh_hostkey(key: str, pend: dict, ctx):
+    """SSH 主机密钥信任：1 信任并继续 / 2 不信任。
+
+    同意则把载荷里那一行写进框架自己的 data/runtime/ssh/known_hosts
+    （不碰 ~/.ssh/known_hosts），然后重放那次调用 - 重放时主机密钥已经
+    在表里，连接才能过严格校验。
+
+    它不经过 _settle_target：那一套发的是"目标的授权"，而这里真正生效
+    的是 known_hosts 那一行。选项 1 的 GRANT_ONCE 只是"这次算同意"。
+    """
+    _replay = _replay_of(pend)
+    _line = str(pend.get("host_key_line") or "")
+    _subject = str(pend.get("subject") or "")
+
+    _opt = _option_for_pend("ssh_hostkey", key, pend)
+    if _opt is not None and _opt.grant == GRANT_ONCE:
+        _drop_pending(pend)
+        try:
+            from core.ssh_config import add_known_host
+            _ok = add_known_host(_line)
+            print(f"[approval] SSH host key recorded: {_subject} - "
+                  + ("written to data/runtime/ssh/known_hosts" if _ok
+                     else "already in table"))
+        except Exception as exc:                            # noqa: BLE001
+            # 写失败不回滚：用户这一下是有效的，但重放会再次撞上未知主机。
+            # 如实出声 - "点了信任、下次还问"必须能一眼看出是哪种情况。
+            print(f"[approval] failed to write SSH host key (replay will hit unknown host again): "
+                  f"{type(exc).__name__}: {exc}")
+        ctx.user_message = ("[系统] 用户已信任此主机。"
+                            "请重新发起刚才那个 SSH 调用，框架会放行。")
+        ctx.approval_replay = dict(_replay, fallback=ctx.user_message)
+        return None
+
+    _drop_pending(pend)
+    ctx.user_message = "[系统] " + outcome_line(
+        "rejected",
+        "用户没有信任这台主机的主机密钥。请告知用户这次连接没有建立；"
+        "不要重试、也不要换个写法重试。")
+    ctx.approval_replay = _deny_of(_replay, ctx.user_message)
+    return None
 
 
 def _settle_destructive(key: str, pend: dict, ctx):
@@ -3376,7 +3442,7 @@ def _leave_plan_mode(ctx) -> None:
         #    数（让稀疏提醒过早或过晚触发）。
         reset_turn_index(sid)
     except Exception as exc:
-        print("[plan] 退出计划模式失败：%s" % exc)
+        print("[plan] failed to exit plan mode: %s" % exc)
 
 
 def _grant_target(ctx, kind: str, subject: str) -> None:
@@ -3619,12 +3685,12 @@ def _settle_ice(key: str, pend: dict, ctx):
 
 def _emit_ice_downgraded(session_id: str) -> None:
     """说出"保护已降级"（标签不许说谎，界面必须一直看得见）。"""
-    print("[ice] 信息层在**本会话**内已降级（用户 §6.9 选项 2）—— /clear 回收")
+    print("[ice] info layer downgraded for THIS session - /clear restores")
     try:
         from core.events import EVT_ICE_DOWNGRADED, get_event_bus
         get_event_bus().emit(EVT_ICE_DOWNGRADED, session_key=session_id)
     except Exception as exc:  # noqa: BLE001
-        print("[ice] 降级事件发失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[ice] failed to emit downgrade event (%s: %s)" % (type(exc).__name__, exc))
 
 
 _SETTLERS = {
@@ -3634,6 +3700,8 @@ _SETTLERS = {
     # （见 `_settle_delete_bulk`）。
     "delete_bulk": _settle_delete_bulk,
     "egress": _settle_egress,
+    # SSH 主机密钥信任：只写框架自己的 known_hosts，然后重放那次调用。
+    "ssh_hostkey": _settle_ssh_hostkey,
     "command": _settle_command,
     "destructive": _settle_destructive,
     # 工作区之外写文件 —— 与出网/命令同一种结算器形状

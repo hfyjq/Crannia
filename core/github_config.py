@@ -38,7 +38,7 @@ def load(path: Optional[Path] = None) -> dict:
             return {}
         raw = json.loads(p.read_text(encoding="utf-8"))
     except Exception as exc:                                   # noqa: BLE001
-        print("[github] 读不到设置里的令牌（%s）—— 视为未配置" % type(exc).__name__)
+        print("[github] cannot read token from settings (%s) - treated as unconfigured" % type(exc).__name__)
         return {}
     cfg = (raw.get("skill_configs") or {}).get(SCOPE) or {}
     return cfg if isinstance(cfg, dict) else {}

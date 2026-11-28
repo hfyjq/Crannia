@@ -8,6 +8,7 @@ Pillow>=12.3
 # 这三条代码里有 import，但这份清单里一度漏了：照它装出来的包会缺，而开发机
 # 上一切正常。tests/test_primary_runtime.py 现在拿源码里的 import 对这份清单。
 matplotlib>=3.9            # plot_excel_data（Excel 出图）
+graph-layout>=0.5          # diagram skill：流程图/思维导图布局，MIT，不需要 Graphviz 二进制
 curl-cffi>=0.13            # `web_search` / `web_fetch` 传输层（裸 urllib 撞 Cloudflare 1010）
 tzdata>=2024.1             # Windows 上 `ZoneInfo("Asia/Shanghai")` 没有它直接抛
 opencv-python-headless>=5.0
@@ -37,6 +38,10 @@ openai>=2.44
 openpyxl>=3.1
 pdfplumber>=0.11
 psutil>=7.2
+# netops skill：DNS 记录与 TTL（ISC，零传递依赖）
+dnspython>=2.9
+# ssh skill：SSH 客户端（LGPL-2.1，只做客户端）
+paramiko>=5.1
 py7zr>=1.1
 pystray>=0.19
 python-docx>=1.2

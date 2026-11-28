@@ -101,7 +101,7 @@ Apache-2.0 那一支履约）。
 - **npm / Python 依赖**按各自包的许可，由 `package.json` / `requirements.txt` 记录；
   Electron 自身的许可由打包工具带进产物。
 - **随包的 Python 运行时**（`python-build-standalone`）是 CPython 的再分发，许可随包。
-- **全量清单**：`THIRD-PARTY-PYTHON.md`（145 个 Python 包）与 `sbom.json`
+- **全量清单**：`THIRD-PARTY-PYTHON.md`（151 个 Python 包）与 `sbom.json`
   （CycloneDX，275 个组件）。
 单独点名的一支（直接依赖，`NOTICE` 里也写了）：
 

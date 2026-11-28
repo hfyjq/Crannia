@@ -470,7 +470,8 @@ def _quarantine_dead_server(server) -> None:
 
 
 def register_external_server(server: ExternalMCPServer, *,
-                             trusted_output: bool = False) -> int:
+                             trusted_output: bool = False,
+                             egress: dict | None = None) -> int:
     """
     Register tools from an external MCP server into bus/registry.
 
@@ -525,6 +526,16 @@ def register_external_server(server: ExternalMCPServer, *,
             print(f"[mcp] WARNING: '{tool_name}' 的档位 {perm!r} 被拒（落回兜底）")
         if not _tool_permission.declare_destructive(prefixed_name, destructive):
             print(f"[mcp] WARNING: '{tool_name}' 的 destructive 声明被拒（落回兜底）")
+        if isinstance(egress, dict):
+            # 出网声明：用户在服务器配置里写的 `egress:` 段。
+            #   与技能 manifest 同一张表（同一个 `declare`）；坏的一律出声拒，
+            #   默认值会把"没声明"变成 auto=True（放行的一侧）。
+            from core import egress_channels as _ec
+            _ok, _why = _ec.declare(prefixed_name, egress,
+                                    source=f"mcp:{server.name}")
+            if not _ok:
+                print(f"[mcp] WARNING: '{prefixed_name}' 的 egress 声明无效"
+                      f"（{_why}）- 按「未声明」处置")
         if trusted_output:
             # 用户明确信任这台服务器只回结构化结果 —— 落到同一条 `declare`
             # 上，不另开一个"可信服务器"集合：两个真相源迟早漂，而漂的方向

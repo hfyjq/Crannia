@@ -230,12 +230,10 @@ def _read_domain(skill: str) -> str:
             return ""
         text = path.read_text(encoding="utf-8").strip()
     except Exception as exc:  # 判据 4：不静默，但也不阻断对话
-        print(f"[skill_guidance] 读不动 {path}（{type(exc).__name__}: {exc}）"
-              f" —— 这个 skill 本轮不带领域片段")
+        print(f"[skill_guidance] cannot read {path} ({type(exc).__name__}: {exc}) - this skill gets no domain guidance this turn")
         return ""
     if len(text) > _MAX_DOMAIN_CHARS:
-        print(f"[skill_guidance] {path} 有 {len(text)} 字符，超过 "
-              f"{_MAX_DOMAIN_CHARS} —— 已截断（它是按条计费的，请写短些）")
+        print(f"[skill_guidance] {path} has {len(text)} chars, exceeds {_MAX_DOMAIN_CHARS} - truncated (billed per request, please write shorter)")
         text = text[:_MAX_DOMAIN_CHARS].rstrip() + "..."
     return text
 

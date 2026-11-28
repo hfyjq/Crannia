@@ -78,7 +78,7 @@ def load_cached(key: str) -> Optional[str]:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception as e:
         # 出声但继续 —— 缓存是加速器，不是正确性的一部分（判据 ②）。
-        print(f"[summarizer] 缓存读不动（{type(e).__name__}: {e}）—— 按没缓存算")
+        print(f"[summarizer] cache read failed ({type(e).__name__}: {e}) - treating as no cache")
         return None
     text = data.get("text") if isinstance(data, dict) else None
     if isinstance(text, str) and text.strip():
@@ -104,7 +104,7 @@ def save_cached(key: str, text: str) -> None:
         os.replace(tmp, final)
         _evict()
     except Exception as e:
-        print(f"[summarizer] 缓存写不下去（{type(e).__name__}: {e}）—— 这次不缓存")
+        print(f"[summarizer] cache write failed ({type(e).__name__}: {e}) - not caching this time")
 
 
 def _evict() -> None:
@@ -197,7 +197,7 @@ def iterative_summarize(
                      merge_batch_size, _model)
     _hit = load_cached(_key)
     if _hit is not None:
-        print(f"[summarizer] 命中缓存（{_key[:12]}…）—— **0 次 LLM 调用**")
+        print(f"[summarizer] cache hit ({_key[:12]}...) - 0 LLM calls")
         return _hit
     _result = _summarize_uncached(
         chunks, llm_client, summary_prompt,
@@ -224,8 +224,7 @@ def _summarize_uncached(
     _budget = _single_call_char_budget(llm_client)
     _total_chars = sum(len(c.get("text", "")) for c in chunks)
     if _budget and _total_chars <= _budget:
-        print(f"[summarizer] 文档 {_total_chars:,} 字符 ≤ 单次预算 {_budget:,} "
-              f"—— 一次调用完成（跳过 map-reduce）")
+        print(f"[summarizer] document {_total_chars:,} chars <= single-call budget {_budget:,} - done in one call (map-reduce skipped)")
         return _summarize_single(
             llm_client,
             system_prompt=summary_prompt,

@@ -56,7 +56,7 @@ def _read() -> dict[str, dict]:
     except Exception as exc:                                    # noqa: BLE001
         # 账本坏了，当没有停用（同 `quarantine._read` 那条判据：
         #   宁可多放一个工具出来，不可凭一个读不动的文件把用户的东西关掉）。
-        print(f"[mcp_disabled] 账本读不动（{type(exc).__name__}: {exc}）—— 按空账本走")
+        print(f"[mcp_disabled] ledger unreadable ({type(exc).__name__}: {exc}) - treating as empty")
         return {}
     return raw if isinstance(raw, dict) else {}
 
@@ -83,7 +83,7 @@ def _sync_registry(data: dict[str, dict]) -> None:
         set_mcp_disabled(data.keys())
     except Exception as exc:                                    # noqa: BLE001
         # 推不进去不影响账本本身（下次启动还有）。但要说出来。
-        print(f"[mcp_disabled] 推给注册表失败（{type(exc).__name__}: {exc}）")
+        print(f"[mcp_disabled] push to registry failed ({type(exc).__name__}: {exc})")
 
 
 def load() -> dict[str, dict]:
@@ -153,8 +153,7 @@ def disable(owner: str, *, reason: str = "") -> dict:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
             # 写不进去也照样停用（本次运行内是真的）—— 同 `quarantine` 那条。
-            print(f"[mcp_disabled] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**仍然停用** '{owner}'")
+            print(f"[mcp_disabled] ledger write failed ({type(exc).__name__}: {exc}) - still disabled for this run '{owner}'")
         _sync_registry(data)
     return entry
 
@@ -172,8 +171,7 @@ def enable(owner: str) -> bool:
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[mcp_disabled] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**仍然启用** '{owner}'")
+            print(f"[mcp_disabled] ledger write failed ({type(exc).__name__}: {exc}) - still enabled for this run '{owner}'")
         _sync_registry(data)
     return True
 

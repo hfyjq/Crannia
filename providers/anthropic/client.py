@@ -57,8 +57,8 @@ def _create_with_retry(client, kwargs):
                     else int(rstate.get("retry") or 0)
                 llm_retry.note(_session_key(), n, kind=kind,
                                text=headline(e, kind=kind), phase=action)
-                print(f"[llm] {kind or 'unknown'} —— {delay}ms 后重试"
-                      f"（{action} {n}）")
+                print(f"[llm] {kind or 'unknown'} -- retrying in {delay}ms"
+                      f" ({action} {n})")
                 #: 可打断 —— 用户按了打断就立刻把原异常抛回。
                 if not llm_retry.wait(_session_key(), delay):
                     raise
@@ -113,8 +113,8 @@ def _to_anthropic_content(content):
             if block is not None:
                 out.append(block)
         else:
-            print(f"[anthropic] 认不出的 content 块 type={kind!r} —— "
-                  f"换成一个可见的说明（不静默丢）")
+            print(f"[anthropic] unrecognized content block type={kind!r} -- "
+                  f"replaced with a visible note")
             out.append({"type": "text",
                         "text": f"[这块内容（{kind}）Anthropic 这条线不支持]"})
     # 空列表上游会 400（content 不能是空数组），补一个空文本块。
@@ -134,13 +134,13 @@ def _image_block(part: dict) -> Optional[dict]:
 
     url = (part.get("image_url") or {}).get("url") or ""
     if not url.startswith("data:"):
-        print(f"[anthropic] 图片块不是一个 data: URL（{url[:40]!r}）—— "
-              f"Anthropic 那条路只收内嵌的字节，这一块被丢掉了")
+        print(f"[anthropic] image block is not a data: URL ({url[:40]!r}) -- "
+              f"dropped")
         return None
     head, _, payload = url.partition(",")
     media = head[5:].split(";")[0].strip().lower() or "image/png"
     if not payload:
-        print("[anthropic] 图片块的 data: URL 里没有 payload —— 丢掉了")
+        print("[anthropic] image data: URL has no payload -- dropped")
         return None
     # 重编码成 base64 一次（`data:` 里本来就是 base64，但别假设 ——
     #   一个 `;base64,` 都没有的 data URL 是百分号编码的）。
@@ -171,8 +171,7 @@ def _image_block_media(block) -> list:
                 getattr(src, "media_type", "image/png"), src.data),
             "name": "image",
         }]
-    print("[media] 忽略非 base64 的 image 块"
-          "（url 来源不下载，绕开出网闸）")
+    print("[media] ignoring non-base64 image block")
     return []
 
 
@@ -288,8 +287,8 @@ class AnthropicProvider(BaseProvider):
         self.supports_vision = bool(supports_vision)
         # 这条路没有音频部件 —— 永远 False，声明了也要出声。
         if supports_audio:
-            print("[anthropic] config 声明了 supports_audio，但这条线没有音频部件 "
-                  "—— 仍按不支持处理（语音会以可见说明的形式交给模型）")
+            print("[anthropic] config declares supports_audio but this path has no audio parts "
+                  "-- treating as unsupported")
         self.supports_audio = False
         self._temperature = temperature
         self._max_tokens = max_tokens
@@ -359,11 +358,11 @@ class AnthropicProvider(BaseProvider):
             return
         self._window_claim_warned = True
         print(
-            f"[window] prompt={prompt_tokens:,} 已超过声明窗口 "
-            f"{self._context_window:,} —— 声明值错了"
-            f"（来源={self._window_source}，model={self._model}）。"
-            f"压缩闸门按声明值算（{int(self._context_window * 0.85):,}），"
-            f"会永远够不着。"
+            f"[window] prompt={prompt_tokens:,} exceeds declared window "
+            f"{self._context_window:,} -- declared value is wrong"
+            f" (source={self._window_source}, model={self._model})."
+            f" compression gate uses the declared value"
+            f" ({int(self._context_window * 0.85):,})"
         )
 
     # ------------------------------------------------------------------
@@ -435,23 +434,21 @@ class AnthropicProvider(BaseProvider):
             budget = 0
             if self._thinking_budget > 0 and not self._tier_supersede_warned:
                 self._tier_supersede_warned = True
-                print(f"[thinking] 投入档这一档是「不思考」—— config.yaml 的 "
-                      f"anthropic.thinking_budget={self._thinking_budget} 被它取代"
-                      f"（档位是唯一来源）")
+                print(f"[thinking] effort tier disables thinking -- config.yaml "
+                      f"anthropic.thinking_budget={self._thinking_budget} superseded")
         if budget <= 0:
             return {}
         if budget < _MIN_THINKING_BUDGET:
-            print(f"[thinking] 预算 {budget} 低于 Anthropic 的下限 "
-                  f"{_MIN_THINKING_BUDGET} —— 按 {_MIN_THINKING_BUDGET} 发")
+            print(f"[thinking] budget {budget} below Anthropic minimum "
+                  f"{_MIN_THINKING_BUDGET} -- sending {_MIN_THINKING_BUDGET}")
             budget = _MIN_THINKING_BUDGET
         if budget >= self._max_tokens:
             if self._max_tokens <= _MIN_THINKING_BUDGET:
-                print(f"[thinking] max_tokens={self._max_tokens} 容不下思考预算 "
-                      f"（要 >{_MIN_THINKING_BUDGET}）—— 这一次**不带思考**"
-                      f"（硬发会被上游 400，整轮都没了）")
+                print(f"[thinking] max_tokens={self._max_tokens} cannot fit thinking budget "
+                      f"(needs >{_MIN_THINKING_BUDGET}) -- omitting thinking this time")
                 return {}
-            print(f"[thinking] 预算 {budget} >= max_tokens {self._max_tokens} "
-                  f"—— 夹到 {self._max_tokens - 1}（上游硬约束）")
+            print(f"[thinking] budget {budget} >= max_tokens {self._max_tokens} "
+                  f"-- clamped to {self._max_tokens - 1}")
             budget = self._max_tokens - 1
         return {"thinking": {"type": "enabled", "budget_tokens": budget}}
 
@@ -625,8 +622,8 @@ class AnthropicProvider(BaseProvider):
                         else int(rstate.get("retry") or 0)
                     llm_retry.note(_session_key(), n, kind=kind,
                                    text=headline(e, kind=kind), phase=action)
-                    print(f"[llm] {kind or 'unknown'} —— {delay}ms 后重试"
-                          f"（{action} {n}）")
+                    print(f"[llm] {kind or 'unknown'} -- retrying in {delay}ms"
+                          f" ({action} {n})")
                     #: 可打断（同 OpenAI 兼容那条）。
                     if not await llm_retry.wait_async(_session_key(), delay):
                         llm_retry.clear(_session_key())
@@ -635,8 +632,8 @@ class AnthropicProvider(BaseProvider):
                     continue
                 #: 与 OpenAI 兼容那条同一条诊断口径 —— 错误类别跟着 chunk 走
                 #: （用户面 `core/llm_errors.explain` 要用），并且出声。
-                print(f"[llm] 流式失败（{type(e).__name__}: {str(e)[:200]}）"
-                      f" —— model={self._model}")
+                print(f"[llm] stream failed ({type(e).__name__}: {str(e)[:200]})"
+                      f" -- model={self._model}")
                 llm_retry.fail(_session_key(), kind=kind,
                                text=headline(e, kind=kind))
                 yield StreamChunk(
@@ -733,9 +730,8 @@ class AnthropicProvider(BaseProvider):
                             args = json.loads(raw_args)
                         except (json.JSONDecodeError, TypeError) as exc:
                             args = {}
-                            print(f"[anthropic] 历史里 '{name}' 的 arguments 不是合法 "
-                                  f"JSON（{type(exc).__name__}: {exc}）—— 按无参回填"
-                                  f"（历史本身不动）")
+                            print(f"[anthropic] arguments for '{name}' in history are not valid "
+                                  f"JSON ({type(exc).__name__}: {exc}) -- backfilled with no args")
                         tool_blocks.append({
                             "type": "tool_use",
                             "id": tc.get("id", ""),

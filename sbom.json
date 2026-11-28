@@ -932,6 +932,19 @@
     },
     {
       "type": "library",
+      "name": "bcrypt",
+      "version": "5.0.0",
+      "purl": "pkg:pypi/bcrypt@5.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache Software License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "beautifulsoup4",
       "version": "4.15.0",
       "purl": "pkg:pypi/beautifulsoup4@4.15.0",
@@ -2024,6 +2037,19 @@
     },
     {
       "type": "library",
+      "name": "dnspython",
+      "version": "2.9.2",
+      "purl": "pkg:pypi/dnspython@2.9.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "ISC"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "docstring_parser",
       "version": "0.18.0",
       "purl": "pkg:pypi/docstring-parser@0.18.0",
@@ -2264,6 +2290,19 @@
         {
           "license": {
             "name": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "graph-layout",
+      "version": "0.5.0",
+      "purl": "pkg:pypi/graph-layout@0.5.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
           }
         }
       ]
@@ -3079,6 +3118,25 @@
     },
     {
       "type": "library",
+      "name": "paramiko",
+      "version": "5.1.0",
+      "purl": "pkg:pypi/paramiko@5.1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "crannia:license-family",
+          "value": "LGPL"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "path-data-parser",
       "version": "0.1.0",
       "purl": "pkg:npm/path-data-parser@0.1.0",
@@ -3430,6 +3488,19 @@
         {
           "license": {
             "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "PyNaCl",
+      "version": "1.6.2",
+      "purl": "pkg:pypi/pynacl@1.6.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache Software License"
           }
         }
       ]
@@ -4025,6 +4096,19 @@
         {
           "license": {
             "name": "MIT License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sortedcontainers",
+      "version": "2.4.0",
+      "purl": "pkg:pypi/sortedcontainers@2.4.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache Software License"
           }
         }
       ]

@@ -235,10 +235,10 @@ def load(start=None) -> tuple:
     total = sum(n for _p, n in files)
     if total > WARN_CHARS and not _warned:
         _warned = True
-        print("[leaf] 项目指令文件偏大：%d 字符（软告警线 %d）—— %s"
+        print("[leaf] project instruction files are large: %d chars (soft warning line %d) - %s"
               % (total, WARN_CHARS, " + ".join("%s(%d)" % (p, n) for p, n in files)))
-        print("[leaf]   -> 仍然**全量发送**（这是提示不是限制）；"
-              "每轮都在付费，值得回头删一批。")
+        print("[leaf]   -> still sent in full (this is a hint, not a limit); "
+              "you pay for it every request, worth trimming.")
     if not texts:
         return "", []
     head = "（以下是本项目的指令文件：先全局、后项目根、再到当前目录 —— **越靠后越具体**，与前面冲突时以后面为准）"

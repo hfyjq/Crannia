@@ -36,8 +36,8 @@ import threading
 from pathlib import Path
 
 __all__ = [
-    "SETTING_KEY", "DEFAULT_SECONDS", "seconds", "should_arm", "note_bad_setting",
-    "forget_noted",
+    "SETTING_KEY", "DEFAULT_SECONDS", "MAX_SESSIONS", "seconds", "should_arm",
+    "note_bad_setting", "forget_noted",
 ]
 
 #: 设置里那个键。
@@ -108,8 +108,7 @@ def seconds(session_id: str = "") -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         if not _already_noted(session_id):
             note_bad_setting(session_id)
-            print("[approval-timeout] 设置项 %r 不是整数（收到 %r）—— **本次不启用超时**"
-                  "（回今天的行为：挂起）。改 data/settings.json 修好它。"
+            print("[approval-timeout] setting %r is not an integer (got %r) - timeout disabled"
                   % (SETTING_KEY, value))
         return 0
 
@@ -119,8 +118,8 @@ def seconds(session_id: str = "") -> int:
         # 离谱的大数：多半是写错了（单位？）。同样往"关"那边倒。
         if not _already_noted(session_id):
             note_bad_setting(session_id)
-            print("[approval-timeout] 设置项 %r = %d 秒，超过一小时 —— "
-                  "**本次不启用超时**。确认你要的是这个数就改小它。"
+            print("[approval-timeout] setting %r = %d seconds, over one hour - "
+                  "timeout disabled"
                   % (SETTING_KEY, value))
         return 0
     return value
@@ -159,6 +158,34 @@ def should_arm(session_id: str = "") -> bool:
 #   （靠它的 `reply_callback`；造一条假 event 就没有回执通道）。
 _timers: dict[str, dict] = {}
 
+#: 同时保留多少条会话的"最后一轮事件"。
+#:
+#: 判据与 `core/context_report.py::_MAX_SESSIONS` 同款：这张表按会话键长，
+#:   键来自通道（六个通道共用一个进程），而 `/clear` 只清当前那一条 ——
+#:   跑得越久、见过的会话越多，表只增不减。每一格挂着一个真
+#:   `MessageEvent`（超时之后接着跑那一轮要靠它的回执通道），
+#:   所以它比纯数字的会话态更该有界。
+#: 只淘汰没挂着定时器的格子：那只是"下一轮要用的那条事件"，
+#:   `remember()` 会重新写回来；挂着定时器的绝不动 —— 那是还没结算的
+#:   审批，淘汰它等于把一次超时静默关掉。
+MAX_SESSIONS = 256
+
+
+def _evict_idle_over_cap(current: str) -> None:
+    """超上限时淘汰最老的空闲格（挂着定时器的一个不动）。"""
+    extra = len(_timers) - MAX_SESSIONS
+    if extra <= 0:
+        return
+    for key in list(_timers):
+        if extra <= 0:
+            break
+        if key == current:
+            continue
+        if (_timers.get(key) or {}).get("timer") is not None:
+            continue
+        _timers.pop(key, None)
+        extra -= 1
+
 
 def remember(session_key: str, event) -> None:
     """轮首记下这条真事件（调度器每轮调一次）。"""
@@ -167,6 +194,7 @@ def remember(session_key: str, event) -> None:
         slot = {"event": None, "timer": None}
         _timers[session_key] = slot
     slot["event"] = event
+    _evict_idle_over_cap(session_key)
 
 
 def event_of(session_key: str):

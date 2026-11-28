@@ -99,7 +99,7 @@ def _acquire_turn_slot(session_key: str) -> None:
     事件发送失败不许影响排队本身（观测不能阻断操作）。
     """
     if not _turn_slots.acquire(blocking=False):
-        print("[sched] %s 排队中（并发上限 %d）" % (session_key, _MAX_CONCURRENT_TURNS))
+        print("[sched] %s queued (concurrency limit %d)" % (session_key, _MAX_CONCURRENT_TURNS))
         try:
             from core.events import (EVT_TURN_QUEUED,
                                      TURN_QUEUED_MESSAGE, get_event_bus)
@@ -110,7 +110,7 @@ def _acquire_turn_slot(session_key: str) -> None:
                                  limit=_MAX_CONCURRENT_TURNS,
                                  message=TURN_QUEUED_MESSAGE)
         except Exception as exc:  # noqa: BLE001
-            print("[sched] turn.queued 事件发送失败：%s: %s" % (type(exc).__name__, exc))
+            print("[sched] failed to emit turn.queued event: %s: %s" % (type(exc).__name__, exc))
         _turn_slots.acquire()
 
 
@@ -221,8 +221,8 @@ def _context_state_payload(ctx, session_key: str) -> "dict | None":
         try:
             pool.note_memory_context(session_key, _mc)
         except Exception as e:
-            print(f"[context] 记忆注入读数没记上（{type(e).__name__}: {e}）—— "
-                  f"面板里那一格会停在上一轮的值")
+            print(f"[context] memory-injection reading not recorded ({type(e).__name__}: {e}) - "
+                  f"panel cell stays at last turn's value")
 
     usage = ctx.metadata.get("context_usage")
     if not isinstance(usage, dict):
@@ -327,6 +327,9 @@ _PENDING_STORES: tuple[tuple[str, str], ...] = (
     # 钩子要求人工确认（`PreToolUse` 的 `ask`）。自己一格。
     # 漏了这一行同样坏：聊天/回执里写着要确认，而浮窗永远不出现。
     ("hook_ask", "_pending_hook_ask"),
+    # SSH 主机密钥信任（TOFU）。自己一格（一格只许一个 kind 用）-
+    # 被审批物是指纹，不是目标的授权范围。漏了同样坏。
+    ("ssh_hostkey", "_pending_ssh_hostkey"),
 )
 
 
@@ -405,6 +408,8 @@ class PipelineScheduler:
         # 读者仍必须从载荷取 kind（`pend["kind"]`）—— 见
         # `_PENDING_STORES`。
         self._pending_egress: dict[str, dict] = {}
+        # SSH 主机密钥信任（TOFU）。自己一格（一格只许一个 kind 用）。
+        self._pending_ssh_hostkey: dict[str, dict] = {}
         self._pending_command: dict[str, dict] = {}
         # 兜底闸（不可逆、且自身没有审批发射点的工具）。
         self._pending_destructive: dict[str, dict] = {}
@@ -506,7 +511,7 @@ class PipelineScheduler:
             wm = get_workspace_manager()
         except Exception as exc:
             print(f"[pipeline] approval projection could not reach the workspace "
-                  f"manager ({type(exc).__name__}: {exc}) — this turn will ask again")
+                  f"manager ({type(exc).__name__}: {exc}) - this turn will ask again")
             return
 
         if wm is None:
@@ -547,7 +552,7 @@ class PipelineScheduler:
                 setattr(wm, name, value)
             except Exception as exc:
                 print(f"[pipeline] projection of {name} failed "
-                      f"({type(exc).__name__}: {exc}) — this turn will ask again")
+                      f"({type(exc).__name__}: {exc}) - this turn will ask again")
 
         # 按目标、按对话的放行。不并进上面的循环 —— 它不是标量赋值，而是
         # 整组替换（`set_target_session`），每个 kind 调一次。
@@ -586,7 +591,7 @@ class PipelineScheduler:
                 wm.set_target_wildcard(kind, "*" in persisted)
         except Exception as exc:
             print(f"[pipeline] projection of target grants failed "
-                  f"({type(exc).__name__}: {exc}) — this turn will ask again")
+                  f"({type(exc).__name__}: {exc}) - this turn will ask again")
 
     # ------------------------------------------------------------------
     def pending_approval(self, session_key: str) -> dict | None:
@@ -773,8 +778,8 @@ class PipelineScheduler:
         except Exception:                            # noqa: BLE001
             return
         if _AT.arm(session_key, loop, self._fire_approval_timeout):
-            print("[approval-timeout] 有待审批 —— %d 秒后"
-                  "按「没有可问的通道」结算（`/clear` 或回答即撤）"
+            print("[approval-timeout] pending approval - in %d seconds; "
+                  "settled as 'no channel to ask' (/clear or an answer cancels)"
                   % _AT.seconds(session_key))
 
     def _fire_approval_timeout(self, session_key: str) -> None:
@@ -792,8 +797,8 @@ class PipelineScheduler:
             return                                    # 已经答过了 / 撤了
         event = _AT.event_of(session_key)
         if event is None:
-            print("[approval-timeout] 到点了，但没记住那条事件 —— "
-                  "**不做任何事**（回今天的行为：继续等）")
+            print("[approval-timeout] timer fired but event not remembered - "
+                  "doing nothing (keep waiting)")
             return
         try:
             evt = copy.copy(event)
@@ -801,15 +806,15 @@ class PipelineScheduler:
             evt.extras["approval_timeout"] = True
             evt._stopped = False
         except Exception as exc:                      # noqa: BLE001
-            print("[approval-timeout] 造超时事件失败（%s）—— 不做任何事"
+            print("[approval-timeout] failed to build timeout event (%s) - doing nothing"
                   % type(exc).__name__)
             return
         try:
             asyncio.ensure_future(self.execute(evt))
-            print("[approval-timeout] %s：到点，按「没有可问的通道」结算"
+            print("[approval-timeout] %s: timer fired, settled as 'no channel to ask'"
                   % session_key)
         except Exception as exc:                      # noqa: BLE001
-            print("[approval-timeout] 重入失败（%s）—— 不做任何事"
+            print("[approval-timeout] re-entry failed (%s) - doing nothing"
                   % type(exc).__name__)
 
     # ------------------------------------------------------------------
@@ -943,10 +948,10 @@ class PipelineScheduler:
             from core import net_proxy as _np
             _changed = _np.apply_env_policy()
             if _changed:
-                print("[proxy] 「%s」档已落到环境变量：%s"
+                print("[proxy] '%s' mode applied to env vars: %s"
                       % (_np.mode(), ", ".join(_changed)))
         except Exception as _e:                                   # noqa: BLE001
-            print("[proxy] 环境变量口径没落下去（只认 env 的 SDK 会跟随系统）："
+            print("[proxy] env vars not applied (env-only SDKs follow system): "
                   "%s: %s" % (type(_e).__name__, _e))
         #: 附件回收：后台线程 + 一天一次（`attachment_gc.maybe_prune_daily`）。
         #:   判据是"启动是唯一不会漏的入口"（同监听器自启动那一段），
@@ -959,12 +964,12 @@ class PipelineScheduler:
                 try:
                     st = maybe_prune_daily()
                     if st and st.get("deleted"):
-                        print("[attachments] 回收 %d 个未被引用的附件（%d 字节）"
+                        print("[attachments] reclaimed %d unreferenced attachments (%d bytes)"
                               % (st["deleted"], st["freed"]))
                     elif st and st.get("skipped"):
-                        print("[attachments] 本次未回收（%s）" % st["skipped"])
+                        print("[attachments] nothing reclaimed this time (%s)" % st["skipped"])
                 except Exception as exc:                   # noqa: BLE001
-                    print("[attachments] 回收失败（不影响框架）：%s: %s"
+                    print("[attachments] reclaim failed (does not affect the framework): %s: %s"
                           % (type(exc).__name__, exc))
                 #: 框架自己的运行目录（计划 / 工具结果 / 通道收件媒体 /
                 #:   任务日志）原来谁都不收。挂在启动这一下 ——
@@ -973,13 +978,13 @@ class PipelineScheduler:
                     from core.retention import prune_runtime_dirs
                     prune_runtime_dirs()
                 except Exception as exc:                   # noqa: BLE001
-                    print("[retention] 运行目录回收失败（不影响框架）：%s: %s"
+                    print("[retention] runtime dir reclaim failed (does not affect the framework): %s: %s"
                           % (type(exc).__name__, exc))
 
             threading.Thread(target=_gc_bg, name="attachment-gc",
                              daemon=True).start()
         except Exception as exc:                           # noqa: BLE001
-            print("[attachments] 回收线程没起来（不影响框架）：%s: %s"
+            print("[attachments] reclaim thread not started (does not affect the framework): %s: %s"
                   % (type(exc).__name__, exc))
         try:
             from bus.registry import get_workspace_manager
@@ -987,7 +992,7 @@ class PipelineScheduler:
             if wm is not None:
                 wm.autostart_watchers()
         except Exception as exc:                  # noqa: BLE001
-            print("[scheduler] 监听器自启动失败（不影响框架启动）：%s: %s"
+            print("[scheduler] listener autostart failed (does not affect framework startup): %s: %s"
                   % (type(exc).__name__, exc))
 
     def _apply_configured_model(self) -> None:
@@ -1038,10 +1043,10 @@ class PipelineScheduler:
                     mgr._provider = inst
                     mgr.report_thresholds()
             except Exception as exc:              # noqa: BLE001
-                print("[scheduler] 记忆层换模型失败（它仍用原窗口）：%s: %s"
+                print("[scheduler] memory layer model switch failed (still using old window): %s: %s"
                       % (type(exc).__name__, exc))
         except Exception as exc:                  # noqa: BLE001
-            print("[scheduler] 模型配置装载失败，沿用 config.yaml 那个模型：%s: %s"
+            print("[scheduler] model config load failed, using config.yaml model: %s: %s"
                   % (type(exc).__name__, exc))
 
     @staticmethod
@@ -1078,7 +1083,7 @@ class PipelineScheduler:
                 return None
             return _mc.instance_for(cid, fallback=None)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[scheduler] 群主理人的模型解析失败，沿用进程那个："
+            print(f"[scheduler] group-host model resolution failed, using the process one: "
                   f"{type(exc).__name__}: {exc}")
             return None
 
@@ -1121,12 +1126,12 @@ class PipelineScheduler:
                 return "", self._provider
             inst = _mc.instance_for(cid, fallback=None)
             if inst is None:
-                print(f"[scheduler] 这一段冻的配置 '{cid}' 今天装不上 —— "
-                      f"这一轮沿用原模型（且**不冻**，下一轮仍跟默认走）")
+                print(f"[scheduler] frozen config '{cid}' unusable today - "
+                      f"using original model this turn (not freezing; next turn follows default)")
                 return "", self._provider
             return cid, inst
         except Exception as exc:                  # noqa: BLE001
-            print("[scheduler] 这一段模型解析失败，沿用进程那个：%s: %s"
+            print("[scheduler] model resolution failed for this conversation, using process one: %s: %s"
                   % (type(exc).__name__, exc))
             return "", self._provider
 
@@ -1182,7 +1187,7 @@ class PipelineScheduler:
             decision = im_routing.route(
                 event, self._last_activity, self._title_of, self._session_exists)
         except Exception as exc:  # noqa: BLE001
-            print("[routing] 选址失败（这一条按默认键走）：%s: %s"
+            print("[routing] routing failed (falling back to default key): %s: %s"
                   % (type(exc).__name__, exc))
             decision = None
         if decision is not None and decision.kind == "ask":
@@ -1224,7 +1229,7 @@ class PipelineScheduler:
                     from core.computer import session as _cu
                     _cu.disarm_for(session_key, "turn_end")
                 except Exception as exc:             # noqa: BLE001
-                    print("[computer] 轮末关闭操作检测失败：%s: %s"
+                    print("[computer] turn-end close-operation detection failed: %s: %s"
                           % (type(exc).__name__, exc))
                 _turn_slots.release()
         finally:
@@ -1431,8 +1436,8 @@ class PipelineScheduler:
                     from core.dedup import default as _dedup_default
                     _dedup_default().release(**_ded)
                 except Exception as exc:                # noqa: BLE001
-                    print(f"[dedup] 放位失败（{type(exc).__name__}: {exc}）"
-                          f" —— 这条消息的重投可能被当成重复")
+                    print(f"[dedup] failed to claim slot ({type(exc).__name__}: {exc})"
+                          f" - a redelivery may be treated as duplicate")
 
             # 轮末收口：还在重试的清掉（否则 `/api/status` 每 5 秒
             # 把它读回来，网络恢复了红条也不消失）；失败收尾的留着 ——
@@ -1441,8 +1446,8 @@ class PipelineScheduler:
                 from core import llm_retry as _lr
                 _lr.reset_if_retrying(session_key)
             except Exception as exc:                            # noqa: BLE001
-                print(f"[llm] 重试状态清理失败（{type(exc).__name__}: {exc}）"
-                      f" —— 下一轮的横幅可能还挂着")
+                print(f"[llm] retry-state cleanup failed ({type(exc).__name__}: {exc})"
+                      f" - next turn's banner may still show")
 
             # 轮末：把 `ctx` 上的载体收回按对话的真值表
             # 抽成方法是为了让测试能调用真的那份：测试若抄这 60 行
@@ -1460,9 +1465,9 @@ class PipelineScheduler:
                 try:
                     _ctx_state = _context_state_payload(ctx, session_key)
                 except Exception as exc:                 # noqa: BLE001
-                    print(f"[context] 状态读数失败 "
-                          f"({type(exc).__name__}: {exc}) —— 这一轮没有"
-                          f"上下文事件")
+                    print(f"[context] state reading failed "
+                          f"({type(exc).__name__}: {exc}) - no "
+                          f"context event this turn")
                     _ctx_state = None
                 if _ctx_state is not None:
                     bus.emit(EVT_CONTEXT_STATE, session_key=session_key,
@@ -1490,7 +1495,7 @@ class PipelineScheduler:
             try:
                 self._sync_approval_timer(session_key)
             except Exception as exc:                  # noqa: BLE001
-                print("[approval-timeout] 同步定时器失败（%s）—— 这一轮不受影响"
+                print("[approval-timeout] failed to sync timer (%s) - this turn unaffected"
                       % type(exc).__name__)
 
             # 回复头只加给 IM，而且只加在被改派过的轮次 —— 前端看得见
@@ -1600,8 +1605,8 @@ class PipelineScheduler:
                 from core import steer as _steer_inbox
                 _steer_left = _steer_inbox.drain(session_key)
             except Exception as exc:                 # noqa: BLE001
-                print(f"[steer] 轮末取空失败（{type(exc).__name__}: {exc}）"
-                      f" —— 这一轮没有 steer_leftover")
+                print(f"[steer] turn-end drain failed ({type(exc).__name__}: {exc})"
+                      f" - no steer_leftover this turn")
             # 两条出口都要有：`extras` 给 `/api/chat`，关键字参数给 SSE。
             try:
                 event.extras["steer_leftover"] = _steer_left
@@ -1685,9 +1690,9 @@ class PipelineScheduler:
                 try:
                     _files = _touched_payload(session_key)
                 except Exception as exc:                 # noqa: BLE001
-                    print(f"[files] 改动清单发送失败 "
-                          f"({type(exc).__name__}: {exc}) —— 这一轮没有"
-                          f"改动文件事件")
+                    print(f"[files] failed to send changed-file list "
+                          f"({type(exc).__name__}: {exc}) - no "
+                          f"changed-file event this turn")
                     _files = None
                 if _files:
                     bus.emit(EVT_FILES_CHANGED, session_key=session_key,

@@ -249,9 +249,9 @@ def bash_path() -> str:
     _bash_cache = found
     _bash_probed = True          # 最后写 —— 见 docstring 那段
     if not _bash_cache:
-        print("[shell] 找不到 bash —— 命令执行工具将不可用。"
-              f"已试过：{', '.join(_BASH_CANDIDATES)} 与 PATH。"
-              f"装了 Git for Windows 之后重启框架即可。")
+        print("[shell] bash not found - command execution tool will be unavailable. "
+              f"Tried: {', '.join(_BASH_CANDIDATES)} and PATH. "
+              f"Install Git for Windows and restart the framework.")
     return _bash_cache
 
 
@@ -445,8 +445,8 @@ def ensure_snapshot() -> str:
     dest = _SNAPSHOT_DEST.resolve()
     ok, why = _write_snapshot(bash, dest)
     if not ok:
-        print("[shell] 没生成 shell 快照（%s）—— 命令照常跑，只是没有 profile "
-              "里的函数与别名。" % why)
+        print("[shell] shell snapshot not created (%s) - commands still run, "
+              "but without profile functions and aliases." % why)
         return ""
     _snapshot_file = str(dest)
     _snapshot_cache = str(dest)
@@ -687,14 +687,13 @@ def _kill_tree(proc: subprocess.Popen) -> None:
                                capture_output=True, timeout=10)
                 return
             except Exception as exc:
-                print(f"[shell] taskkill 失败（{type(exc).__name__}: {exc}）"
-                      f" —— 退回单进程 kill，孙进程可能残留")
+                print(f"[shell] taskkill failed ({type(exc).__name__}: {exc}) - falling back to single-process kill, grandchildren may survive")
         else:
-            print("[shell] 找不到 taskkill —— 退回单进程 kill，孙进程可能残留")
+            print("[shell] taskkill not found - falling back to single-process kill, grandchildren may survive")
         try:
             proc.kill()
         except Exception as exc:
-            print(f"[shell] kill 也失败了（{type(exc).__name__}: {exc}）")
+            print(f"[shell] kill also failed ({type(exc).__name__}: {exc})")
         return
 
     # POSIX：先确认它真的自成一组，再杀组 —— 杀错组的代价是把框架自己带走。
@@ -704,8 +703,7 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         return
     except Exception as exc:
         pgid = None
-        print(f"[shell] 查不到进程组（{type(exc).__name__}: {exc}）"
-              f" —— 退回单进程 kill，孙进程可能残留")
+        print(f"[shell] process group lookup failed ({type(exc).__name__}: {exc}) - falling back to single-process kill, grandchildren may survive")
     if pgid is not None:
         if pgid == proc.pid:
             try:
@@ -714,14 +712,13 @@ def _kill_tree(proc: subprocess.Popen) -> None:
             except ProcessLookupError:
                 return
             except Exception as exc:
-                print(f"[shell] killpg 失败（{type(exc).__name__}: {exc}）"
-                      f" —— 退回单进程 kill，孙进程可能残留")
+                print(f"[shell] killpg failed ({type(exc).__name__}: {exc}) - falling back to single-process kill, grandchildren may survive")
         else:
-            print("[shell] 子进程不在独立进程组 —— 只杀它自己，孙进程可能残留")
+            print("[shell] child process not in its own process group - killing only itself, grandchildren may survive")
     try:
         proc.kill()
     except Exception as exc:
-        print(f"[shell] kill 也失败了（{type(exc).__name__}: {exc}）")
+        print(f"[shell] kill also failed ({type(exc).__name__}: {exc})")
 
 
 def _spill(payload: str) -> str:
@@ -1109,8 +1106,7 @@ def _run(command: str, work_dir: Path, timeout_ms: int, *,
             )
             why = ("用户转后台" if by_user else
                    ("超时转后台" if timed_out_ else "按请求直接转后台"))
-            print(f"[shell] {why}：{job.id}（上限 "
-                  f"{jobs.JOB_MAX_LIFETIME_MS // 60000} 分钟）")
+            print(f"[shell] {why}: {job.id} (limit {jobs.JOB_MAX_LIFETIME_MS // 60000} min)")
             # 产生后台任务的这一刻，把 `task` 工具挂进这个会话（按需发现；
             #   只追加、不改前缀，`K5`）。回执里点名它，模型不用猜。
             if _cancel_key:
@@ -1312,7 +1308,7 @@ def _note_command_touches(command: str, cwd, wm) -> None:
                 break
     except Exception as exc:                              # noqa: BLE001
         # 记账失败绝不许拦住一条要跑的命令（同 `touched_files.note` 的规矩）。
-        print("[touched] 命令行改动记账失败（不影响执行）：%s: %s"
+        print("[touched] command-line change recording failed (does not affect execution): %s: %s"
               % (type(exc).__name__, exc))
 
 
@@ -1459,7 +1455,7 @@ def run_command(command: str = "", cwd: str = "", timeout_ms: int = 0,
     _snap = request_snapshot.get_current()
     spec = current_spec(_snap.session_id if _snap is not None else "")
     if not offers_command(spec):
-        print(f"[tier] 拒绝 run_command：档 {spec.level}（{spec.name}）不给执行命令")
+        print(f"[tier] run_command refused: tier {spec.level} ({spec.name}) does not allow command execution")
         return {
             "success": False,
             "denied": True,
@@ -1502,7 +1498,7 @@ def run_command(command: str = "", cwd: str = "", timeout_ms: int = 0,
         except Exception:                                   # noqa: BLE001
             _unlocked = False
         if _unlocked:
-            print("[unlock] deny 档命令放行：%s" % raw[:120])
+            print("[unlock] deny-tier command allowed: %s" % raw[:120])
             tier = TIER_ALLOW
         else:
             return {
@@ -1629,7 +1625,7 @@ def run_command(command: str = "", cwd: str = "", timeout_ms: int = 0,
     # 这里只 `print`（进运行日志）。界面上一行是它的自然后继 ——
     #   要动事件流（前端加一种事件 = 三处），不顺手做。
     if _no_ask:
-        print(f"[command] 免问集命中，未询问：{subject[:120]} —— {_no_ask}")
+        print(f"[command] allowlist hit, not asking: {subject[:120]} - {_no_ask}")
 
     # 命令里点名的、工作区内的文件先记一笔（列表要它，留档也要它）。
     #   放在这里 = 审批过了、真的要跑了 —— 没跑的命令不该出现在"本轮改过"里。
@@ -1672,8 +1668,7 @@ def run_command(command: str = "", cwd: str = "", timeout_ms: int = 0,
                      ("ok" if result.get("success") else "fail"))
     except Exception as exc:
         # 审计失败不能吞掉：它是这条路径上唯一的留痕。
-        print(f"[audit] run_command 审计写入失败（{type(exc).__name__}: {exc}）"
-              f" —— 这条命令执行过但没有记录")
+        print(f"[audit] run_command audit write failed ({type(exc).__name__}: {exc}) - command ran but was not recorded")
 
     # 输出裁剪（保尾 + spill）。在工具里做，不在 agent_loop 里 ——
     # 那边那把刀保的是头部，方向正好相反（见 `_OUT_BUDGET` 的注释）。

@@ -80,8 +80,13 @@ def crop_zoom(png: bytes, coord_rect, crop_rect, *,
         return png
 
 
-def grid(png: bytes) -> bytes:
-    """10% 一格的带标签网格（标签就是 100…900 的比例值）。"""
+def grid(png: bytes, *, avoid=None) -> bytes:
+    """10% 一格的带标签网格（标签就是 100…900 的比例值）。
+
+    `avoid=(x_frac, y_frac)`：以这个点（0–1 的图内比例）为圆心留一个洞 ——
+    标记（红十字/环）压在上面时，网格线穿过中心会被模型读成"标记的十字臂"
+    （真机原话）。
+    """
     try:
         img = _open(png)
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -91,11 +96,32 @@ def grid(png: bytes) -> bytes:
         font = _font(max(13, min(w, h) // 55))
         fh = getattr(font, "size", 11) if font is not None else 11
         color = (255, 70, 0, 190)
+        ax = ay = 0
+        ar = 0
+        if avoid is not None:
+            ax = int(round(avoid[0] * w))
+            ay = int(round(avoid[1] * h))
+            ar = max(12, min(w, h) // 40)
+
+        def _v(x: int) -> None:
+            if ar and abs(x - ax) <= ar:
+                d.line([(x, 0), (x, max(0, ay - ar))], fill=color, width=line_w)
+                d.line([(x, min(h, ay + ar)), (x, h)], fill=color, width=line_w)
+            else:
+                d.line([(x, 0), (x, h)], fill=color, width=line_w)
+
+        def _hh(y: int) -> None:
+            if ar and abs(y - ay) <= ar:
+                d.line([(0, y), (max(0, ax - ar), y)], fill=color, width=line_w)
+                d.line([(min(w, ax + ar), y), (w, y)], fill=color, width=line_w)
+            else:
+                d.line([(0, y), (w, y)], fill=color, width=line_w)
+
         for i in range(1, 10):
             x = int(w * i / 10.0)
             y = int(h * i / 10.0)
-            d.line([(x, 0), (x, h)], fill=color, width=line_w)
-            d.line([(0, y), (w, y)], fill=color, width=line_w)
+            _v(x)
+            _hh(y)
             if font is not None:
                 label = str(i * 100)
                 # 顶部 x 标签
@@ -112,8 +138,73 @@ def grid(png: bytes) -> bytes:
         return png
 
 
-def click_marker(png: bytes, coord_rect, point) -> bytes:
-    """在实际落点画红十字 + 圈 + 一句 `LAST CLICK`。"""
+#: 点击标记的候选色 / 光标标记的候选色 —— 两组互斥。
+#: 判据"红十字是上一次点落在哪、准星是我读到它在哪"要求两者分得开；
+#: 自动选色只能在各自那组里挑，不能把点击选成青色。
+_CLICK_COLORS = ((230, 30, 30), (255, 210, 0), (0, 200, 80),
+                 (230, 0, 200), (255, 255, 255))
+_CURSOR_COLORS = ((0, 180, 210), (30, 120, 255), (150, 80, 255))
+
+
+def _dist2(a, b) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+            + (a[2] - b[2]) ** 2)
+
+
+def pick_marker_color(img, x: int, y: int, rad: int, candidates):
+    """在标记点周围较大一块区域里，挑一个"最不接近任何背景像素"的候选色。
+
+    采样范围 = max(标记直径的 2 倍, 图短边的 1/16, 10px)。
+
+    范围不是越大越好：真机色块墙上，48px 半径在 644x386 的放大图里跨到了
+    相邻色块（每块仅约 214x193）→ 对整块区域"都不混"的色，对标记所在的那
+    一小块反而对比不足。以标记尺度为主，兼顾"标记可能压在图标上"。
+    判据是 max-min —— 对每个候选算"与区域内最接近它的像素的距离"，
+    取最坏情况最好的那个，直接对应"标记落在区域里哪儿都不会混"。
+    """
+    try:
+        sr = max(int(rad) * 4, min(img.width, img.height) // 16, 10)
+        box = (max(0, x - sr), max(0, y - sr),
+               min(img.width, x + sr), min(img.height, y + sr))
+        region = img.crop(box).convert("RGB")
+        # 降采样到几百个点：够代表这块区域，又不拖慢一次观察。
+        small = region.resize((max(1, region.width // 8),
+                               max(1, region.height // 8)))
+        px = list(small.getdata())
+        if not px:
+            return candidates[0]
+        best, best_score = candidates[0], -1.0
+        for c in candidates:
+            worst = min(_dist2(c, p) for p in px)
+            if worst > best_score:
+                best, best_score = c, worst
+        return best
+    except Exception:                                # noqa: BLE001
+        return candidates[0]
+
+
+def _ring_point(d, x: int, y: int, rad: int, color) -> None:
+    """轻量标记：空心圆环，圆心留空。圆心就是位置。
+
+    局部放大图的专用形态 —— 放大图里被观察的目标本身就小，红十字的臂
+    与「LAST CLICK」标签会压在目标上。真实反馈：圆心画实心点会盖住
+    1–2 像素的纤细目标（线端点 / 光标点），所以环里什么都不画。
+    白色衬里是兜底：主体色由 `pick_marker_color` 选，但区域颜色多样时
+    仍可能有一块跟它相近，衬里保证环的轮廓至少有一层看得见。
+    """
+    lw = max(1, rad // 4)
+    box = [x - rad, y - rad, x + rad, y + rad]
+    d.ellipse(box, outline=(255, 255, 255, 220), width=lw + 2)
+    d.ellipse(box, outline=color, width=lw)
+
+
+def click_marker(png: bytes, coord_rect, point, *, compact: bool = False) -> bytes:
+    """在实际落点画红十字 + 圈 + 一句 `LAST CLICK`。
+
+    `compact=True`（局部放大图）改画轻量版：空心圈 + 圆心点，不写文字 ——
+    高倍放大时固定下限让十字臂与标签相对变大（实测 scale=8 时标签约占
+    图宽 11%），会挡在要观察的目标上。
+    """
     try:
         img = _open(png)
         l, t, r, b = coord_rect
@@ -125,23 +216,76 @@ def click_marker(png: bytes, coord_rect, point) -> bytes:
             return png
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(overlay)
+        if compact:
+            rad = max(4, min(img.width, img.height) // 60)
+            rgb = pick_marker_color(img, x, y, rad, _CLICK_COLORS)
+            _ring_point(d, x, y, rad, rgb + (240,))
+            return _save(Image.alpha_composite(img, overlay))
         rad = max(10, min(img.width, img.height) // 70)
-        color = (230, 0, 0, 235)
+        # 颜色按"标记点周围一块区域"自动挑（满屏红叉/红底的装饰图上，
+        # 写死的红标记会淹进背景）。候选集与光标标记互斥。
+        color = pick_marker_color(img, x, y, rad, _CLICK_COLORS) + (235,)
         lw = max(2, rad // 4)
         d.line([(x - rad, y), (x + rad, y)], fill=color, width=lw)
         d.line([(x, y - rad), (x, y + rad)], fill=color, width=lw)
         d.ellipse([x - rad // 2, y - rad // 2, x + rad // 2, y + rad // 2],
                   outline=color, width=lw)
+        # 不再画「LAST CLICK」白底标签：真机实测它的白底（约 67×19 图像素）
+        # 正好横穿一条 2px 的线，把要看的线截断了。十字 + 圈本身已经
+        # 认得出来（回执里也写着"红十字画的是实际落点"）。
+        return _save(Image.alpha_composite(img, overlay))
+    except Exception:                                # noqa: BLE001
+        return png
+
+
+def cursor_marker(png: bytes, coord_rect, point, *,
+                  compact: bool = False) -> bytes:
+    """把上次 `cursor_position` 读到的光标位置画成青色准星 + 一句 `CURSOR`。
+
+    `compact=True`（局部放大图）同样换成空心圈 + 圆心点，理由同 `click_marker`。
+
+    与 `click_marker` 的红十字必须分得开：红十字是"上一次点落在哪"，
+    这里画的是"报数那一刻光标在哪"。两者同形的话，模型会把"我读到它在这"
+    读成"我点中了这"。
+
+    只标一次（`session.take_cursor`），而且报数之后再画 —— 中间的移动
+    由回执里那句"这是读数那一刻的位置"负责说清楚，不靠图。
+    """
+    try:
+        img = _open(png)
+        l, t, r, b = coord_rect
+        w = max(1, r - l)
+        h = max(1, b - t)
+        x = int(round((point[0] - l) * img.width / float(w)))
+        y = int(round((point[1] - t) * img.height / float(h)))
+        if not (0 <= x < img.width and 0 <= y < img.height):
+            return png
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(overlay)
+        if compact:
+            rad = max(4, min(img.width, img.height) // 60)
+            rgb = pick_marker_color(img, x, y, rad, _CURSOR_COLORS)
+            _ring_point(d, x, y, rad, rgb + (240,))
+            return _save(Image.alpha_composite(img, overlay))
+        rad = max(8, min(img.width, img.height) // 90)
+        color = pick_marker_color(img, x, y, rad, _CURSOR_COLORS) + (235,)
+        lw = max(2, rad // 4)
+        # 准星：四段短线 + 中间一个空心圈（不与红十字的实心交叉同形）。
+        d.line([(x - rad, y), (x - rad // 2, y)], fill=color, width=lw)
+        d.line([(x + rad // 2, y), (x + rad, y)], fill=color, width=lw)
+        d.line([(x, y - rad), (x, y - rad // 2)], fill=color, width=lw)
+        d.line([(x, y + rad // 2), (x, y + rad)], fill=color, width=lw)
+        d.ellipse([x - rad // 2, y - rad // 2, x + rad // 2, y + rad // 2],
+                  outline=color, width=lw)
         font = _font(max(13, rad))
         if font is not None:
-            label = "LAST CLICK"
+            label = "CURSOR"
             fh = getattr(font, "size", 11)
             tw = d.textlength(label, font=font)
             d.rectangle([x + rad + 2, y - fh // 2 - 2,
                          x + rad + tw + 8, y + fh // 2 + 2],
                         fill=(255, 255, 255, 225))
-            d.text((x + rad + 5, y - fh // 2),
-                   label, fill=(200, 0, 0, 255), font=font)
+            d.text((x + rad + 5, y - fh // 2), label, fill=color, font=font)
         return _save(Image.alpha_composite(img, overlay))
     except Exception:                                # noqa: BLE001
         return png

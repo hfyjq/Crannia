@@ -36,7 +36,14 @@
      用开发树里的预览脚本重渲（截图工具不随发布；Pillow 复刻的预览算不对折行）。 */
   :root {
     --win-w: 688px;    /* 窗宽 */
-    --win-h: 386px;    /* 窗高 */
+    --win-h: 386px;    /* 内容高（内层） */
+    /*: 上下各裁多少 —— 窗高 = `--win-h - 2 * --cut`。
+       判据（用户 2026-11-28）：框要收紧到内容附近，但内容一个像素都不许动。
+       所以裁的是内层的外边：`.inner` 仍按 `--win-h` 排版，只是往上偏 `--cut`，
+       屏幕坐标与裁之前逐像素相同；被裁掉的只有画布/右栏的空白边。
+       ⚠️ 改这个数必须同时改 `main.cjs` 的 `SPLASH_H`（= 386 - 2×cut），
+       两处对不上时症状是"下方多一条空白"或"内容被切掉一截"。 */
+    --cut: 28px;
     --art-w: 364px;    /* 左半边（画）的宽度，剩下给右边那栏文字 */
     --pad: 26px;       /* 右栏左右内边距 */
     --quote-pad: 103px;/* 右栏那段字离顶多远（`alignStatus` 会按句长收窄它 —— 那是"上移"） */
@@ -52,14 +59,25 @@
   }
   body.preview { background: #e9ebe6; }
   /* ── 那张"居中的白色长方形小窗" ───────────────────────────────── */
+  /*: 圆角半径 —— 窗口是透明无边框的，形状靠这一行 + `overflow: hidden`；
+     窗口那一层还会被 `main.cjs::setShape` 裁成同样的圆角（Windows 上
+     透明合成不一定可信，形状裁剪是兜底 —— 两层都做才"一定看得见"）。 */
   .win {
-    width: var(--win-w); height: var(--win-h); background: #fff; border-radius: 14px;
+    width: var(--win-w); height: calc(var(--win-h) - 2 * var(--cut));
+    background: #fff; border-radius: 28px;
     box-shadow: 0 18px 60px rgba(24, 40, 20, .22), 0 2px 6px rgba(0, 0, 0, .06);
-    display: grid; grid-template-columns: var(--art-w) 1fr;
     overflow: hidden; position: relative;
     /* 拖动整窗：Electron 里用 `-webkit-app-region: drag`。
        浏览器里没这个属性（点着没反应是正常的）。 */
     -webkit-app-region: drag;
+  }
+  /*: 内层保持原尺寸（`--win-h`）并上移 `--cut` ——
+     于是"裁掉上下两条"不会移动任何内容物（屏幕坐标不变），
+     被裁的只有画布/右栏的空白边。 */
+  .inner {
+    position: absolute; left: 0; top: calc(-1 * var(--cut));
+    width: var(--win-w); height: var(--win-h);
+    display: grid; grid-template-columns: var(--art-w) 1fr;
   }
   .art { position: relative; }
   .art canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -200,6 +218,7 @@
 </head>
 <body>
   <div class="win">
+    <div class="inner">
     <div class="art"><canvas id="c"></canvas></div>
     <div class="side">
       <div class="quote">
@@ -222,6 +241,7 @@
           <button data-i18n onclick="quitApp()">退出</button>
         </div>
       </div>
+    </div>
     </div>
   </div>
 

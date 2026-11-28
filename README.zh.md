@@ -9,7 +9,7 @@
   <p>
     <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
     <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
-    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
   </p>
 </div>
 
@@ -52,7 +52,17 @@ npm run dev
 
 ### Linux
 
-要求：Linux x64，Python **3.11+**（只有桌面 GUI 需要 Node.js）。
+从 Releases 下载 `crannia-*-linux-x64.AppImage`，然后：
+
+```bash
+chmod +x crannia-*-linux-x64.AppImage
+./crannia-*-linux-x64.AppImage
+```
+
+AppImage 需要 FUSE 2（Ubuntu 24.04 及更新版本上是 `libfuse2t64`）。没有它时，
+用 `--appimage-extract-and-run` 跑同一个文件。
+
+也可以从源码运行（要求：Linux x64，Python **3.11+**；只有桌面 GUI 需要 Node.js）：
 
 ```bash
 git clone https://github.com/hfyjq/Crannia.git

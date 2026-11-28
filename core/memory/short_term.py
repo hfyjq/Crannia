@@ -61,9 +61,9 @@ class ShortTermMemory:
         try:
             _n = self.backfill_framework_notes()
             if _n:
-                print("[memory] 已给 %d 条旧消息补上 framework_note 标记" % _n)
+                print("[memory] marked %d old messages with framework_note" % _n)
         except Exception as exc:                       # noqa: BLE001
-            print("[memory] 旧消息补标记失败（不影响启动）：%s: %s"
+            print("[memory] old message marking failed (does not affect startup): %s: %s"
                   % (type(exc).__name__, exc))
 
     @staticmethod
@@ -817,7 +817,7 @@ class ShortTermMemory:
                                (str(storage_id or ""),))
             self._conn.commit()
         except Exception as exc:                                    # noqa: BLE001
-            print(f"[memory] 清会话模型失败（{type(exc).__name__}: {exc}）")
+            print(f"[memory] clear session model failed ({type(exc).__name__}: {exc})")
 
     # ------------------------------------------------------------------
     # 会话 -> 工作目录（ ）
@@ -881,7 +881,7 @@ class ShortTermMemory:
                 (str(storage_id or ""),))
             self._conn.commit()
         except Exception as exc:                                    # noqa: BLE001
-            print(f"[memory] 清会话工作目录失败（{type(exc).__name__}: {exc}）")
+            print(f"[memory] clear session workspace failed ({type(exc).__name__}: {exc})")
 
     @_serialized
     def first_user_text(self, session_id: str, limit: int = 40) -> str:

@@ -496,7 +496,10 @@ def _check_table_keys(view: str, server: str) -> None:
               "export_settings": None,
               "import_settings": None,
               #: 更新日志子页 —— 纯客户端动作：页面自己拉 `GET /api/update/log`。
-              "open_update_log": None}
+              "open_update_log": None,
+              #: 网络请求凭据子页 —— 纯客户端动作。页面自己打
+              #:   `/api/web-request/credentials`（GET / POST / DELETE）。
+              "open_net_creds": None}
     missing = [a for a in acts if a not in routes]
     check("★★ 每个动作名都在**那张路由表**里（拼错 = 按了没反应）", not missing, repr(missing))
     dead = [p for a, p in routes.items()

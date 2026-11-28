@@ -108,16 +108,15 @@ def fit_listing(lines: List[str], budget: int) -> List[str]:
     heads = [split_line(x)[0] for x in lines]
     names_only = sum(len(h) for h in heads)
     if budget <= names_only:
-        print("[skill_listing] 超预算（%d 行 %d 字符 > %d）—— **只列名字**"
+        print("[skill_listing] over budget (%d lines %d chars > %d) - names only"
               % (len(lines), total, budget))
         return heads
 
     per = max(1, (budget - names_only) // max(1, len(lines)))
     per = min(per, SKILL_LISTING_DESC_CAP)          # 每个 skill 的描述上限
     out = [h + _cut(x[len(h):], per) for x, h in zip(lines, heads)]
-    print("[skill_listing] 超预算：%d 行 %d 字符 > %d —— **描述被砍短**"
-          "（要更宽：设置 `skillListingBudgetFraction` / 环境变量 "
-          "`SLASH_COMMAND_TOOL_CHAR_BUDGET`）" % (len(lines), total, budget))
+    print("[skill_listing] over budget: %d lines %d chars > %d - descriptions truncated"
+          % (len(lines), total, budget))
     return out
 
 

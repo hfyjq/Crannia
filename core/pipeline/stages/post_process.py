@@ -80,10 +80,10 @@ class PostProcessStage(Stage):
             if ctx.model_config_id:
                 from core import session_model
                 if session_model.freeze(session_key, ctx.model_config_id):
-                    print(f"[session_model] 这一段冻结在配置 "
-                          f"'{ctx.model_config_id}' 上 —— 之后改默认不再影响它")
+                    print(f"[session_model] this conversation frozen to config "
+                          f"'{ctx.model_config_id}' - later default changes won't affect it")
         except Exception as exc:                                # noqa: BLE001
-            print(f"[session_model] 冻结失败（这一段会跟随默认）："
+            print(f"[session_model] freeze failed (this conversation follows the default): "
                   f"{type(exc).__name__}: {exc}")
 
         if compressed is not None and compressed is not ctx.messages:
@@ -110,8 +110,8 @@ class PostProcessStage(Stage):
                 from core.plan import note_compressed
                 note_compressed(ctx.session_id)
             except Exception as exc:  # noqa: BLE001
-                print(f"[plan_reminder] 标记压缩失败（{type(exc).__name__}: {exc}）"
-                      f" —— 这一段对话不再重发计划模式提醒")
+                print(f"[plan_reminder] failed to mark compressed ({type(exc).__name__}: {exc})"
+                      f" - this conversation won't resend the plan-mode reminder")
         # Keep pool cache in sync with potentially compressed messages
         if session_key in pool._loaded:
             sid = pool._loaded[session_key][0]
@@ -135,7 +135,7 @@ class PostProcessStage(Stage):
                 ctx.metadata["dedup_done"] = True
             except Exception as exc:  # noqa: BLE001
                 # 不阻断对话，但不许静默：落不了账的后果是"重投时再答一遍"。
-                print(f"[dedup] 落账失败（{type(exc).__name__}: {exc}）"
-                      f" —— 这条消息重投时可能再答一遍")
+                print(f"[dedup] failed to record ({type(exc).__name__}: {exc})"
+                      f" - a redelivery of this message may be answered again")
 
         return ctx

@@ -73,7 +73,7 @@ def load_config(path: Optional[Path] = None) -> Dict[str, Any]:
             return {}
         raw = json.loads(p.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        print(f"[mail] 读不到邮箱配置（{type(exc).__name__}）—— 本次视为未配置")
+        print(f"[mail] mail config unreadable ({type(exc).__name__}) - treating as unconfigured")
         return {}
     cfg = (raw.get("skill_configs") or {}).get(SCOPE) or {}
     return cfg if isinstance(cfg, dict) else {}
@@ -119,7 +119,7 @@ def smtp_params(account: Dict[str, Any]) -> Tuple[str, int]:
             defaults = ((m.get("config") or {}).get("provider_presets")
                         or {}).get(preset, {}).get("defaults", {}) or {}
     except Exception as exc:  # noqa: BLE001
-        print(f"[mail] 读 provider 预设失败（{type(exc).__name__}）—— 落回兜底")
+        print(f"[mail] provider preset read failed ({type(exc).__name__}) - falling back")
     server = (account or {}).get("smtp_server", "") or defaults.get(
         "smtp_server", "smtp.qq.com")
     try:

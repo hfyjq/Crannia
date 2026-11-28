@@ -119,8 +119,8 @@ def _snapshot_db_bytes(db_path: Path) -> bytes | None:
             src.close()
         return Path(tmp).read_bytes()
     except (sqlite3.Error, OSError) as exc:
-        print("[memory-transfer] 快照失败（%s: %s）—— 退回直接读主库文件，"
-              "包里的历史可能少最近那条" % (type(exc).__name__, exc))
+        print("[memory-transfer] snapshot failed (%s: %s) - falling back to main db file, "
+              "package history may miss the latest entry" % (type(exc).__name__, exc))
         try:
             return db_path.read_bytes()
         except OSError:

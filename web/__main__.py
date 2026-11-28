@@ -16,11 +16,11 @@ from core import endpoint as _endpoint
 _live = _endpoint.probe(paths.data_root())
 if _live is not None:
     _st = _live.get("status") or {}
-    print("[web] 已有服务在跑：http://127.0.0.1:%s（pid=%s，版本=%s）"
-          " —— 本次启动退出。" %
+    print("[web] service already running: http://127.0.0.1:%s (pid=%s, version=%s)"
+          " -- exiting this launch" %
           (_live["port"], _live["pid"],
-           _st.get("version") or _live.get("version") or "未知"), flush=True)
-    print("[web] 要用这个数据根就接上它；要自己起，先停掉那一个。", flush=True)
+           _st.get("version") or _live.get("version") or "unknown"), flush=True)
+    print("[web] connect to it to use this data root; to start your own, stop it first.", flush=True)
     sys.exit(2)
 
 _rep = paths.prepare()
@@ -31,18 +31,18 @@ _rep = paths.prepare()
 _ds = (_rep or {}).get("data_schema") or {}
 if _ds.get("compat"):
     if _ds.get("complete") and _ds.get("backup"):
-        print("[paths] 数据格式 %s 高于本地 %s —— 已备份到 %s，兼容模式继续"
+        print("[paths] data schema %s newer than local %s -- backed up to %s, continuing in compatibility mode"
               % (_ds.get("found"), _ds.get("ours"), _ds.get("backup")))
     else:
-        print("[paths] !! 数据格式 %s 高于本地 %s，但备份没做成（%s）"
-              " —— 请先手动复制整个数据目录再使用"
+        print("[paths] !! data schema %s newer than local %s but backup failed (%s)"
+              " -- copy the whole data dir manually before use"
               % (_ds.get("found"), _ds.get("ours"),
-                 _ds.get("failed") or _ds.get("error") or "未知原因"))
+                 _ds.get("failed") or _ds.get("error") or "unknown reason"))
 
 _mig_errors = (_rep or {}).get("errors") or []
 if _mig_errors:
-    print("[paths] !! 数据迁移没有完成（%s）—— 旧数据仍在安装目录，"
-          "排除原因后重启会继续" % "; ".join(_mig_errors))
+    print("[paths] !! data migration incomplete (%s) -- old data still in install dir,"
+          " restart resumes after fixing" % "; ".join(_mig_errors))
 
 # 上面这两行只是终端里的读数。用户看得到的横幅（`#02`）与模型手里的
 #   `build_note()` 读的是 `data/incidents` 那份账 —— 记账发生在
@@ -63,12 +63,9 @@ try:
     #:   「壳设的变量 Python 得用同一个拼写读」查的就是它。
     _tag = (os.environ.get("CRANNIA_SYSTEM_LOCALE") or "").strip()
     _cfg = _i18n.configured()
-    print("[i18n] 界面语言: %s（%s；系统: %s -> %s）"
-          % (_i18n.current(),
-             ("跟随系统" if _cfg is None else "用户选了 %s" % _cfg),
-             (_tag or "本机探测"), _i18n.system_language()))
+    print("[i18n] Interface language: %s" % _i18n.current())
 except Exception as _exc:                                    # noqa: BLE001
-    print("[i18n] 语言状态读不出来（%s: %s）—— 照常启动"
+    print("[i18n] Language state unreadable (%s: %s) - starting anyway"
           % (type(_exc).__name__, _exc))
 
 start_webui(

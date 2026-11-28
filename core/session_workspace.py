@@ -134,8 +134,7 @@ def chosen(storage_key: str) -> str:
         # 读不到，当没选过（fail-open，同 `session_model.frozen` 那条）。
         #   方向是掐出来的：读不到就走默认工作区 —— 而"读不到"最可能的时刻
         #   正是库刚建、或换了一台机器；那时"用默认"就是对的答案。
-        print(f"[session_workspace] 读会话工作目录失败（按未选择处理）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[session_workspace] read session workspace failed (treating as unset): {type(exc).__name__}: {exc}")
         return ""
 
 
@@ -188,7 +187,7 @@ def use_default(storage_key: str) -> bool:
         st.clear_session_workspace(key)
         return existed
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[session_workspace] 退回默认工作区失败（{type(exc).__name__}: {exc}）")
+        print(f"[session_workspace] revert to default workspace failed ({type(exc).__name__}: {exc})")
         return False
 
 

@@ -94,14 +94,17 @@ class CDP:
         while not stop.is_set():
             try:
                 for w in win32.enum_windows():
-                    if (w.exe or "").lower() not in ("msedge.exe", "chrome.exe"):
+                    # Chromium 家族共用「Allow remote debugging?」弹窗；
+                    # Opera 的进程名是 opera.exe（与 discover.PRODUCTS 保持一致）。
+                    if (w.exe or "").lower() not in (
+                            "msedge.exe", "chrome.exe", "opera.exe"):
                         continue
                     if not is_consent_title(w.title):
                         continue
                     if not win32.is_foreground(w.hwnd):
                         ok, _why = win32.activate(w.hwnd)
                         if ok:
-                            print("[browser] 把「允许远程调试」弹窗切到前台（等你点）")
+                            print("[browser] bringing the Allow Remote Debugging dialog to front (waiting for you)")
                     break
             except Exception:                        # noqa: BLE001
                 pass

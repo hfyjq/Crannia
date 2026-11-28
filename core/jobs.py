@@ -350,7 +350,7 @@ def _run_start_hooks(job: Job) -> None:
         try:
             cb(job)
         except Exception as exc:                      # noqa: BLE001
-            print("[jobs] 起始钩子失败（%s: %s）—— 任务照常跑"
+            print("[jobs] start hook failed (%s: %s) - job continues"
                   % (type(exc).__name__, exc))
 
 
@@ -359,7 +359,7 @@ def _run_finish_hooks(job: Job) -> None:
         try:
             cb(job)
         except Exception as exc:                      # noqa: BLE001
-            print("[jobs] 完成钩子失败（%s: %s）—— 任务照常收尾"
+            print("[jobs] finish hook failed (%s: %s) - job still completes"
                   % (type(exc).__name__, exc))
 
 
@@ -391,7 +391,7 @@ def _dump_output(job: Job) -> None:
             text += ("\n[stderr]\n" if text else "") + err
         path.write_text(text, encoding="utf-8")
     except OSError as exc:                            # noqa: BLE001
-        print("[jobs] 输出落盘失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[jobs] output save failed (%s: %s)" % (type(exc).__name__, exc))
 
 
 def start(proc: subprocess.Popen, command: str, work_dir: str,
@@ -676,12 +676,12 @@ def suppress_notification(job_id: str) -> None:
     try:
         mark_notified(job_id)
     except Exception as exc:                         # noqa: BLE001
-        print("[jobs] 标记已通知失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[jobs] mark notified failed (%s: %s)" % (type(exc).__name__, exc))
     try:
         from core import tasks_notify              # 懒导入：它 import 本模块
         tasks_notify.forget_task(job_id)
     except Exception as exc:                         # noqa: BLE001
-        print("[jobs] 丢掉待发回报失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[jobs] discard pending report failed (%s: %s)" % (type(exc).__name__, exc))
 
 
 def cancel(job_id: str) -> bool:
@@ -699,7 +699,7 @@ def cancel(job_id: str) -> bool:
             from core.shell import _kill_tree     # 懒导入：避免环
             _kill_tree(job.proc)
         except Exception as exc:                  # noqa: BLE001
-            print("[jobs] 取消失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[jobs] cancel failed (%s: %s)" % (type(exc).__name__, exc))
     elif job.cancel_event is not None:
         job.cancel_event.set()
     if job.done_event is not None:

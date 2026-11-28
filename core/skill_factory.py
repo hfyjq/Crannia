@@ -338,8 +338,8 @@ def create_skill(name: str = "", manifest_yaml=None, handler_py=None,
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    print("[skill] create_skill 造了草稿 %s（%d 个工具）%s"
-          % (name, len(tools), ("，已强制 " + "；".join(forced)) if forced else ""))
+    print("[skill] create_skill created draft %s (%d tools)%s"
+          % (name, len(tools), (", forced " + "; ".join(forced)) if forced else ""))
 
     return {
         "success": True,

@@ -197,14 +197,14 @@ def _default_deliver(session: MessageSession, text: str) -> None:
         from core.cron.runner import resolve_channel
         ch = resolve_channel(session.platform)
         if ch is None:
-            print("[tasks] 后台回报投不出去：%s 通道没在跑" % session.platform)
+            print("[tasks] background report not deliverable: %s channel not running" % session.platform)
             return
         #: 回执契约：只有 `True` 才算送达（见 `channels/base.py::send`）。
         #:   同一条判据在 `cron/runner.py::_deliver`；两处都是"没声张的成功"的入口。
         if asyncio.run(ch.send(session, text[:4000])) is not True:
-            print("[tasks] 后台回报投递失败：%s 通道报告未送达" % session.platform)
+            print("[tasks] background report delivery failed: %s channel reported undelivered" % session.platform)
     except Exception as exc:                          # noqa: BLE001
-        print("[tasks] 后台回报投递失败（%s: %s）"
+        print("[tasks] background report delivery failed (%s: %s)"
               % (type(exc).__name__, exc))
 
 
@@ -288,10 +288,10 @@ def _run_turn(key: str, item: dict, scheduler, deliver) -> None:
         try:
             deliver(event.session, text or "")
         except Exception as exc:                       # noqa: BLE001
-            print("[tasks] 后台轮回复投递失败（%s: %s）"
+            print("[tasks] background turn reply delivery failed (%s: %s)"
                   % (type(exc).__name__, exc))
     except Exception as exc:                           # noqa: BLE001
-        print("[tasks] 后台通知起轮失败（%s: %s）"
+        print("[tasks] background notification turn start failed (%s: %s)"
               % (type(exc).__name__, exc))
     finally:
         with _lock:
@@ -333,7 +333,7 @@ def _dispatcher() -> None:
         try:
             dispatch_once()
         except Exception as exc:                       # noqa: BLE001
-            print("[tasks] 通知调度失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[tasks] notification dispatch failed (%s: %s)" % (type(exc).__name__, exc))
 
 
 def install(scheduler, deliver: Optional[Callable] = None,

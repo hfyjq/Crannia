@@ -4,6 +4,8 @@
 
     .venv/Scripts/python.exe scripts/i18n_scan.py             # 全部已登记块
     .venv/Scripts/python.exe scripts/i18n_scan.py --blocks 01-commands 02-api-messages
+        # 部分扫描只更新那些块的 CSV；00-all / source.json / skipped.csv
+        # 仍是上一份全量的（脚本会出声）。收尾跑一次全量。
     .venv/Scripts/python.exe scripts/i18n_scan.py --langs en ja   # 预留多语言列
 
 ## 三条规矩（与 `locales/README.md` 一致）
@@ -146,6 +148,10 @@ BLOCKS: dict[str, dict] = {
             {"js": "packages/ui/src/MemoryLibrary.jsx"},
             #: 名单类子页（访问白名单 / 规避目录 / 监听目录）。
             {"js": "packages/ui/src/ListEditor.jsx"},
+            #: 网络请求凭据子页。它一直没登记，所以那一屏的译文在
+            #:   `en.json` 里全是孤儿（同 AutoRulesPanel 那次）—— 新文件不
+            #:   登记，没有任何东西会红。
+            {"js": "packages/ui/src/NetCreds.jsx"},
             {"js": "packages/ui/src/App.jsx", "js_funcs": ["Settings"]},
         ],
     },
@@ -1059,26 +1065,34 @@ def main() -> int:
         print("[scan] %-18s %3d 行（保留=0：%d）"
               % (name, len(rows), sum(1 for r in rows if _keep_eff(r)[0] == 0)))
 
-    if len(all_rows) > 1:
-        _write_csv(WS / "00-all.csv", all_rows, langs, pack=pack)
+    # 三个聚合产物只许全量扫描重写：`--blocks` 时 all_rows 只含选中的块，
+    #   照写会把其余块的清单静默截掉（2026-11-28 现场：source.json
+    #   17,191 行 -> 1,513 行，而三条命令都返回 0）。
+    full = args.blocks is None
+    if not full:
+        print("[scan] 部分扫描：00-all.csv / source.json / skipped.csv 未更新 "
+              "（收尾请跑一次全量）")
+    else:
+        if len(all_rows) > 1:
+            _write_csv(WS / "00-all.csv", all_rows, langs, pack=pack)
 
-    # 机读清单（回填脚本与覆盖率用）
-    src_map = {r["原文"]: {"block": r["block"], "screen": r["screen"],
-                           "where": r["where"], "ph": _PH.findall(r["原文"]),
-                           "keep": _keep_eff(r)[0]} for r in all_rows}
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "source.json").write_text(
-        json.dumps(src_map, ensure_ascii=False, indent=2),
-        encoding="utf-8", newline="\n")
+        # 机读清单（回填脚本与覆盖率用）
+        src_map = {r["原文"]: {"block": r["block"], "screen": r["screen"],
+                               "where": r["where"], "ph": _PH.findall(r["原文"]),
+                               "keep": _keep_eff(r)[0]} for r in all_rows}
+        OUT.mkdir(parents=True, exist_ok=True)
+        (OUT / "source.json").write_text(
+            json.dumps(src_map, ensure_ascii=False, indent=2),
+            encoding="utf-8", newline="\n")
 
-    skipped = [r for r in all_rows if _keep_eff(r)[0] == 0]
-    skip_path = OUT / "skipped.csv"
-    with skip_path.open("w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, lineterminator="\n")
-        w.writerow(["块", "原文", "位置", "原因"])
-        for r in skipped:
-            w.writerow([r["block"], r["原文"], "；".join(r["where"]),
-                        _keep_eff(r)[1]])
+        skipped = [r for r in all_rows if _keep_eff(r)[0] == 0]
+        skip_path = OUT / "skipped.csv"
+        with skip_path.open("w", encoding="utf-8-sig", newline="") as f:
+            w = csv.writer(f, lineterminator="\n")
+            w.writerow(["块", "原文", "位置", "原因"])
+            for r in skipped:
+                w.writerow([r["block"], r["原文"], "；".join(r["where"]),
+                            _keep_eff(r)[1]])
 
     print("[scan] 共 %d 行 → %s" % (len(all_rows), WS))
     return 0

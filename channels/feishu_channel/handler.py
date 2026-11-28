@@ -252,11 +252,11 @@ class FeishuChannel(Channel):
                 resp = client.im.v1.message.reply(req)
                 if _response_ok(resp):
                     return True
-                print("[feishu] 回复被拒（msg_type=%s code=%s %s），改发普通消息"
+                print("[feishu] reply rejected (msg_type=%s code=%s %s), sending as normal message"
                       % (msg_type, getattr(resp, "code", "?"),
                          getattr(resp, "msg", "")))
             except Exception as e:                                # noqa: BLE001
-                print(f"[feishu] 回复失败（{type(e).__name__}: {e}），改发普通消息")
+                print(f"[feishu] reply failed ({type(e).__name__}: {e}), sending as normal message")
 
         #: 形状即真相（飞书的 id 带前缀：`oc_` 群/会话、`ou_` 用户）
         receive_id_type = ("chat_id" if str(session.session_id).startswith("oc_")
@@ -272,10 +272,10 @@ class FeishuChannel(Channel):
                 .build()
             resp = client.im.v1.message.create(req)
         except Exception as e:                                    # noqa: BLE001
-            print(f"[feishu] send error（{type(e).__name__}: {e}）")
+            print(f"[feishu] send error ({type(e).__name__}: {e})")
             return False
         if not _response_ok(resp):
-            print("[feishu] send rejected（msg_type=%s code=%s %s）"
+            print("[feishu] send rejected (msg_type=%s code=%s %s)"
                   % (msg_type, getattr(resp, "code", "?"),
                      getattr(resp, "msg", "")))
             return False
@@ -288,21 +288,21 @@ class FeishuChannel(Channel):
         """上传 + 发一条（图片走 `image`，其余走 `file`）。"""
         p = Path(str(file_path or ""))
         if not p.is_file():
-            print("[feishu] 要发的文件不存在：%s" % (file_path or "（空）"))
+            print("[feishu] file to send does not exist: %s" % (file_path or "(empty)"))
             return False
         data = p.read_bytes()
         mime, _ = mimetypes.guess_type(p.name)
         is_image = (mime or "").lower().startswith("image/")
         limit = MAX_IMAGE_BYTES if is_image else MAX_FILE_BYTES
         if len(data) > limit:
-            print("[feishu] 文件太大（%d 字节 > %d），没有上传：%s"
+            print("[feishu] file too large (%d bytes > %d), not uploaded: %s"
                   % (len(data), limit, p.name))
             return False
         name = filename or p.name
         try:
             client = self._get_client()
         except ImportError:
-            print("[feishu] 没装 lark-oapi，发不了附件")
+            print("[feishu] lark-oapi not installed, cannot send attachment")
             return False
         try:
             if is_image:
@@ -315,7 +315,7 @@ class FeishuChannel(Channel):
                 resp = client.im.v1.image.create(req)
                 key = getattr(getattr(resp, "data", None), "image_key", "") or ""
                 if not _response_ok(resp) or not key:
-                    print("[feishu] 图片上传失败（code=%s %s）"
+                    print("[feishu] image upload failed (code=%s %s)"
                           % (getattr(resp, "code", "?"), getattr(resp, "msg", "")))
                     return False
                 return self._post_message(
@@ -331,7 +331,7 @@ class FeishuChannel(Channel):
             resp = client.im.v1.file.create(req)
             key = getattr(getattr(resp, "data", None), "file_key", "") or ""
             if not _response_ok(resp) or not key:
-                print("[feishu] 文件上传失败（code=%s %s）"
+                print("[feishu] file upload failed (code=%s %s)"
                       % (getattr(resp, "code", "?"), getattr(resp, "msg", "")))
                 return False
             return self._post_message(
@@ -339,7 +339,7 @@ class FeishuChannel(Channel):
                 json.dumps({"file_key": key, "file_name": name},
                            ensure_ascii=False))
         except Exception as e:                                    # noqa: BLE001
-            print(f"[feishu] 附件发送失败（{type(e).__name__}: {e}）")
+            print(f"[feishu] attachment send failed ({type(e).__name__}: {e})")
             return False
 
     def _drain_sync(self, session: MessageSession, reply_to: str = "") -> None:
@@ -351,7 +351,7 @@ class FeishuChannel(Channel):
                                     channel="feishu_channel",
                                     user_id=session.session_id)
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[feishu] 取待发文件失败（{type(exc).__name__}: {exc}）")
+            print(f"[feishu] failed to fetch pending files ({type(exc).__name__}: {exc})")
             return
         for rec in recs:
             ok = self._send_media_sync(session, rec.get("path", ""),
@@ -407,22 +407,22 @@ class FeishuChannel(Channel):
             if not kind:
                 continue
             if not message_id:
-                print("[feishu] 消息里没有 message_id，取不到附件：%s" % key)
+                print("[feishu] message has no message_id, cannot fetch attachment: %s" % key)
                 continue
             try:
                 data, real_name = await asyncio.to_thread(
                     self._download_resource, message_id, key, kind)
             except Exception as exc:                              # noqa: BLE001
-                print(f"[feishu] 取附件失败（{type(exc).__name__}: {exc}）")
+                print(f"[feishu] failed to fetch attachment ({type(exc).__name__}: {exc})")
                 continue
             if not data:
                 # 空字节不是"一个空文件"：它多半是"响应 200 但没有正文"。
                 #    以前会落一个 0 字节的文件，下游只能说"附件是空的"。
-                print("[feishu] 取回来的附件是空的（kind=%s key=%s…）"
+                print("[feishu] fetched attachment is empty (kind=%s key=%s...)"
                       % (kind, str(key)[:8]))
                 continue
             if len(data) > feishu_media.MAX_DOWNLOAD_BYTES:
-                print("[feishu] 附件太大（%d 字节），没有下载：%s"
+                print("[feishu] attachment too large (%d bytes), not downloaded: %s"
                       % (len(data), key))
                 continue
             name = getattr(comp, "name", "") or real_name
@@ -430,12 +430,12 @@ class FeishuChannel(Channel):
                 path = await asyncio.to_thread(
                     self._save_media, data, kind, key, name)
             except Exception as exc:                              # noqa: BLE001
-                print(f"[feishu] 附件落盘失败（{type(exc).__name__}: {exc}）")
+                print(f"[feishu] failed to save attachment ({type(exc).__name__}: {exc})")
                 continue
             comp.local_path = str(path)
             if hasattr(comp, "size_bytes"):
                 comp.size_bytes = len(data)
-            print("[feishu] 附件已落盘：%s（%d 字节）" % (path.name, len(data)))
+            print("[feishu] attachment saved: %s (%d bytes)" % (path.name, len(data)))
 
     # ------------------------------------------------------------------
     # Event handling (called from worker thread via _FeishuEventHandler)
@@ -454,7 +454,7 @@ class FeishuChannel(Channel):
         if not self._main_loop or not self._running:
             # 这一条不许静默：通道还没就绪时消息会凭空消失，
             #    看来就像"对方那条消息没发出来"。
-            print("[feishu] 通道还没就绪（main_loop/running），这条消息丢了：type=%s"
+            print("[feishu] channel not ready (main_loop/running), message dropped: type=%s"
                   % (msg_data.get("message_type") or "?"))
             return
         try:
@@ -465,7 +465,7 @@ class FeishuChannel(Channel):
             #    没有回复、也没有步骤流（症状与"这条消息没收到"一模一样）。
             fut.add_done_callback(_report_future_error)
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[feishu] 投递事件失败（{type(exc).__name__}: {exc}）")
+            print(f"[feishu] failed to dispatch event ({type(exc).__name__}: {exc})")
 
     async def _handle(self, msg_data: dict, event_data: dict) -> None:
         """主循环上的处理：转换 → 取附件 → 提交事件 → 管线。"""
@@ -480,20 +480,20 @@ class FeishuChannel(Channel):
         #:   "消息像没收到"这一类只能靠它区分是"没进来"还是"进来后被丢了"。
         #: 带消息号前 8 位 —— "它怎么自己又回了一遍"只能靠它区分
         #:   "同一条被重投"（号相同，会被去重闸拦）与"真的又发了一条"（号不同）。
-        print("[feishu] 收到消息 type=%s chat=%s id=%s keys=%s"
+        print("[feishu] message received type=%s chat=%s id=%s keys=%s"
               % (msg_type or "?",
-                 (str(chat_id)[:10] + "…") if chat_id else "（空）",
-                 (str(msg_id)[:8] + "…") if msg_id else "（空）",
-                 ",".join(sorted(feishu_media.content_of(msg_data).keys())) or "（空）"))
+                 (str(chat_id)[:10] + "…") if chat_id else "(empty)",
+                 (str(msg_id)[:8] + "…") if msg_id else "(empty)",
+                 ",".join(sorted(feishu_media.content_of(msg_data).keys())) or "(empty)"))
 
         chain = FeishuMessageConverter().to_internal(msg_data)
         if chain.is_empty:
             # `system`（入群/退群等）本来就没有给模型的内容 —— 不打日志。
             if msg_type != "system":
-                print("[feishu] 收到一条没有可用内容的消息（type=%s，content 键=%s）"
+                print("[feishu] message has no usable content (type=%s, content keys=%s)"
                       % (msg_type or "?",
                          ",".join(sorted(feishu_media.content_of(msg_data).keys()))
-                         or "（空）"))
+                         or "(empty)"))
             return
 
         await self._resolve_media(chain, msg_id)
@@ -561,11 +561,11 @@ class FeishuChannel(Channel):
                                  in_thread=in_thread)
             #: 每一次发出都留一行：两行 = 两遍（用户能看到"又回了一遍"这
             #:   件事的现场），零行 = 它压根没发出去。
-            print("[feishu] 回复已发出（%d 字符，%s，msg=%s）"
-                  % (len(response), "成功" if ok else "失败",
-                     (str(message_id)[:8] + "…") if message_id else "（空）"))
+            print("[feishu] reply sent (%d chars, %s, msg=%s)"
+                  % (len(response), "ok" if ok else "failed",
+                     (str(message_id)[:8] + "…") if message_id else "(empty)"))
         else:
-            print("[feishu] 这一轮没有回复文本（不发送）")
+            print("[feishu] no reply text this turn (not sending)")
         self._drain_sync(event.session, message_id)
 
 
@@ -581,7 +581,7 @@ def _report_future_error(fut: Any) -> None:
     except Exception:                                             # noqa: BLE001
         return
     if exc is not None:
-        print("[feishu] 处理这条消息时抛了异常（这一条没能进入管线）：%s: %s"
+        print("[feishu] exception while handling message (not entering pipeline): %s: %s"
               % (type(exc).__name__, exc))
 
 
@@ -765,7 +765,7 @@ class FeishuMessageConverter:
             #    `container_id_type` 取值在本机 SDK 里没有依据，不猜，
             #    如实说明 + 打日志（别让它变成"机器人不理我"）。
             comps.append(Plain(text="[合并转发的聊天记录]（暂不支持展开）"))
-            print("[feishu] 合并转发消息：暂不支持展开")
+            print("[feishu] merged-forward message: expansion not supported")
 
         elif msg_type == "system":
             # 入群 / 退群 / 改名 —— 不是给模型的输入。
@@ -925,12 +925,12 @@ class FeishuMessageConverter:
                 name=_f["file_name"],
                 url=feishu_media.SCHEME + "file/" + _f["file_key"],
                 mime_type=_mime_of(_f["file_name"])))
-            print("[feishu] 富文本顶层 files 里的附件：%s" % _f["file_name"])
+            print("[feishu] attachment in rich-text top-level files: %s" % _f["file_name"])
 
         if unknown:
             #: 出声：这条消息照常处理，但那种元素我们没接住 ——
             #:   下一次"模型看不见"的现场，日志里要有这句话当线索。
-            print("[feishu] post 里有没见过的元素标签：%s（其余部分照常处理）"
+            print("[feishu] unknown element tag in post: %s (rest handled normally)"
                   % ",".join(sorted(set(unknown))))
 
         text = feishu_media.replace_mentions("\n".join(texts), mentions)

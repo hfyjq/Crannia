@@ -260,7 +260,7 @@ def mark_round_done(memory_root) -> None:
         tmp.write_text(json.dumps({"last_round": time.time()}), encoding="utf-8")
         os.replace(tmp, root / STATE_FILE)
     except OSError as exc:
-        print("[memory] 巩固：记状态失败（%s）—— 下一轮会再跑一遍" % exc)
+        print("[memory] consolidate: state record failed (%s) - retries next round" % exc)
 
 
 def _read_holder(d: Path) -> Tuple[Optional[int], float]:
@@ -551,10 +551,10 @@ def maybe_organize(*, session_id: str, messages: Optional[List[dict]], provider,
     if snap is None or snap.session_id != session_id:
         # 拿不到快照，fork 不出"同前缀"，把互斥还回去
         release_round(memory_root)
-        _status(status, "[memory] 巩固：没有本会话的请求快照 —— 跳过本轮")
+        _status(status, "[memory] organize: no request snapshot for this session - skipping this round")
         return
 
-    _status(status, "[memory] 记忆巩固开始 —— %.1f 小时未巩固，%d 个会话待看"
+    _status(status, "[memory] organize started - %.1f h since last run, %d sessions to review"
             % (hours_since, len(session_ids)))
     _state["in_progress"] = True
     _spawn(target=run_organize, kwargs=dict(
@@ -625,7 +625,7 @@ def run_organize(*, session_id: str, messages: List[dict], provider,
             )
         ok = True
     except Exception as exc:  # noqa: BLE001 —— 判据：best-effort，绝不把失败报成成功
-        _status(status, "[memory] 记忆巩固失败（互斥已还，下轮重算时间闸）："
+        _status(status, "[memory] organize failed (mutex released; time gate recomputed next turn): "
                         "%s: %s" % (type(exc).__name__, exc))
     finally:
         _state["in_progress"] = False
@@ -658,10 +658,10 @@ def run_organize(*, session_id: str, messages: List[dict], provider,
                              count=len(changed), names=names,
                              sessions=len(sessions))
     except Exception as exc:  # noqa: BLE001 —— 事件发不出去不许影响巩固本身
-        print("[memory] memory.organized 事件发送失败：%s: %s"
+        print("[memory] memory.organized event send failed: %s: %s"
               % (type(exc).__name__, exc))
     if changed:
-        _status(status, "[memory] 记忆巩固完成 —— 改动 %d 条：%s"
-                % (len(changed), "、".join(names)))
+        _status(status, "[memory] organize done - changed %d entries: %s"
+                % (len(changed), ", ".join(names)))
     else:
-        _status(status, "[memory] 记忆巩固完成 —— 无改动（记忆已紧凑）")
+        _status(status, "[memory] organize done - no changes (memory already compact)")

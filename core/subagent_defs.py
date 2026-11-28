@@ -84,7 +84,7 @@ def agent_roots() -> list[Path]:
         from core import plugin_packages
         roots.extend(plugin_packages.agents_dirs())
     except Exception as exc:                                  # noqa: BLE001
-        print("[subagent] 读取插件包失败：%s: %s" % (type(exc).__name__, exc))
+        print("[subagent] read plugin packs failed: %s: %s" % (type(exc).__name__, exc))
     out: list[Path] = []
     seen: set[str] = set()
     for r in roots:
@@ -112,14 +112,14 @@ def _parse(path: Path) -> Optional[SubagentDef]:
         import yaml
         meta = yaml.safe_load(m.group(1))
     except Exception:                                     # noqa: BLE001
-        print("[subagent] 跳过 %s：frontmatter 无法解析" % path)
+        print("[subagent] skipping %s: frontmatter unparsable" % path)
         return None
     if not isinstance(meta, dict):
         return None
 
     name = str(meta.get("name") or path.stem).strip()
     if not _NAME_RE.match(name):
-        print("[subagent] 跳过 %s：名字不合法（%r）" % (path, name))
+        print("[subagent] skipping %s: invalid name (%r)" % (path, name))
         return None
     description = str(meta.get("description") or "").strip()
 

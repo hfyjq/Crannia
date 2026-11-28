@@ -892,7 +892,7 @@ def _emit_bg(evt_type: str, kind: str, session_key: str, ts: float,
             data["duration_ms"] = int((ts - started) * 1000)
         get_event_bus().emit(evt_type, session_key=session_key, **data)
     except Exception as exc:  # noqa: BLE001
-        print(f"[bg] {evt_type} 事件发不出去（{type(exc).__name__}: {exc}）")
+        print(f"[bg] {evt_type} event could not be sent ({type(exc).__name__}: {exc})")
 
 
 __all__ = [

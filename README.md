@@ -9,7 +9,7 @@
   <p>
     <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
     <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
-    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
   </p>
 </div>
 
@@ -59,7 +59,17 @@ Models can be added from the endpoint settings page instead of editing
 
 ### Linux
 
-Requirements: Linux x64, Python **3.11+** (Node.js only for the desktop GUI).
+Download `crannia-*-linux-x64.AppImage` from Releases, then:
+
+```bash
+chmod +x crannia-*-linux-x64.AppImage
+./crannia-*-linux-x64.AppImage
+```
+
+The AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04 and newer). Without it,
+run the same file with `--appimage-extract-and-run`.
+
+Or run from source (Linux x64, Python **3.11+**; Node.js only for the desktop GUI):
 
 ```bash
 git clone https://github.com/hfyjq/Crannia.git

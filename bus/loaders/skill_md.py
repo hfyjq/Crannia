@@ -74,14 +74,14 @@ _SKILL_MD = "SKILL.md"
 #: · 致命 —— 这个 skill 收不进来（并进 `skipped` 那一行）；
 #: · 提示 —— 收进来了，只是某个字段不合规范（不影响使用，名字取目录名）。
 _PARSE_FATAL = {
-    "no-frontmatter": "SKILL.md 没有 frontmatter",
-    "yaml": "SKILL.md 的 YAML 读不出",
-    "not-dict": "SKILL.md 的 frontmatter 不是字典",
-    "missing-name": "SKILL.md 缺 name",
-    "missing-description": "SKILL.md 缺 description",
+    "no-frontmatter": "SKILL.md has no frontmatter",
+    "yaml": "SKILL.md YAML unreadable",
+    "not-dict": "SKILL.md frontmatter is not a mapping",
+    "missing-name": "SKILL.md missing name",
+    "missing-description": "SKILL.md missing description",
 }
 _PARSE_ADVISORY = {
-    "bad-name": "name 不符合 agentskills.io 规范",
+    "bad-name": "name violates the agentskills.io spec",
 }
 
 
@@ -246,7 +246,7 @@ def discover_plugin_commands(root=None) -> list[InstructionSkill]:
                 seen.add(real)
                 meta = _parse_command_md(f)
                 if meta is None:
-                    print("[skill] 跳过命令文件（读不出 frontmatter）：%s" % f)
+                    print("[skill] skipping command file (no frontmatter): %s" % f)
                     continue
                 out.append(InstructionSkill(
                     name=f.stem,
@@ -426,11 +426,11 @@ def discover_instruction_skills(root=None) -> list[InstructionSkill]:
                 skipped[_label] = skipped.get(_label, 0) + _n
 
         for why, n in sorted(skipped.items()):
-            print("[skill] 跳过 %d 个（%s）—— 根：%s" % (n, why, base))
+            print("[skill] skipped %d (%s) - root: %s" % (n, why, base))
         for why, n in sorted(advisory.items()):
             # 点破"不影响使用"：命令名取目录名，frontmatter 那个 `name`
             #   我们根本不读 —— 不说的话，用户会以为这个技能坏了。
-            print("[skill] %d 个 %s（不影响使用：命令名取目录名）—— 根：%s"
+            print("[skill] %d %s - root: %s"
                   % (n, why, base))
     return out
 

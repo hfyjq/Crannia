@@ -247,7 +247,8 @@ def test_headroom_log_prints_both_numbers_on_one_line():
             system=system_text, tools=tools,
         )
     line = buf.getvalue()
-    assert "当前" in line and "阈值" in line and "还差" in line, line
+    assert "current" in line and "threshold" in line, line
+    assert "gap" in line or "over" in line, line
     assert f"{total:,}" in line, f"the current value is missing: {line!r}"
     assert f"{THRESHOLD:,}" in line, f"the threshold is missing: {line!r}"
     # All three parts, on that same line, so the sum is checkable by eye.

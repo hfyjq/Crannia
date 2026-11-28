@@ -222,7 +222,7 @@ def test_providers_carry_kind():
     check("★ Anthropic 那条也带上了",
           "classify_transport_error(e)" in an and "error_kind=" in an)
     check("★★ 两条都**出声**（控制台此前什么都没有）",
-          oa.count("[llm] 流式失败") >= 1 and "[llm] 流式失败" in an)
+          oa.count("[llm] stream failed") >= 1 and "[llm] stream failed" in an)
 
     from providers.base import classify_transport_error
 

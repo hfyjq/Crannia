@@ -1032,8 +1032,8 @@ def user_rules() -> "Dict[str, List[str]]":
     except ValueError as exc:
         if not _rules_bad_noted:
             _rules_bad_noted = True
-            print("[auto-review] 设置项 %r 不合法（%s）—— 这次不用它。"
-                  "改 data/settings.json 修好它。" % (SETTING_KEY, exc))
+            print("[auto-review] setting %r invalid (%s) - ignored this time"
+                  % (SETTING_KEY, exc))
         return empty_rules()
     except Exception:
         # 文件坏了，属于「读不到」，三段全空（不让一轮对话因为一个设置失败）。

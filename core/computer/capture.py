@@ -69,6 +69,128 @@ class CaptureError(RuntimeError):
         self.detail = detail
 
 
+#: 系统画出来的浮层窗口类：下拉菜单 / 起始菜单。它们没有标题，也不在
+#: 主窗的位图里 —— `PrintWindow` 只画窗口自己的内容，而菜单是另一路顶层
+#: 窗口。不单独抓就会"菜单明明开着、模型却看不见"，接着它按下的每个键
+#: 都被那个看不见的菜单吃掉（实测现场：Alt+L 开了图层菜单，之后 v / Tab /
+#: Ctrl+R 全部无效，而截图逐字节不变）。
+_POPUP_CLASSES = frozenset({"#32768", "#32769"})
+
+
+def is_popup(info) -> bool:
+    """这个窗口是系统画的浮层（下拉菜单一类）吗？
+
+    给"列同进程窗口"那类地方用：浮层没有标题，按标题筛会把它们
+    整类丢掉 —— 而它们恰恰是模型最需要知道的东西。
+    """
+    return (getattr(info, "class_name", "") or "") in _POPUP_CLASSES
+
+
+def is_popup_class(name: str) -> bool:
+    """按类名判浮层（给不持有 WindowInfo 的调用点用）。"""
+    return (name or "") in _POPUP_CLASSES
+
+
+def popup_rects(hwnd: int) -> list:
+    """窗口所属进程此刻可见的浮层矩形（下拉菜单一类）。
+
+    判据与 `overlay_windows` 相同，但不查进程路径 —— 那一步占了它九成
+    的开销。这个会在按键前后各跑一次（只为回答"多没多出一个菜单"），
+    要的是毫秒级。
+    """
+    if not win32.IS_WINDOWS:
+        return []
+    out: list[tuple[int, int, int, int]] = []
+    owner = wintypes.DWORD(0)
+    win32.user32.GetWindowThreadProcessId(int(hwnd), ctypes.byref(owner))
+    if not owner.value:
+        return []
+
+    def _cb(h, _lparam):
+        try:
+            if not win32.user32.IsWindowVisible(h):
+                return True
+            if win32._class_name(h) not in _POPUP_CLASSES:
+                return True
+            pid = wintypes.DWORD(0)
+            win32.user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+            if pid.value != owner.value:
+                return True
+            r = win32.RECT()
+            if win32.user32.GetWindowRect(h, ctypes.byref(r)):
+                out.append((r.left, r.top, r.right, r.bottom))
+        except Exception:                            # noqa: BLE001 - 坏一个不毁全表
+            pass
+        return True
+
+    with win32.dpi_aware():
+        win32.user32.EnumWindows(win32.WNDENUMPROC(_cb), 0)
+    return out
+
+
+def new_popups(before, after) -> bool:
+    """按键前后比一比：多出来一个浮层，说明这个字母被菜单栏吃成了助记键。
+
+    只比个数，不猜程序内部状态 —— 目标程序那边"什么都没变"正是这个坑的
+    表现，能看到的只有"凭空多了一个菜单"。
+    """
+    return len(after) > len(before)
+
+
+def overlay_windows(hwnd: int, rect=None) -> list:
+    """压在窗口上的浮层窗口（下拉菜单一类），按 Z 序从下到上返回。
+
+    只认系统画的浮层类：同进程的浮动面板本来就在主窗的位图里，再贴一遍
+    没有意义；而按屏幕像素贴一个可能被别的程序挡住的面板会把别家的
+    画面贴进来。
+    """
+    info = win32.window_info(hwnd)
+    if info is None:
+        return []
+    if rect is None:
+        rect = win32.outer_rect(info.hwnd)
+    l, t, r, b = rect
+    out = []
+    try:
+        windows = win32.enum_windows(include_invisible=True, include_tool_windows=True)
+    except Exception:                                # noqa: BLE001 - 附加信息
+        return []
+    for w in windows:
+        if w.hwnd == int(hwnd) or w.pid != info.pid:
+            continue
+        if not w.visible or w.minimized or w.cloaked:
+            continue
+        if (w.class_name or "") not in _POPUP_CLASSES:
+            continue
+        wl, wt, wr, wb = w.rect
+        if wr <= l or wb <= t or wl >= r or wt >= b:
+            continue
+        out.append(w)
+    out.reverse()                    # 枚举是上→下压的顺序，画的时候反过来
+    return out
+
+
+def _paste_overlays(img, rect, overlays):
+    """把浮层按屏幕像素贴到图上，返回真贴上去的那些。"""
+    l, t, r, b = rect
+    painted = []
+    for w in overlays:
+        wl, wt, wr, wb = w.rect
+        x0, y0 = max(wl, l), max(wt, t)
+        x1, y1 = min(wr, r), min(wb, b)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        try:
+            with win32.dpi_aware():
+                sub = _grab(w.hwnd, (x0, y0, x1, y1),
+                            (x1 - x0, y1 - y0), True, [])
+        except CaptureError:
+            continue
+        img.paste(sub, (x0 - l, y0 - t))
+        painted.append(w)
+    return img, painted
+
+
 @dataclass
 class CaptureResult:
     png: bytes
@@ -76,6 +198,8 @@ class CaptureResult:
     height: int
     rect: tuple[int, int, int, int]
     notes: list[str] = field(default_factory=list)
+    #: 已经画进图里的浮层（类名）。空 = 没有浮层，或者有但没能画进去。
+    overlays: list[str] = field(default_factory=list)
 
     @property
     def looks_black(self) -> bool:
@@ -194,9 +318,24 @@ def capture_window(hwnd: int, *, allow_screen_fallback: bool = True) -> CaptureR
     if img.size != (pw, ph):
         from PIL import Image
         img = img.resize((pw, ph), Image.LANCZOS)
+    # 浮层（菜单/下拉框）是独立窗口，主窗的位图里没有它 —— 单独贴上去。
+    # 贴的前提是它在最上面：前台窗口的弹出层一定在前台之上，那时屏幕
+    # 像素就是真值；窗口不在前台时不贴（贴上去可能是别家的画面），只出声。
+    painted: list[str] = []
+    overlays = overlay_windows(info.hwnd, rect)
+    if overlays and win32.is_foreground(info.hwnd):
+        img, done = _paste_overlays(img, rect, overlays)
+        painted = [w.class_name for w in done]
+        missed = len(overlays) - len(painted)
+        if missed > 0:
+            notes.append("有 %d 个弹出层没能画进图里（取不到屏幕像素）" % missed)
+    elif overlays:
+        notes.append("有个弹出层（菜单/下拉框）压在窗口上，但窗口不在前台，"
+                     "没能画进图里 —— 先 `activate_window` 再观察")
     if _looks_all_black(img):
         notes.append("这张图**整张是黑的** —— 可能是独占全屏 / 硬件合成 / DRM，"
                      "或者窗口内容还没画出来；别把它当成'看见了'")
     out = io.BytesIO()
     img.save(out, format="PNG", optimize=False)
-    return CaptureResult(png=out.getvalue(), width=pw, height=ph, rect=rect, notes=notes)
+    return CaptureResult(png=out.getvalue(), width=pw, height=ph, rect=rect,
+                         notes=notes, overlays=painted)

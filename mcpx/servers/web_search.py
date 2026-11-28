@@ -536,25 +536,17 @@ def _http_get_once(url: str, timeout: int = 15, max_bytes=None):
 def _same_site(a: str, b: str) -> bool:
     """两个 URL 是不是同一个站（scheme + 端口 + host，host 忽略 `www.` 前缀）。
 
-    判据：protocol 相同、port 相同、剥掉 `www.` 后 hostname 完全相等。
+    判据与实现都在 `core.egress_gate.same_site`（唯一一处）——
+    `web_request` 用的是同一个函数，两处各写一份必然漂。
+
     跨 host 的跳转不跟随，而是交回模型
     —— 模型要重新调一次 `web_fetch`，于是重新走一遍判定。
 
     忽略 `www.` 是有代价的取舍：多跟一跳同名站（`example.com` → `www.example.com`
     很常见），换掉的是大量正常抓取被退回给模型。
     """
-    from urllib.parse import urlsplit
-
-    pa, pb = urlsplit(a), urlsplit(b)
-
-    def norm(p):
-        host = (p.hostname or "").lower()
-        if host.startswith("www."):
-            host = host[4:]
-        port = p.port or (443 if p.scheme == "https" else 80)
-        return (p.scheme.lower(), host, port)
-
-    return norm(pa) == norm(pb)
+    from core.egress_gate import same_site
+    return same_site(a, b)
 
 
 #: 单次抓取的内容上限。年报这类文件常见几十 MB（英文版尤其大），

@@ -166,19 +166,26 @@ def _patch_click(actual, raises=None):
         return "sendinput"
 
     saved = (T._stored_window, T._check_input_ready, T._ensure_same_rect,
-             S.usable_observation, T.input_mod.click, T.win32.cursor_pos)
+             S.usable_observation, T.input_mod.click, T.win32.cursor_pos,
+             T.win32.point_hit)
     T._stored_window = lambda wid: info
-    T._check_input_ready = lambda i: None
+    #: 收 `**kw`：`_check_input_ready` 现在按调用方是否发键盘决定要不要拦弹出层
+    #: （`keyboard=`）。替身签名比真函数窄 → 整条链 TypeError，而它长得像"测试自己坏了"。
+    T._check_input_ready = lambda i, **kw: None
     T._ensure_same_rect = lambda o: None
     S.usable_observation = lambda oid: obs
     T.input_mod.click = fake_click
     T.win32.cursor_pos = (lambda: actual) if raises is None else raises
+    #: 落点遮挡检查要问 `WindowFromPoint` —— 这里量的是"回读落点"，不是遮挡。
+    #: 不打桩的话真探针会去问桌面（`w1` 这个假窗口当然不命中）。
+    T.win32.point_hit = lambda h, x, y: True
     return sent, saved
 
 
 def _restore_click(saved):
     (T._stored_window, T._check_input_ready, T._ensure_same_rect,
-     S.usable_observation, T.input_mod.click, T.win32.cursor_pos) = saved
+     S.usable_observation, T.input_mod.click, T.win32.cursor_pos,
+     T.win32.point_hit) = saved
 
 
 def test_click_records_the_read_back_point():
@@ -258,12 +265,13 @@ def test_blind_model_gets_no_screenshot_and_a_first_line():
     try:
         out = T._get_window_state("w1", True, True)
         check("看不见图的模型完全不截图", shot["n"] == 0, str(shot["n"]))
-        text = out if isinstance(out, str) else out.text
+        text = out if isinstance(out, str) else out.render()
         check("回执第一段就说'当前模型不看图'",
-              "不看图" in text.split("\n")[2], text[:200])
+              "不看图" in "\n".join(text.split("\n")[:6]), text[:300])
         check("并给出路线（element_index / 换模型）",
               "element_index" in text and "换" in text)
-        check("返回的是纯文本，没有图片块", isinstance(out, str))
+        check("返回的不是图片块（0 张 prepared）",
+              isinstance(out, str) or not getattr(out, "prepared", None))
     finally:
         (T._stored_window, T._allowed, T._authorize_pending,
          capture.capture_window, T.uia.snapshot, T.uia.focused_element,

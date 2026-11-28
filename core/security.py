@@ -90,6 +90,9 @@ DEFAULT_FORBIDDEN_PATHS: list[str] = [
     #    唯一依据。漏一条 = 模型读得到自己的 key，而没有任何东西会红。
     # `web/server.py::_API_KEYS_PATH` 指向的是同一类账本。
     "data/api_keys.json",
+    # 单文件存储（2026-11-26）：账本与模型 api 同一份。
+    "data/runtime/model_configs.json",
+    # 老形状的凭据文件 —— 只在迁移期可能存在；迁完就删，留着这条不亏。
     "data/runtime/provider_credentials.json",
     # QQ 机器人的 appId / appSecret。读到它就能冒充那个机器人发消息。
     # 旧的那份单文件（升级后由配置条目账本接管，文件可能还在）。
@@ -317,8 +320,7 @@ def _resolve_public_addresses(hostname: str) -> list[str]:
     #   判据刻意只看这一段（RFC 2544 基准段，正常公网不会出现）——
     #   不按"有没有配代理"放宽，因为 DNS 是系统做的、跟我们那档设置无关。
     if all(_is_fake_ip(a) for a in addrs):
-        print(f"[egress] {hostname} -> {addrs[0]} 是 fake-ip 占位地址"
-              f"（代理的 DNS 模式）—— 跳过 IP 段判定")
+        print(f"[egress] {hostname} -> {addrs[0]} is a fake-ip placeholder address (proxy DNS mode) - skipping IP range check")
         return addrs
 
     for addr in addrs:
@@ -538,7 +540,7 @@ def _note_touched(resolved_path: str) -> None:
             from core.file_history import snapshot_before
             snapshot_before(sid, resolved_path, turn=_current_turn(sid))
     except Exception as exc:  # noqa: BLE001
-        print("[touched] 接线失败（不影响写入）：%s: %s" % (type(exc).__name__, exc))
+        print("[touched] wiring failed (does not affect writes): %s: %s" % (type(exc).__name__, exc))
 
 
 def _current_turn(channel_key: str) -> int:
@@ -588,12 +590,12 @@ def _note_command_duplicate(command: str) -> None:
                 _recent_commands.pop(next(iter(_recent_commands)))
         if n == 2:
             print(
-                "[w28] 同一条命令在 %.0f 秒内被记了第 %d 次 —— **归属未定**"
-                "（模型重发 / 框架重派，修法不同）。取证：看它的 `tool_call_id` "
-                "是不是同一个；命令：%s" % (_DUP_COMMAND_WINDOW_S, n, key[:120])
+                "[w28] within %.0f s the same command was seen %d times - attribution unknown"
+                " (model retry vs framework re-dispatch, different fixes). Check whether its `tool_call_id` "
+                "is the same; command: %s" % (_DUP_COMMAND_WINDOW_S, n, key[:120])
             )
     except Exception as exc:  # noqa: BLE001
-        print("[w28] 重复命令探测自己出错（不影响执行）：%s: %s"
+        print("[w28] duplicate command probe itself failed (does not affect execution): %s: %s"
               % (type(exc).__name__, exc))
 
 
@@ -855,7 +857,7 @@ class SecurityGuard:
             #     设置只决定"钉不钉得成"，两处各读一次会分叉。
             #   代价：`.env` 这类密钥读得到、系统目录也读得到。
             if _unlock_bypassing():
-                print("[unlock] 受保护路径放行：%s" % resolved)
+                print("[unlock] protected path allowed: %s" % resolved)
                 return resolved, PathLevel.READ_WRITE
             return resolved, PathLevel.FORBIDDEN
 
@@ -1318,6 +1320,22 @@ class SecurityGuard:
         target += " | %s=%s" % (str(rule_label or "matchedRule"),
                                 matched_rule or "none")
         self._audit(action, target)
+
+    def record_egress(self, channel: str, target: str, action: str,
+                      grant: str = "", verdict: str = "") -> None:
+        """把一次出网调用写进审计（不论工具权限档是 read 还是 write）。
+
+        出网是"数据离开这台机器"，风险与工具权限档无关：net_ports 只读，
+        但它告诉模型哪台机器开着哪个口。事后要回答"什么、何时、发到哪" -
+        少一行就回答不了。
+
+        grant 是这次凭什么放行（session / file / prompt）；
+        verdict 是结果（ok / error / asked）。凭据只记条目名，永不记值。
+        """
+        target_s = "channel=%s | target=%s | action=%s | grant=%s | verdict=%s" % (
+            channel or "?", target or "-", action or "-",
+            grant or "none", verdict or "-")
+        self._audit("EGRESS", target_s)
 
     def record_ice(self, action: str, detail: str) -> None:
         """把一次 `ICE` 信息侧的读数写进同一个审计日志。

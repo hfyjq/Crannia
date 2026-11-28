@@ -1,0 +1,118 @@
+kind: skill
+name: netops
+version: "0.1.0"
+draft: false
+load_strategy: on_demand
+description: "网络诊断脚手架 —— 网卡/路由/DNS/端口/HTTP 探测，跨平台统一 JSON 回执"
+summary: "网络诊断"
+
+api: 1
+requires:
+  - workspace
+
+# 无 config:/settings: —— 按 web/server.py:8300-8312 的判据，
+# 不会在技能页显示（配合 BUILTIN_SKILLS 登记），由框架内部持有。
+review_input: none
+
+tools:
+  - name: net_ifaces
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      查看本机网卡配置（IP/掩码/MAC/是否启用/速率/MTU）。
+      Windows ipconfig 与 Linux ip addr 的输出差异在这里被吃掉，返回统一字段。
+      只读；不修改任何网络配置。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties: {}
+
+  - name: net_routes
+    permission: read
+    destructive: false
+    output_kind: structured
+    description: >
+      查看本机路由表（目标/下一跳/接口/跃点）与默认网关。
+      排"跨网段不通"时先看这里——tracert 断在网关之外多半是路由写错。
+      跨平台统一字段；只读。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties: {}
+
+  - name: net_dns
+    permission: read
+    destructive: false
+    output_kind: structured
+    review_input: "要解析的域名；一次 DNS 查询（只读）"
+    description: >
+      查 DNS 记录（A/AAAA/CNAME/MX/TXT 等），给答案、TTL、规范名、解析服务器。
+      统一 dig/nslookup 的输出差异；只读。
+      dnspython 缺失时降级为系统解析（只有地址、无 TTL），回执会标 degraded。
+    egress:
+      channel: dns
+      target: name
+      route_for: []
+      auto: true
+      audit: true
+      note: "新增能力：诊断类查询，不弹窗（决定 7），只审计"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        name: {type: string, description: "要解析的域名"}
+        record_type: {type: string, default: "A"}
+        timeout_s: {type: number, default: 3}
+      required: [name]
+
+  - name: net_ports
+    permission: read
+    destructive: false
+    output_kind: structured
+    review_input: "要探测的主机与端口列表；只测用户列出的端口，不做网段扫描"
+    description: >
+      探测给定主机上**指定端口列表**是否开放（并发、有超时、统一回执）。
+      只测用户列出的端口，不做网段扫描。只读。
+    egress:
+      channel: tcp
+      target: host
+      route_for: [nc, netcat, ncat, socat, telnet]
+      auto: true
+      audit: true
+      note: "诊断类：只测列出的端口，不扫描网段"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        host: {type: string}
+        ports:
+          type: string
+          description: "端口列表，如 '80,443,8080'（空格/逗号分隔）"
+        timeout_s: {type: number, default: 1.5}
+        max_workers: {type: integer, default: 16}
+      required: [host, ports]
+
+  - name: net_http_probe
+    permission: read
+    destructive: false
+    output_kind: structured
+    review_input: "要探测的 URL；一次只读 GET"
+    description: >
+      HTTP(S) 探针：状态码、重定向链、HTTP 版本、安全响应头、
+      TLS 证书有效期/签发者；给延迟。只读，不做写请求。
+      比裸 curl 好在输出结构化、异常统一、跨平台一致。
+    egress:
+      channel: http
+      target: url
+      route_for: [curl, wget, wget2]
+      auto: true
+      audit: true
+      note: "诊断类：允许内网目标（运维主场），与 web_fetch 的地板不同"
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        url: {type: string}
+        timeout_s: {type: number, default: 8}
+      required: [url]

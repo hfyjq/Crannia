@@ -301,6 +301,19 @@ _VERBS: dict[str, str] = {
     "github_create_pull":        "正在新建 GitHub 拉取请求 {arg}",
     "github_list_commits":       "正在看 GitHub 提交记录 {arg}",
     "web_fetch":                 "正在读取网页 {arg}",
+    "web_request":               "正在发送请求 {arg}",
+    "skill_config_write":        "正在写入技能配置 {arg}",
+    # SSH / 网络诊断
+    "ssh_exec":                  "正在远端执行命令 {arg}",
+    "ssh_upload":                "正在上传文件到远端 {arg}",
+    "ssh_download":              "正在从远端下载文件 {arg}",
+    "ssh_probe":                 "正在探测 SSH 主机 {arg}",
+    "ssh_forward":               "正在建立 SSH 隧道 {arg}",
+    "net_ifaces":                "正在查看本机网卡",
+    "net_routes":                "正在查看本机路由表",
+    "net_dns":                   "正在查询 DNS 记录 {arg}",
+    "net_ports":                 "正在探测主机端口 {arg}",
+    "net_http_probe":            "正在探测网站 {arg}",
 
     # 其他
     "get_weather":               "正在查询天气",
@@ -383,6 +396,13 @@ _VERBS: dict[str, str] = {
     # 措辞同时是中文检索面：用户会说的是「画一张」「生成图片」「画个 logo」，
     #   而这些词在英文描述里一个都没有，漏了这行，工具就在、但按真实话术搜不到。
     "generate_image":               "正在生成图片（AI 画图 / 文生图）",
+
+    # 结构化绘图。三个工具都没有能落进 `_PREFIX_VERBS` 的前缀
+    # （`create_flowchart` 会落到 `("create_", "正在创建 {arg}")`，但流程图与
+    #   思维导图同族不同事，界面上分不出在画哪一种）。
+    "create_flowchart":             "正在画流程图（流程 / 决策 / 依赖关系）",
+    "create_mindmap":               "正在画思维导图（脑图 / 目录树 / 组织架构）",
+    "render_diagram":               "正在把图转成 PNG 图片",
 
     # Excel 收尾三件 + Word 表格行列四件
     # 同样一个前缀都落不到（`freeze_`/`delete_table_` 不在 `_PREFIX_VERBS`；
@@ -546,6 +566,23 @@ _SEARCH_HINTS: dict[str, str] = {
     # 修好之后，这张表补的是露出来的真缺口 —— 它们能通过检索电池，
     # 靠的是单字噪声给的并列断，不是真信号。
     "parse_pdf":  "读一下这个 pdf、解析 pdf 里的文字和表格、看看 pdf 写了什么",
+    # 带自定义头的 HTTP 请求
+    "web_request": "调用一下这个接口、发个 post 请求、带请求头访问、"
+                   "curl 一个请求、用 api 查一下",
+    "skill_config_write": "把私钥路径填上、帮我配 ssh、把密码写到设置里、"
+                          "改一下 ssh 的用户名",
+    # SSH / 网络诊断 - 用户会怎么问这几件事
+    "ssh_exec": "连上那台服务器执行命令、远程跑一条命令、"
+                "在树莓派上装个东西、ssh 上去看日志",
+    "ssh_upload": "把文件传到服务器、上传到远端机器、scp 一个文件过去",
+    "ssh_download": "从服务器下载文件、把远端那个文件取回来",
+    "ssh_probe": "这台机器 ssh 能连吗、22 端口通不通、探一下 ssh 服务",
+    "ssh_forward": "端口转发、隧道、把远端端口映射到本地、socat 那种转发",
+    "net_dns": "查一下这个域名的 IP、dns 解析、看看 mx 记录",
+    "net_ports": "这个端口开着吗、扫一下端口、服务通不通、ping 不到",
+    "net_http_probe": "这个网站能访问吗、看看状态码和证书、网页打不开",
+    "net_ifaces": "本机 IP 是多少、看网卡、mac 地址",
+    "net_routes": "路由表、网关是多少、跨网段不通",
     "read_pdf_pages": "按页读 pdf、读 pdf 的某几页、只看第 16 页、"
                       "读第 10 到 20 页的原文、读报告里某一页的表格",
     "split_pdf":  "把这个 pdf 拆开、按页拆分、每几页切成一个文件",
@@ -580,6 +617,13 @@ _SEARCH_HINTS: dict[str, str] = {
     # 提问
     "ask_user": "让用户选一下、问用户要哪个方案、让用户决定、"
                 "给几个选项让人选、需要用户决定",
+    # 结构化绘图 —— 「画个流程图」「做个脑图」都不含工具名里的字；
+    #   description 只写了「流程图 / 思维导图 / 组织架构」，用户还会说
+    #   「脑图」「目录树」「流程示意」。
+    "create_flowchart": "画个流程图、把流程画出来、决策流程图、依赖关系图、"
+                        "业务流程示意图",
+    "create_mindmap": "画个思维导图、做个脑图、知识结构图、目录树、组织架构图",
+    "render_diagram": "把 svg 图转成 png 图片、把图导出成图片",
 }
 
 

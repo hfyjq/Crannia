@@ -156,12 +156,11 @@ def load() -> dict:
     try:
         data = json.loads(raw)
     except (ValueError, TypeError) as exc:
-        print(f"[allowlist] {_PATH} 解析失败（{type(exc).__name__}: {exc}）"
-              f" —— 按空表处理，这一轮所有目标都会问")
+        print(f"[allowlist] {_PATH} parse failed ({type(exc).__name__}: {exc}) - treating as empty; every target will be asked this turn")
         return out
 
     if not isinstance(data, dict):
-        print(f"[allowlist] {_PATH} 顶层不是对象 —— 按空表处理")
+        print(f"[allowlist] {_PATH} top level is not an object - treating as empty")
         return out
 
     for kind in KINDS:

@@ -254,7 +254,7 @@ def _do_disable(reason: str) -> None:
     try:
         session.disable(reason)
     except Exception as exc:                         # noqa: BLE001
-        print("[computer] 停止接管失败（%s）：%s: %s"
+        print("[computer] stop takeover failed (%s): %s: %s"
               % (reason, type(exc).__name__, exc))
 
 

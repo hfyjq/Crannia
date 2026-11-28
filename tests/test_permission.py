@@ -493,6 +493,13 @@ _UNDECLARED_BASELINE = (0, 0, 0)
 #: 就是一次真闸改动，而它不会有任何东西红。
 #:要动它，必须先动这份基线，而那是一次看得见的、单独的动作。
 _READ_SET_BASELINE = frozenset({
+    # netops / ssh（）：从出生起就只有读操作 -
+    #   net_ifaces / net_routes（读本机状态）、net_dns / net_ports
+    #   （发查询/建连接，不写任何东西）、net_http_probe（只读 GET）、
+    #   ssh_probe（只建 TCP、读 banner，不认证）。
+    #   ssh_exec / ssh_upload / ssh_download 一个都不在这张表里（write）。
+    "net_ifaces", "net_routes", "net_dns", "net_ports", "net_http_probe",
+    "ssh_probe",
     # GitHub 原生的读工具（只读、可并发、可进只读子 agent）——
     #   这是一次看得见的决定：它们只发 GET、不发写请求。
     "github_whoami", "github_get_file", "github_search_code",

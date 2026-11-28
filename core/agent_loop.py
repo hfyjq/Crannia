@@ -69,7 +69,7 @@ from core.file_tools import (
 # 把历史里的图片指针装回成块，并卸载太老的图片。
 # 形状与判据都在 `core/image_input.py`，这里只是"谁在什么时候调它"
 #   （调用点两条路各一处，必须锁步）。
-from core.image_input import ImageToolResult, content_text, expand_attachments
+from core.image_input import ImageToolResult, TrustedText, content_text, expand_attachments
 from core.memory_store import append_memory_index, build_memory_index
 from core.message_history import check as check_history
 from core.prompt_assembler import assemble_system_prompt, model_name_of
@@ -173,6 +173,10 @@ _ISOLATED_DOC_TOOLS: frozenset[str] = (
         # 它的名字不落在 `_READ_FAMILIES` 里（不是 `get_/read_/parse_/…`），
         # 所以反查不会替它报警 —— 写在这里是刻意的，不是被机制逼出来的。
         "run_command",
+        # `web_request` 回的是远端响应体（任意站点的任意文字）。与 `web_fetch`
+        #   同一条判据，显式登记 —— 它的名字落在读家族里，但漏一行就只剩
+        #   fail-closed 兜着，而兜底那支看起来与"做过决定"一模一样。
+        "web_request",
         # `run_subagent` 回的是子 agent 的一段自由文本，而子 agent 读过
         # 什么我们并不知道（它可能刚 `web_fetch` 了一个网页、读了一封邮件）。
         # 所以与 `run_command` 同一条理由：来源不可控。名字同样不落在读家族里。
@@ -566,7 +570,7 @@ def _ice_audit(action: str, detail: str) -> None:
         if guard is not None:
             guard.record_ice(action, detail)
     except Exception as exc:  # noqa: BLE001
-        print("[ice] 审计写入失败（%s: %s）—— 这行读数**没落盘**"
+        print("[ice] audit write failed (%s: %s)"
               % (type(exc).__name__, exc))
 
 
@@ -604,7 +608,7 @@ def _ice_restore_parts(content, tool_calls, session_id: str):
         line = ("还原 %d 处句柄 · 工具参数 %d 条 · 丢弃未登记句柄 %d 处%s"
                 % (restored, n, dropped,
                    "（丢弃 = 编造的句柄或损坏 —— 没换成真值）" if dropped else ""))
-        print("[ice] 出口：" + line)
+        print("[ice] output: " + line)
         # 同一处生成、两处消费（同 `_audit_tool_call` 那条判据）：
         #   `print` 是实时的（排障时要立刻看见），日志是持久的（事后要查得到）。
         _ice_audit("ICE_EGRESS", line)
@@ -859,6 +863,12 @@ _APPROVAL_CAPABLE_TOOLS: frozenset[str] = frozenset({
     # `web_search` 不进 —— 它的目的地是固定的（`search.parallel.ai`），
     #    没有审批发射点，进去只会让它被无谓地拒。
     "web_fetch",
+    # SSH 的四件。判据：兑现路径上会碰到两次审批（出网闸 + 主机密钥信任）。
+    # 不进这一格：兜底闸会先按 destructive 问一次（双问），而且子 agent 里
+    # 它们会挂死。ssh_probe 只建 socket、不认证，但它同样过出网闸。
+    "ssh_exec", "ssh_upload", "ssh_download", "ssh_probe", "ssh_forward",
+    # 带自定义头的 HTTP 请求：发射点在 core/web_request.py（出网闸）。
+    "web_request",
 })
 
 #: 走出网闸（`core/egress_gate.egress_gate`）的那几个工具。
@@ -866,7 +876,12 @@ _APPROVAL_CAPABLE_TOOLS: frozenset[str] = frozenset({
 #: 自动模式判了"安全"之后，`_pre_grant_for_auto` 要往它们各自的载体上发一次性授权
 #: —— 出网这一格的载体是 host。（`tests/test_egress_gate.py` 有一条读者
 #: 按源码钉着"每一扇出网的门都调了那个闸"，两边是同一份事实的两个读者。）
-_EGRESS_TOOLS: frozenset[str] = frozenset({"web_fetch"})
+#: SSH 的四件也在这里：拦截不计熔断、完全权限/自动模式能按 subject 预授权。
+_EGRESS_TOOLS: frozenset[str] = frozenset({
+    "web_fetch",
+    "web_request",
+    "ssh_exec", "ssh_upload", "ssh_download", "ssh_probe", "ssh_forward",
+})
 
 
 # 兜底闸：不可逆、而工具自己不带审批发射点
@@ -943,7 +958,7 @@ def _destructive_gate_needed(session_id: str, tool_name: str,
             if need and all(v in allowed for v in need):
                 return False
         except Exception as exc:          # noqa: BLE001 —— 读不到就当没放行
-            print("[approval] 白名单读不动（照旧问）：%s: %s"
+            print("[approval] cannot read allowlist (asking as before): %s: %s"
                   % (type(exc).__name__, exc))
 
     # 这一轮（一次性授权）或这一段对话（会话级）里用户已经批过这个被审批物。
@@ -1109,6 +1124,69 @@ def _auto_review_scope() -> str:
         return ""
 
 
+def _grant_computer_app(tool_args) -> bool:
+    """把这次 `computer` 调用涉及的应用记进本会话授权（完全权限/自动模式用）。
+
+    载体就是逐应用授权：工具自己的 `pending_computer_app_approval` 读的是
+    同一个集合。不做这一步，判了安全也发不出去，用户照样被弹一次应用授权
+    （真机日志里每一条 computer 调用都打「不知道怎么放行」）。
+    """
+    args = tool_args or {}
+    act = str(args.get("action") or "").strip().lower()
+    try:
+        from core.computer import session as cu
+    except Exception:                                # noqa: BLE001
+        return False
+    if act == "launch_app":
+        app = str(args.get("app") or "").strip()
+        exe = os.path.basename(app).lower() if app else ""
+        if not exe:
+            return False
+        try:
+            cu.authorize(exe)
+            return True
+        except Exception:                            # noqa: BLE001
+            return False
+    wid = args.get("window")
+    if not wid:
+        return False
+    try:
+        info = cu.get_window(str(wid))
+        if info is None or not info.exe:
+            return False
+        cu.authorize(info.exe)
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def _computer_needs_approval(tool_args) -> bool:
+    """`computer` 这一次调用本来会不会弹"应用授权"。
+
+    不能只看工具名：观察/列表/光标从不弹；输入动作的授权是在观察那一刻
+    兑现的（没有授权就拿不到观察 id，动作根本到不了）。真正会弹的只有
+    `get_window_state` / `activate_window` / `launch_app`（已在运行时），
+    而且只在这个应用还没授权时。
+    """
+    args = tool_args or {}
+    act = str(args.get("action") or "").strip().lower()
+    if act in ("list_windows", "cursor_position"):
+        return False
+    if act == "launch_app":
+        return True                                  # 已在运行时会走应用授权
+    if act not in ("get_window_state", "activate_window"):
+        return False                                 # 输入动作的授权在观察时已兑现
+    wid = args.get("window")
+    if not wid:
+        return False
+    try:
+        from core.computer import session as cu
+        info = cu.get_window(str(wid))
+        return not (info is not None and cu.is_authorized(info.exe))
+    except Exception:                                # noqa: BLE001
+        return True                                  # 判不出来按"可能会弹"处理
+
+
 def _pre_grant_for_auto(tool_name: str, tool_args, scope: str) -> bool:
     """"放行"要落在哪一格上 —— 按工具各自的审批载体分别发。
 
@@ -1156,20 +1234,22 @@ def _pre_grant_for_auto(tool_name: str, tool_args, scope: str) -> bool:
             # 出网那一格 —— 「判了安全，却发不出授权」会让分类器白省
             #   一次调用、用户照样被弹窗。 `web_fetch` 是 `admin` 档，
             #   本来就会过分类器，缺了这一支就是判了安全也放不出去。
-            # 载体 = host（与闸那边逐字同一个函数算的）。
-            from core.egress_gate import host_of
-            _h = host_of(str((tool_args or {}).get("url") or ""))
-            if not _h:
+            # 载体 = subject（与闸那边逐字同一个函数算的：
+            #   core.egress_gate.subject_from_args - HTTP 是 host，
+            #   SSH 是 ssh:user@host）。
+            from core.egress_gate import subject_from_args
+            _s = subject_from_args(tool_name, tool_args or {})
+            if not _s:
                 return False          # 取不到，不下发，退回问人（fail-closed）
-            wm.grant_target_once("egress", _h, scope)
+            wm.grant_target_once("egress", _s, scope)
             return True
         # 接管的载体是逐应用授权（它自己的 handler 里发
-        #   `pending_computer_app_approval`）。这里没有可发的目标授权 ——
-        #   落到兜底那句会把一张 `destructive` 授权种到工具名上（没有任何
-        #   东西读它），而且会让 full-access 那一支走"已放行"。
-        #   所以如实返回 False：通用派发照常跑，由工具自己决定要不要弹应用授权。
+        #   `pending_computer_app_approval`）。分类器/完全权限判过之后，
+        #   把这个应用记进本会话授权 —— 不做这一步，判了安全也发不出去，
+        #   用户照样被弹一次应用授权（而且每一条 computer 调用都会打
+        #   「不知道怎么放行」）。
         if tool_name == "computer":
-            return False
+            return _grant_computer_app(tool_args)
         # 兜底闸那一类（不可逆、而自己没有审批发射点，今天只有 `send_email`）
         # 所以它的载体是工具名（见 `_EXPLICIT_REVIEW_INPUT` 上面那张表）。
         # 走到这里已经由 `_needs_approval()` 判过"它确实会弹窗"了
@@ -1180,7 +1260,7 @@ def _pre_grant_for_auto(tool_name: str, tool_args, scope: str) -> bool:
                              _subject_of_destructive(tool_name, tool_args), scope)
         return True
     except Exception as exc:  # noqa: BLE001
-        print(f"[auto] 预授权失败（这一条会退回问人）：{type(exc).__name__}: {exc}")
+        print(f"[auto] pre-authorization failed (will ask user): {type(exc).__name__}: {exc}")
     return False
 
 
@@ -1269,6 +1349,8 @@ def _needs_approval(session_id: str, tool_name: str, tool_args=None) -> bool:
     ② `_destructive_gate_needed`（不可逆、而自己没有发射点）
     `exit_plan_mode` 在 ① 里，但它根本到不了这里（`skip_reason` 把它跳过了）。
     """
+    if tool_name == "computer":
+        return _computer_needs_approval(tool_args)
     if tool_name in _APPROVAL_CAPABLE_TOOLS:
         return True
     return _destructive_gate_needed(session_id, tool_name, tool_args)
@@ -1309,7 +1391,7 @@ def _audit_auto(tool_name: str, outcome: str, rule: str = "",
                               #: （手动那条路记的是授权表命中的那一条）。
                               rule_label="classifierRule")
     except Exception as exc:                                 # noqa: BLE001
-        print(f"[auto] 自动模式审计写入失败（{type(exc).__name__}: {exc}）")
+        print(f"[auto] auto-mode audit write failed ({type(exc).__name__}: {exc})")
 
 
 def _set_auto_gate_note(text: str) -> None:
@@ -1435,12 +1517,12 @@ def _full_access_gate(session_id: str, tool_name: str, tool_args, *,
         if not _needs_approval(session_id, tool_name, tool_args):
             return False                           # 本来就不会问
         if _pre_grant_for_auto(tool_name, tool_args, _auto_review_scope()):
-            print(f"[full-access] 不问而放：{tool_name}")
+            print(f"[full-access] allowing without asking: {tool_name}")
             _audit_auto(tool_name, "approved")
             return True
-        print(f"[full-access] 不知道怎么放行 {tool_name} —— 退回正常审批")
+        print(f"[full-access] don't know how to allow {tool_name} - falling back to normal approval")
     except Exception as exc:                       # noqa: BLE001
-        print(f"[full-access] 放行失败（退回正常审批）："
+        print(f"[full-access] allow failed (falling back to normal approval): "
               f"{type(exc).__name__}: {exc}")
     return False
 
@@ -1479,6 +1561,25 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
     if not mode_is_auto and not _hits_a_bare_star_switch(tool_name, tool_args):
         return None
 
+    # 永不自动放行的那一类 - 出网能力表的 auto: false。
+    #
+    # 远端执行（ssh_exec）与敏感数据外发（ssh_upload）属最高风险，
+    # 分类器不得代答。判据不是工具名，是能力表里那个声明 - 以后新增的
+    # 出网工具登记 auto: false 就自动落到这里，不用改本文件。
+    # 返回 None = 什么都不做，工具自己的闸照常问（审批面板四选项）。
+    try:
+        from core import egress_channels as _EC
+        if not _EC.auto_allowed_for_call(tool_name, tool_args):
+            _set_auto_gate_note(
+                tr("这一类工具永不自动放行（远端执行 / 数据外发）"
+                   " —— 本次需要您手动审批。"))
+            print(f"[auto] never auto-allow: {tool_name} (egress auto=false)")
+            return None
+    except Exception as exc:                       # noqa: BLE001
+        # 读不到能力表则维持现状，但要出声：
+        # "没生效"与"没这东西"必须分得开。
+        print(f"[auto] egress capability table unavailable (not blocking): {type(exc).__name__}: {exc}")
+
     # ① 四层跳过（`deny` 档不在这里 —— 它在 `command_policy` 里就拒了）
     try:
         # `session_id` 是「目标全是本会话自造的」那一层要的 ——
@@ -1490,7 +1591,7 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
             # 跳过要出声。判据（`auto_review.SKIP_TEXT` 的 docstring）：
             # 「"没发生"必须看得见」—— 否则分不出"跳过"与"没生效"。
             # 只说「跳过」，不说「放行」：跳过 = 闸什么都不做。
-            print(f"[auto] 跳过分类器：{tool_name}（{AC.skip_text(_skip_why)}）")
+            print(f"[auto] skipping classifier: {tool_name} ({AC.skip_text(_skip_why)})")
             # 跳过也要复位连续计数。
             #
             # 它要在任何放行处复位 —— 包括根本没走到分类器的那些
@@ -1519,10 +1620,10 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
             if _skip_why == AC.SKIP_SELF_MADE and _needs_approval(
                     session_id, tool_name, tool_args):
                 if _pre_grant_for_auto(tool_name, tool_args, _auto_review_scope()):
-                    print(f"[auto] 目标全是本会话自建的，已预授权：{tool_name}")
+                    print(f"[auto] all targets self-created this session, pre-authorized: {tool_name}")
                 else:
                     # 发不出去，退回问人（fail-closed；弹窗总比"以为放行了"好）
-                    print(f"[auto] 判为自建，但预授权没发出去 —— 退回问人：{tool_name}")
+                    print(f"[auto] judged self-created but pre-authorization failed - falling back to asking: {tool_name}")
             return None
     except Exception:
         return None
@@ -1532,8 +1633,8 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
     if AC.should_fall_back(st):
         AC.reset_total(st)
         AC.note_stat("fallback")
-        print(f"[auto] 连续/累计被拦超限（最近：{st.last_blocked!r}）"
-              f" —— 退回问人，计数器清零")
+        print(f"[auto] block limit exceeded (last: {st.last_blocked!r})"
+              f" - falling back to asking, counter reset")
         # 落一格给审批载荷 —— "自动档还是弹窗"里，熔断是最可能的那个原因，
         #    不写就只有用户能看到结果，事后查不出因。
         _set_auto_gate_note(
@@ -1561,7 +1662,7 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
         #    而本来就不弹窗的那些（`create_skill` / `memory_write`…）
         #    照跑，判据没作出时反而放行 —— 方向反了。
         AC.note_stat("unavailable")
-        print(f"[auto] 分类器没答上来（{verdict.reason}）—— 判定没作出，拒这一次")
+        print(f"[auto] classifier gave no answer ({verdict.reason}) - denying this call")
         # 手动档的退路不一样 ——「auto 档的前提就是用户不在」
         #    在手动档不成立（人在），停下来问用户是一条真出路，
         #    不是这一轮的终点。
@@ -1570,7 +1671,7 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
             _set_auto_gate_note(
                 tr("自动审查失效，需要人工审查")
                 + ("（%s）" % (verdict.reason or tr("没有原因可报"))))
-            print("[auto] 手动档 ⇒ 退回问人（让那个工具自己去问）")
+            print("[auto] manual mode => falling back to asking")
             return None
         # 这一支有意不调 `record_denial`（「设施故障不计入熔断」）：
         #    熔断那条线数的是「分类器判了多少次危险」，不是「设施抖了几次」。
@@ -1589,10 +1690,10 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
         if not _needs_approval(session_id, tool_name, tool_args):
             return None
         if _pre_grant_for_auto(tool_name, tool_args, _auto_review_scope()):
-            print(f"[auto] 判为安全，已预授权：{tool_name}")
+            print(f"[auto] judged safe, pre-authorized: {tool_name}")
             _audit_auto(tool_name, "approved", verdict.rule)
             return None
-        print(f"[auto] 判为安全，但**不知道怎么放行** {tool_name} —— 退回问人")
+        print(f"[auto] judged safe but don't know how to allow {tool_name} - falling back to asking")
         _set_auto_gate_note(
             tr("自动审查失效"
                "`%s` 需要您手动审批") % tool_name)
@@ -1615,14 +1716,14 @@ def _auto_review_gate(session_id: str, tool_name: str, tool_args, messages,
     # 只影响熔断计数：这一次调用照样被拦（下面那两行一个字没动）——
     #    要的是"别再问我"，不是"放它过"。
     if tool_name in _EGRESS_TOOLS:
-        print(f"[auto] 出网那一类的拦截**不计入熔断**：{tool_name}"
-              f"（连续/累计停在 {st.consecutive}/{st.total}）")
+        print(f"[auto] egress block not counted toward circuit breaker: {tool_name}"
+              f" (consecutive/total stay at {st.consecutive}/{st.total})")
     else:
         AC.record_denial(st, action)
     _audit_auto(tool_name, "blocked", verdict.rule)
-    print(f"[auto] 拦下 {tool_name}"
-          + ("〔%s〕" % verdict.rule if verdict.rule else "")
-          + f"：{verdict.reason}")
+    print(f"[auto] blocked {tool_name}"
+          + (" [%s]" % verdict.rule if verdict.rule else "")
+          + f": {verdict.reason}")
     return _render_auto_block(verdict.rule, verdict.reason)
 
 
@@ -1795,8 +1896,8 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
     """
     idx = _find_tool_message(messages, call_id)
     if idx < 0:
-        print(f"[approval] 找不到待审批的那条 tool 消息（id={call_id}）"
-              f" —— 退回旧回执")
+        print(f"[approval] cannot find the pending tool message (id={call_id})"
+              f" - falling back to old receipt")
         return False
 
     tool_args, _args_err = _parse_tool_args(raw_args)
@@ -1837,8 +1938,8 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
             content = _unknown_args_message(
                 tool_name, unknown, _known_tool_args(tool_name))
             _denied = True
-            print(f"[tools] '{tool_name}' 带了不认识的参数 {unknown}，拒绝派发"
-                  f" —— 这是一次**重放**")
+            print(f"[tools] '{tool_name}' has unknown args {unknown}, refusing dispatch"
+                  f" - this is a replay")
         # 重放也要过计划模式的闸
         #
         # 判据与循环里那一支逐字同一套（`plan_mode_active` +
@@ -1866,8 +1967,8 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
               and not is_allowed_in_plan_mode(tool_name, tool_args, session_id)):
             content = plan_deny_message(tool_name, session_id)
             _denied = True
-            print(f"[plan] 拒绝 '{tool_name}'：本会话在计划模式（只读 + 计划文件）"
-                  f" —— 这是一次**重放**，同样要过闸")
+            print(f"[plan] refusing '{tool_name}': session is in plan mode (read-only + plan file)"
+                  f" - replay must pass the gate too")
         else:
             content = _tool_result_of(handler(**tool_args), tool_name)
     except Exception as e:  # noqa: BLE001 —— 与循环那条同一条错误路径
@@ -1904,8 +2005,8 @@ def replay_pending_call(messages: list, *, call_id: str, tool_name: str,
               outcome=_outcome, reason=_reason)
 
     messages[idx]["content"] = content
-    print(f"[approval] 已重放 '{tool_name}' 并把结果补回那次调用"
-          f"（{_chars} 字符）—— 不给模型任何「批准过」的消息")
+    print(f"[approval] replayed '{tool_name}' and restored the result into that call"
+          f" ({_chars} chars)")
     return True
 
 
@@ -1919,11 +2020,11 @@ def answer_pending_call(messages: list, *, call_id: str, message: str) -> bool:
     """
     idx = _find_tool_message(messages, call_id)
     if idx < 0:
-        print(f"[ask_user] 找不到那次提问的 tool 消息（id={call_id}）"
-              f" —— 退回旧回执")
+        print(f"[ask_user] cannot find the tool message for that question (id={call_id})"
+              f" - falling back to old receipt")
         return False
     messages[idx]["content"] = message
-    print("[ask_user] 已把用户的回答补回那次提问的调用")
+    print("[ask_user] restored the user's answer into that question call")
     return True
 
 
@@ -1940,7 +2041,7 @@ def deny_pending_call(messages: list, *, call_id: str, message: str) -> bool:
     if idx < 0:
         return False
     messages[idx]["content"] = message
-    print("[approval] 已把拒绝补回那次被挂起的调用")
+    print("[approval] restored the denial into that paused call")
     return True
 
 
@@ -1973,7 +2074,7 @@ def _check_skills_changed() -> None:
             registered = None      # 所以体检器登记成「没查」，不塌成「没问题」
         bad = _SD.watch(registered_names=registered)
     except Exception as exc:  # noqa: BLE001
-        print(f"[skill-doctor] 体检自己炸了（{type(exc).__name__}: {exc}）")
+        print(f"[skill-doctor] doctor itself crashed ({type(exc).__name__}: {exc})")
         return
     for diag in bad:
         print(_SD.log_line(diag))
@@ -2019,7 +2120,7 @@ def _child_grant_once(kind: str, pend: dict, session_id: str) -> bool:
         from bus.registry import get_workspace_manager
         wm = get_workspace_manager()
     except Exception as exc:                                   # noqa: BLE001
-        print(f"[subagent] 取不到工作区管理器（{type(exc).__name__}: {exc}）")
+        print(f"[subagent] cannot get workspace manager ({type(exc).__name__}: {exc})")
         return False
     if wm is None:
         return False
@@ -2037,7 +2138,7 @@ def _child_grant_once(kind: str, pend: dict, session_id: str) -> bool:
             wm.grant_target_once(kind, subject, session_id)
         return True
     except Exception as exc:                                   # noqa: BLE001
-        print(f"[subagent] 授权失败（{kind}）：{type(exc).__name__}: {exc}")
+        print(f"[subagent] authorization failed ({kind}): {type(exc).__name__}: {exc}")
         return False
 
 
@@ -2062,7 +2163,7 @@ def _child_settle_approval(pend: dict, tool_name: str, tc: dict, handler,
         pass
 
     _decision = "allow" if _unlock_bypassing() else str(child_ask(pend) or "")
-    print(f"[subagent] 就地问审批 '{tool_name}'（{kind}）→ {_decision}")
+    print(f"[subagent] asking approval in place for '{tool_name}' ({kind}) -> {_decision}")
     if _decision != "allow":
         from core.approval import outcome_line
         if _decision == "deny":
@@ -2277,8 +2378,8 @@ def _audit_tool_call(tool_name: str, tool_args: dict, denied: bool,
         if guard is not None:
             guard.record_tool_call(tool_name, perm, outcome, summary)
     except Exception as exc:
-        print(f"[audit] 工具调用审计写入失败（{type(exc).__name__}: {exc}）"
-              f" —— 这次调用没有记录")
+        print(f"[audit] tool-call audit write failed ({type(exc).__name__}: {exc})"
+              f" - this call was not recorded")
 
 
 #: 保留最近几组工具结果 —— 保留最近 5 组。
@@ -2548,7 +2649,7 @@ def _prefetch_readonly(tool_calls: list, session_id: str,
             if not get_tool_concurrency_safe(name):
                 return {}
         except Exception:      # 判不出来就串行（fail-closed，且不静默——下面那行会说话）
-            print(f"[tools] 并发判定失败（{name}）—— 这一批退回串行")
+            print(f"[tools] concurrency check failed ({name}) - this batch falls back to serial")
             return {}
         tool_args, err = _parse_tool_args(tc["function"]["arguments"])
         if err is not None:
@@ -2595,8 +2696,8 @@ def _prefetch_readonly(tool_calls: list, session_id: str,
                 out[cid] = fut.result()
             except Exception as exc:  # noqa: BLE001 —— 原样带回串行那条路去抛
                 out[cid] = _PrefetchFailed(exc)
-    print(f"[tools] 并发派发 {len(plan)} 个工具（上限 {limit}，档位给的；"
-          f"判据是 `concurrency_safe` 那根轴）")
+    print(f"[tools] dispatching {len(plan)} tools concurrently (limit {limit};"
+          f" per concurrency_safe)")
     return out
 
 
@@ -2861,7 +2962,7 @@ def _brake_wrap_up(provider, messages, system_prompt, why, fallback,
         text = (resp.content or "").strip()
         return text or fallback
     except Exception as exc:  # 不静默，也不许因此更糟
-        print(f"[brake] 收尾调用失败（{type(exc).__name__}: {exc}）—— 退回原文案")
+        print(f"[brake] wrap-up call failed ({type(exc).__name__}: {exc}) - falling back to original text")
         return fallback
 
 
@@ -2899,14 +3000,14 @@ def _workflow_step(step: dict, dep_outputs: dict, *, snapshot, assistant_msg,
             res = {"success": False,
                    "error": "子 agent 失败：%s: %s" % (type(exc).__name__, exc)}
         if res.get("success"):
-            print(f"[workflow] {step['id']} 完成（第 {attempt} 次尝试）")
+            print(f"[workflow] {step['id']} done (attempt {attempt})")
             return {"id": step["id"], "status": "completed", "attempts": attempt,
                     "output": str(res.get("output") or "")}
         last_error = str(res.get("error") or "子 agent 没做成")
         if is_cancelled(session_id):
             return {"id": step["id"], "status": "cancelled", "attempts": attempts,
                     "error": "用户中断"}
-        print(f"[workflow] {step['id']} 第 {attempt} 次没成：{last_error[:120]}")
+        print(f"[workflow] {step['id']} failed on attempt {attempt}: {last_error[:120]}")
     return {"id": step["id"], "status": "failed", "attempts": attempts,
             "error": last_error}
 
@@ -2985,7 +3086,7 @@ def _dispatch_workflow(tool_name: str, tool_args: dict, provider,
                 results[sid] = {
                     "id": sid, "status": "skipped", "attempts": 0,
                     "skipped_reason": "依赖的步骤没做成：%s" % "、".join(bad)}
-                print(f"[workflow] {sid} 跳过（依赖失败：{bad}）")
+                print(f"[workflow] {sid} skipped (dependency failed: {bad})")
             else:
                 runnable.append(step)
         if not runnable:
@@ -3015,13 +3116,13 @@ def _dispatch_workflow(tool_name: str, tool_args: dict, provider,
                 for s in runnable):
             aborted = True
             _mark_rest("on_failure=abort：同一波里有步骤没做成")
-            print("[workflow] on_failure=abort ⇒ 不再发后面的波")
+            print("[workflow] on_failure=abort => no further waves")
             break
 
     rows = [results.get(s["id"]) or {
         "id": s["id"], "status": "skipped", "attempts": 0,
         "skipped_reason": "没跑到"} for s in plan["steps"]]
-    print("[workflow] 收尾：" + " ".join(
+    print("[workflow] summary: " + " ".join(
         "%s=%s" % (r["id"], r["status"]) for r in rows))
     return WF.format_report(rows, on_failure=plan["on_failure"],
                             cancelled=cancelled, aborted=aborted)
@@ -3084,15 +3185,15 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
     # 断缓存前缀（而档位本来就进缓存键，改档已经是一次冷启动，不该再叠一层）。
     spec = tiers.current_spec(session_id)
     if not tiers.offers_subagents(spec):
-        print(f"[subagent] 拒绝：档 {spec.level}（{spec.name}）不给子 agent")
+        print(f"[subagent] refused: tier {spec.level} ({spec.name}) does not allow subagents")
         return json.dumps({
             "success": False,
             "error": (f"**这一档不给子 agent**（当前是档 {spec.level}「{spec.name}」）—— "
                       f"这件事你自己做完；要派子 agent 得把投入档调到 3 及以上。"),
         }, ensure_ascii=False)
     if not slots.take():
-        print(f"[subagent] 拒绝：这一轮的位子用完了（档 {spec.level} 给 "
-              f"{spec.subagent_slots} 个）")
+        print(f"[subagent] refused: no slots left this turn (tier {spec.level} gives "
+              f"{spec.subagent_slots})")
         return json.dumps({
             "success": False,
             "error": (f"**这一轮的子 agent 位子用完了**（档 {spec.level} 给 "
@@ -3114,7 +3215,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
         _agent_def = _agent_defs.find_agent(_agent_name)
         if _agent_def is None:
             _names = "、".join(d.name for d in _agent_defs.discover_agents())
-            print(f"[subagent] 拒绝：没有名为 {_agent_name!r} 的子 agent 定义")
+            print(f"[subagent] refused: no subagent definition named {_agent_name!r}")
             return json.dumps({
                 "success": False,
                 "error": ("没有名为 %s 的子 agent 定义。可用的有：%s"
@@ -3125,7 +3226,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
     if snap is None:
         # 不静默。拿不到快照说明捕获点没接上（或有人清早了），
         # 而"没有快照"与"快照是空的"是两件事。
-        print("[subagent] 拒绝：拿不到请求快照（捕获点没接上？）")
+        print("[subagent] refused: cannot get request snapshot")
         return json.dumps({
             "success": False,
             "error": ("拿不到这一次请求的快照 —— 没有它就没法与父同前缀，"
@@ -3137,8 +3238,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
     # "有人在别的上下文里 set 了" —— 留着当绊线，代价一行比较。
     # 与其拿别人的历史去 fork（静默、且看着像"子 agent 记错了"），不如当场拒。
     if snap.session_id != session_id:
-        print(f"[subagent] 拒绝：快照属于 {snap.session_id!r}，当前是 {session_id!r}"
-              f" —— 快照串上下文了？")
+        print(f"[subagent] refused: snapshot belongs to {snap.session_id!r}, current is {session_id!r}")
         return json.dumps({
             "success": False,
             "error": "请求快照与当前会话对不上（框架内部状态串了）—— 已跳过，请重试。",
@@ -3177,7 +3277,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
         if _inst is None:
             _e = _mc.get(_wanted) or {}
             _why = _mc.preflight(_wanted) or "这条配置今天装不上"
-            print(f"[subagent] 拒绝：设置里那条子 agent 配置用不了（{_why}）")
+            print(f"[subagent] refused: subagent config from settings unusable ({_why})")
             return json.dumps({
                 "success": False,
                 "error": (f"**设置里给子 agent 指定的模型用不了**："
@@ -3310,8 +3410,8 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
                             "path": wt.get("path"), "branch": wt.get("branch")}
                 job.worktree = _fin
         ok = bool(res.get("success"))
-        print(f"[subagent] {'完成' if ok else '失败'} —— 父会话 {session_id!r}，"
-              f"{snap.to_dict()}，子花了 {res.get('tokens', '?')} tokens")
+        print(f"[subagent] {'done' if ok else 'failed'} - parent session {session_id!r}, "
+              f"{snap.to_dict()}, child used {res.get('tokens', '?')} tokens")
         if job.cancel_event is not None and job.cancel_event.is_set():
             job.status = "killed"
         if not ok:
@@ -3339,7 +3439,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
                 _wt.finish(wt["repo"], wt["path"], wt["branch"], wt["slug"])
             except Exception:                      # noqa: BLE001
                 pass
-        print(f"[subagent] 起线程失败（{type(exc).__name__}: {exc}）")
+        print(f"[subagent] failed to start thread ({type(exc).__name__}: {exc})")
         return json.dumps({"success": False,
                            "error": "子 agent 起不来（%s: %s）—— 这次没派出去。"
                                     % (type(exc).__name__, exc)},
@@ -3353,7 +3453,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
             note_discovered(session_id, "task")
         except Exception:                        # noqa: BLE001
             pass
-        print(f"[subagent] 转后台：{job.id}（{_label}）")
+        print(f"[subagent] moved to background: {job.id} ({_label})")
         # 时间的真话：回报要等这一轮结束才送得到（投递判据是会话空闲）。
         #   不写清这一句，模型会一边等一条到不了的回报、一边接着干活。
         return ("[subagent] 已转到后台跑，任务 ID：%s（%s）。"
@@ -3374,7 +3474,7 @@ def _dispatch_subagent(tool_name: str, tool_args: dict, provider,
             note_discovered(session_id, "task")
         except Exception:                        # noqa: BLE001
             pass
-        print(f"[subagent] {why}：{job.id}（{_label}）")
+        print(f"[subagent] {why}: {job.id} ({_label})")
         return ("[subagent] %s，任务 ID：%s（%s）。"
                 "它跑完的回报要等你这一轮结束之后才送得到；这一轮里就要结论，"
                 "就用 `task(task_id=\"%s\", action=\"wait\")` 去取"
@@ -3490,7 +3590,7 @@ def _note_progress(cb, tokens: int, output_tokens: int = 0) -> None:
     try:
         cb(int(tokens or 0), int(output_tokens or 0))
     except Exception as exc:  # noqa: BLE001
-        print(f"[progress] 进度回调失败（{type(exc).__name__}: {exc}）")
+        print(f"[progress] progress callback failed ({type(exc).__name__}: {exc})")
 
 
 def agent_loop(
@@ -3661,8 +3761,8 @@ def agent_loop(
         # （`<git_status>` 是冻结的、但 `memory_context`/nudge 不是），白搭。
         # 所以这里连两条 nudge 都跳过（下面那条 + 流式那条）。
         system_prompt = _system
-        print(f"[agent] system prompt: 用传入的那份（{len(system_prompt)} chars，"
-              f"子 agent fork —— 与父逐字节相同才有缓存）")
+        print(f"[agent] system prompt: using passed-in copy ({len(system_prompt)} chars,"
+              f" subagent fork)")
     else:
         system_prompt = assemble_system_prompt(
             # `ICE`：会话笔记那段是模型自己写的（注入表头逐字这么说），
@@ -3759,8 +3859,8 @@ def agent_loop(
     try:
         _skill_index = build_skill_index()
     except Exception as exc:  # 不静默，但也不阻断对话
-        print(f"[skill_index] 生成失败（{type(exc).__name__}: {exc}）"
-              f" —— 本轮不带索引，search_tools 按需发现仍然可用")
+        print(f"[skill_index] generation failed ({type(exc).__name__}: {exc})"
+              f" - no index this turn; search_tools discovery still works")
         _skill_index = ""
 
     # 记忆索引：长期记忆的派生索引 —— 与技能索引同一族：
@@ -3769,8 +3869,8 @@ def agent_loop(
     try:
         _memory_index = build_memory_index()
     except Exception as exc:  # 不静默，也不阻断对话
-        print(f"[memory_store] 索引生成失败（{type(exc).__name__}: {exc}）"
-              f" —— 本轮不带记忆索引，memory_read/search 仍然可用")
+        print(f"[memory_store] index generation failed ({type(exc).__name__}: {exc})"
+              f" - no memory index this turn; memory_read/search still work")
         _memory_index = ""
 
     # 每轮比对一次 `skills/` 的指纹，变了才体检。
@@ -3922,10 +4022,8 @@ def agent_loop(
         _mc_n, _mc_saved = _prune_tool_results(messages, session_id)
         _note_model_activity(session_id)
         if _mc_n:
-            print(f"[tool_result_prune] 空闲已超 {_PRUNE_GAP_MINUTES} 分钟 —— "
-                  f"清了 {_mc_n} 条旧工具结果（省约 {_mc_saved} 字符）。"
-                  f"★ 这时服务端的前缀缓存**本来就要失效**，所以这次重算**不额外付**"
-                  f"（判据：不为一次本来不会发生的未命中额外付费）")
+            print(f"[tool_result_prune] idle over {_PRUNE_GAP_MINUTES} min - "
+                  f"pruned {_mc_n} old tool results (~{_mc_saved} chars saved)")
             #: 落一条事件 —— 否则"上下文自己少了一点"在重启之后没有任何痕迹
             #:   （控制台那句 print 只活在当前进程里）。
             if _emit:
@@ -3955,15 +4053,15 @@ def agent_loop(
                 _new_msgs = compact_cb()
                 if _new_msgs:
                     messages[:] = _new_msgs
-                    print("[context_pressure] 已压缩（%d 条），本轮继续"
+                    print("[context_pressure] compressed (%d msgs), continuing"
                           % len(_new_msgs))
 
         _messages_for_wire, _pressure = trim_for_pressure(
             messages, provider, system=system_prompt, tools=tools)
         note_ratio(session_id, _pressure.get("ratio_before", -1.0))
         if _pressure.get("trimmed"):
-            print("[context_pressure] 占用 %.0f%% —— 收缩了 %d 条旧工具输出"
-                  "（省约 %d 字符，降到 %.0f%%）"
+            print("[context_pressure] usage %.0f%% - trimmed %d old tool outputs"
+                  " (~%d chars saved, down to %.0f%%)"
                   % (_pressure["ratio_before"] * 100, _pressure["trimmed"],
                      _pressure["freed"], _pressure["ratio_after"] * 100))
             #: 同上一条：这是"这一次发出去的比 `messages` 小"的唯一记录。
@@ -4011,8 +4109,8 @@ def agent_loop(
         try:
             _skill_guidance = build_skill_guidance(session_id)
         except Exception as exc:  # 不静默，但也不阻断对话
-            print(f"[skill_guidance] 生成失败（{type(exc).__name__}: {exc}）"
-                  f" —— 本轮不带引导片段")
+            print(f"[skill_guidance] generation failed ({type(exc).__name__}: {exc})"
+                  f" - no guidance block this turn")
             _skill_guidance = ""
         if _skill_guidance:
             payload = append_skill_guidance(payload, _skill_guidance)
@@ -4036,8 +4134,8 @@ def agent_loop(
             from core.plan import append_plan_reminder, build_plan_reminder
             _plan_note = build_plan_reminder(session_id, new_turn=(turn == 0))
         except Exception as exc:  # 不静默，但也不阻断对话
-            print(f"[plan_reminder] 生成失败（{type(exc).__name__}: {exc}）"
-                  f" —— 本轮不带计划模式提醒")
+            print(f"[plan_reminder] generation failed ({type(exc).__name__}: {exc})"
+                  f" - no plan-mode reminder this turn")
             _plan_note = ""
         if _plan_note:
             payload = append_plan_reminder(payload, _plan_note)
@@ -4052,8 +4150,8 @@ def agent_loop(
             from core.incidents import append_incident_note, build_note
             _incident_note = build_note()
         except Exception as exc:  # 不静默，但也不阻断对话
-            print(f"[incidents] 生成失败（{type(exc).__name__}: {exc}）"
-                  f" —— 本轮不带事故摘要")
+            print(f"[incidents] generation failed ({type(exc).__name__}: {exc})"
+                  f" - no incident summary this turn")
             _incident_note = ""
         if turn == 0 and _incident_note:
             payload = append_incident_note(payload, _incident_note)
@@ -4088,8 +4186,8 @@ def agent_loop(
             _bal = check_history(payload)
             if not _bal.balanced:
                 _bal_reported = True
-                print(f"[history] 消息历史不平衡（{_bal.problems} 处）：{_bal.explain()}"
-                      f" —— 发回上游大概率 400，而报错会说是上游的问题")
+                print(f"[history] message history unbalanced ({_bal.problems} spots): {_bal.explain()}"
+                      f" - likely a 400 upstream")
 
         # 把刚要发出去的四个冻下来（fork 的唯一入口）
         # 位置是判据的一部分：必须紧挨发送，且抓的是 `payload`（不是 `messages`
@@ -4157,7 +4255,7 @@ def agent_loop(
         response.content, _ice_restored = _ice_restore_parts(
             response.content, response.tool_calls, session_id)
         if _ice_restored:
-            print("[ice] 还原了 %d 条工具参数里的句柄" % _ice_restored)
+            print("[ice] restored %d handles in tool args" % _ice_restored)
 
         _llm_ms = int((time.monotonic() - _t_turn) * 1000)
         tokens_used += response.total_tokens
@@ -4251,8 +4349,8 @@ def agent_loop(
             messages.append(_cut_msg)
             messages.append({"role": "user", "content": OUTPUT_RECOVERY_MSG,
                              "kind": OUTPUT_RECOVERY_KIND})
-            print("[truncated] finish_reason=length —— 同一轮里注入续写"
-                  "（还剩 %d 次）" % _recovery_left)
+            print("[truncated] finish_reason=length - injecting continuation this turn"
+                  " (%d left)" % _recovery_left)
             _end_turn(_turn_no, _t_turn, _tool_count)
             continue
 
@@ -4442,8 +4540,8 @@ def agent_loop(
                     # 差别见 `_unknown_tool_message` 的 docstring。
                     tool_result_content = _unknown_tool_message(tool_name)
                     _denied = True
-                    print(f"[tools] 拒绝执行不存在的工具 '{tool_name}'"
-                          f" —— 注册表里没有这个名字")
+                    print(f"[tools] refusing to run unknown tool '{tool_name}'"
+                          f" - not in registry")
 
                 # 它属于一个被屏蔽的插件
                 # 必须有这一支，不能让它落到下面"未呈现"那一支去：
@@ -4457,7 +4555,7 @@ def agent_loop(
                     tool_result_content = _QUARANTINE.blocked_message(
                         tool_name, owner, _QUARANTINE.reason_for(owner))
                     _denied = True
-                    print(f"[quarantine] 拒绝 '{tool_name}'：它属于**已被屏蔽**的插件"
+                    print(f"[quarantine] refusing '{tool_name}': belongs to blocked plugin"
                           f" '{owner}'")
 
                 # 它属于一个被用户停用的 MCP 服务器
@@ -4468,15 +4566,15 @@ def agent_loop(
                 elif (owner := _disabled_owner(tool_name)) is not None:
                     tool_result_content = _disabled_message(tool_name, owner)
                     _denied = True
-                    print(f"[mcp] 拒绝 '{tool_name}'：它属于**已被用户停用**的 MCP "
-                          f"服务器 '{owner}'")
+                    print(f"[mcp] refusing '{tool_name}': belongs to user-disabled MCP "
+                          f"server '{owner}'")
 
                 # 它属于一个被用户停用的技能
                 # 与上一条同形状，路线不同：去技能页启用。
                 elif (owner := _skill_disabled_owner(tool_name)) is not None:
                     tool_result_content = _skill_disabled_message(tool_name, owner)
                     _denied = True
-                    print(f"[skill] 拒绝 '{tool_name}'：它属于**已被用户停用**的技能 "
+                    print(f"[skill] refusing '{tool_name}': belongs to user-disabled skill "
                           f"'{owner}'")
 
                 # 呈现与执行走同一个判定
@@ -4493,17 +4591,17 @@ def agent_loop(
                 elif not is_tool_active(session_id, tool_name):
                     tool_result_content = _not_offered_message(tool_name)
                     _denied = True
-                    print(f"[tools] 拒绝执行未呈现的工具 '{tool_name}'"
-                          f" —— 它不在本会话的暴露集里（常驻 ∪ 已发现）")
+                    print(f"[tools] refusing to run tool not offered '{tool_name}'"
+                          f" - not in this session's exposed set")
 
                 # 参数坏了不许带着空参跑
                 elif _args_err is not None:
                     tool_result_content = _bad_args_message(
                         tool_name, _args_err, tc["function"]["arguments"])
                     _denied = True
-                    print(f"[tools] 参数不是合法 JSON，拒绝派发 '{tool_name}'"
-                          f" —— {_args_err}"
-                          f" · {_args_fragment_report(tc['function']['arguments'])}")
+                    print(f"[tools] args are not valid JSON, refusing dispatch '{tool_name}'"
+                          f" - {_args_err}"
+                          f"; {_args_fragment_report(tc['function']['arguments'])}")
 
                 # 参数压根没到也不许跑
                 # 与上面那支同形、紧挨着：一个管"JSON 坏了"，一个管"参数空了"。
@@ -4512,8 +4610,8 @@ def agent_loop(
                 elif (missing := _missing_required_args(tool_name, tool_args)):
                     tool_result_content = _empty_args_message(tool_name, missing)
                     _denied = True
-                    print(f"[tools] '{tool_name}' 的参数是空的、而它有必填字段，拒绝派发"
-                          f" —— 缺 {missing}")
+                    print(f"[tools] '{tool_name}' has empty args but required fields, refusing dispatch"
+                          f" - missing {missing}")
 
                 # 参数名不认识也不许跑
                 # 例：给 `grep` 传了 `path`（它的参数叫 `root`），
@@ -4523,8 +4621,8 @@ def agent_loop(
                     tool_result_content = _unknown_args_message(
                         tool_name, unknown, _known_tool_args(tool_name))
                     _denied = True
-                    print(f"[tools] '{tool_name}' 带了不认识的参数 {unknown}，拒绝派发"
-                          f" —— 它接受 {_known_tool_args(tool_name) or '（无参数）'}")
+                    print(f"[tools] '{tool_name}' has unknown args {unknown}, refusing dispatch"
+                          f" - it accepts {_known_tool_args(tool_name) or '(no args)'}")
 
                 # 计划模式：执行侧的闸
                 #
@@ -4540,7 +4638,7 @@ def agent_loop(
                       and not is_allowed_in_plan_mode(tool_name, tool_args, session_id)):
                     tool_result_content = plan_deny_message(tool_name, session_id)
                     _denied = True
-                    print(f"[plan] 拒绝 '{tool_name}'：本会话在计划模式（只读 + 计划文件）")
+                    print(f"[plan] refusing '{tool_name}': session is in plan mode (read-only + plan file)")
 
                 # 完全权限，不问而放
                 # 位置必须在 cron 那条之前、plan 那条之后：
@@ -4570,8 +4668,7 @@ def agent_loop(
                             or _destructive_gate_needed(session_id, tool_name))):
                     tool_result_content = _approval_in_cron_message(tool_name)
                     _denied = True
-                    print(f"[cron] 拒绝 '{tool_name}'：定时任务那一轮没有人可以回答审批"
-                          f"（模式不是自动 —— 见 _cron_may_use_auto）")
+                    print(f"[cron] refusing '{tool_name}': no one can answer approvals in a cron turn")
 
                 # 子 agent 的提问：仍然是拒 + 给路线。
                 # 提问是"再开一轮"（`ask_user` 的回答本身就是新的一轮），
@@ -4586,8 +4683,8 @@ def agent_loop(
                             or _destructive_gate_needed(session_id, tool_name)))):
                     tool_result_content = _approval_in_child_message(tool_name)
                     _denied = True
-                    print(f"[subagent] 拒绝 '{tool_name}'：子 agent 没有可提问的那一轮"
-                          f"（深度 {subagent.depth()}）")
+                    print(f"[subagent] refusing '{tool_name}': subagent has no turn to ask"
+                          f" (depth {subagent.depth()})")
 
                 # 自动模式：分类器代答
                 #
@@ -4611,8 +4708,8 @@ def agent_loop(
                     tool_result_content = _destructive_pending_payload(
                         tool_name, tool_args)
                     _denied = True
-                    print(f"[tools] 挂起 '{tool_name}'：它不可逆、而没有自己的审批发射点"
-                          f" —— 已请用户确认")
+                    print(f"[tools] pausing '{tool_name}': irreversible, no approval hook of its own"
+                          f" - user confirmation requested")
 
                 # 只读档 —— 两条路同位置、同顺序
                 # 排在 `_APPROVAL_CAPABLE_TOOLS` 之后是故意的：那个分支说的是
@@ -4623,8 +4720,8 @@ def agent_loop(
                 elif subagent.readonly() and subagent.is_write_like(tool_name):
                     tool_result_content = subagent.readonly_denied_message(tool_name)
                     _denied = True
-                    print(f"[subagent] 拒绝 '{tool_name}'：这一趟是只读的"
-                          f"（深度 {subagent.depth()}）")
+                    print(f"[subagent] refusing '{tool_name}': this run is read-only"
+                          f" (depth {subagent.depth()})")
 
                 # 记忆抽取 fork 的白名单 —— 与 stream 同位置、同顺序
                 # 执行侧拒（判据见 `_allowlist_denied_message`）：
@@ -4632,7 +4729,7 @@ def agent_loop(
                 elif _tool_allowlist is not None and tool_name not in _tool_allowlist:
                     tool_result_content = _allowlist_denied_message(tool_name, _tool_allowlist)
                     _denied = True
-                    print(f"[fork] 拒绝 '{tool_name}'：不在本上下文的白名单里")
+                    print(f"[fork] refusing '{tool_name}': not in this context's allowlist")
 
                 # 子 agent —— 特判（与 `search_tools` 同形）
                 # 为什么不能走通用分支：handler 的签名是 `handler(**tool_args)`，
@@ -4760,7 +4857,7 @@ def agent_loop(
                     tool_result_content = json.dumps(
                         result, ensure_ascii=False, default=json_default)
                     print(f"[tools] search_tools({tool_args.get('query', '')!r}) "
-                          f"→ {found} (+{added} new)")
+                          f"-> {found} (+{added} new)")
 
                 #  Generic tool — pass result as JSON
                 else:
@@ -4823,8 +4920,8 @@ def agent_loop(
             if _pend is not None:
                 if _origin == "cron":
                     tool_result_content = _approval_in_cron_replacement(_pend)
-                    print(f"[cron] 中和 '{tool_name}' 的待审批（{_pend.get('kind')}）："
-                          f"定时任务那一轮没有人可以回答")
+                    print(f"[cron] neutralizing pending approval for '{tool_name}' ({_pend.get('kind')}):"
+                          f" no one can answer in a cron turn")
                 elif subagent.depth() > 0 and _child_ask is not None:
                     # 子的审批：就地等用户回答（不挂起父那一轮）。
                     # 同意之后补一次性授权、重跑这次调用 —— 工具在返回
@@ -4948,8 +5045,8 @@ def agent_loop(
         #   （一轮 4 个调用各自都在单条闸以内，合起来照样 4 倍）。
         _mb_n, _mb_saved = _enforce_message_tool_budget(messages, _batch_start, tool_calls)
         if _mb_n:
-            print(f"[tool-budget] 本批结果总量超 {_MESSAGE_TOOL_RESULT_BUDGET} 字符 —— "
-                  f"把最大的 {_mb_n} 条落盘（省约 {_mb_saved} 字符，指针可读）")
+            print(f"[tool-budget] batch results exceed {_MESSAGE_TOOL_RESULT_BUDGET} chars - "
+                  f"persisted largest {_mb_n} (~{_mb_saved} chars saved, pointers readable)")
 
         # 一轮（LLM 往返 + 其全部工具调用）结束。
         _end_turn(_turn_no, _t_turn, _tool_count)
@@ -4969,8 +5066,7 @@ def agent_loop(
         #    后面的 `tool_call` 没有结果，那就是悬空引用，下一轮上游硬 400
         #    （`_fill_skipped_tool_calls` 修的是刹车那两条路，不是这里）。
         if _saw_pending:
-            print("[approval] 本批有一条待审批 —— 本轮就地停下"
-                  "（模型绕不过去，也不会去写「我在等批准」）")
+            print("[approval] this batch has a pending approval - stopping this turn")
             _attach_artifacts(messages, _artifacts)
             return (content or "", messages, session_chunks, tokens_used)
 
@@ -5173,16 +5269,16 @@ async def agent_loop_stream(
     try:
         _skill_index = build_skill_index()
     except Exception as exc:  # 不静默，但也不阻断对话
-        print(f"[skill_index] 生成失败（{type(exc).__name__}: {exc}）"
-              f" —— 本轮不带索引，search_tools 按需发现仍然可用")
+        print(f"[skill_index] generation failed ({type(exc).__name__}: {exc})"
+              f" - no index this turn; search_tools discovery still works")
         _skill_index = ""
 
     # 记忆索引：与 sync 逐字同一个调用（必须锁步）。
     try:
         _memory_index = build_memory_index()
     except Exception as exc:  # 不静默，也不阻断对话
-        print(f"[memory_store] 索引生成失败（{type(exc).__name__}: {exc}）"
-              f" —— 本轮不带记忆索引，memory_read/search 仍然可用")
+        print(f"[memory_store] index generation failed ({type(exc).__name__}: {exc})"
+              f" - no memory index this turn; memory_read/search still work")
         _memory_index = ""
 
     # 与 sync 逐字同一个调用（必须锁步）——
@@ -5353,10 +5449,8 @@ async def agent_loop_stream(
         _mc_n, _mc_saved = _prune_tool_results(messages, session_id)
         _note_model_activity(session_id)
         if _mc_n:
-            print(f"[tool_result_prune] 空闲已超 {_PRUNE_GAP_MINUTES} 分钟 —— "
-                  f"清了 {_mc_n} 条旧工具结果（省约 {_mc_saved} 字符）。"
-                  f"★ 这时服务端的前缀缓存**本来就要失效**，所以这次重算**不额外付**"
-                  f"（判据：不为一次本来不会发生的未命中额外付费）")
+            print(f"[tool_result_prune] idle over {_PRUNE_GAP_MINUTES} min - "
+                  f"pruned {_mc_n} old tool results (~{_mc_saved} chars saved)")
             #: 落一条事件 —— 否则"上下文自己少了一点"在重启之后没有任何痕迹
             #:   （控制台那句 print 只活在当前进程里）。
             if _emit:
@@ -5386,15 +5480,15 @@ async def agent_loop_stream(
                 _new_msgs = await asyncio.to_thread(compact_cb)
                 if _new_msgs:
                     messages[:] = _new_msgs
-                    print("[context_pressure] 已压缩（%d 条），本轮继续"
+                    print("[context_pressure] compressed (%d msgs), continuing"
                           % len(_new_msgs))
 
         _messages_for_wire, _pressure = trim_for_pressure(
             messages, provider, system=system_prompt, tools=tools)
         note_ratio(session_id, _pressure.get("ratio_before", -1.0))
         if _pressure.get("trimmed"):
-            print("[context_pressure] 占用 %.0f%% —— 收缩了 %d 条旧工具输出"
-                  "（省约 %d 字符，降到 %.0f%%）"
+            print("[context_pressure] usage %.0f%% - trimmed %d old tool outputs"
+                  " (~%d chars saved, down to %.0f%%)"
                   % (_pressure["ratio_before"] * 100, _pressure["trimmed"],
                      _pressure["freed"], _pressure["ratio_after"] * 100))
             #: 同上一条：这是"这一次发出去的比 `messages` 小"的唯一记录。
@@ -5433,8 +5527,8 @@ async def agent_loop_stream(
         try:
             _skill_guidance = build_skill_guidance(session_id)
         except Exception as exc:  # 不静默，但也不阻断对话
-            print(f"[skill_guidance] 生成失败（{type(exc).__name__}: {exc}）"
-                  f" —— 本轮不带引导片段")
+            print(f"[skill_guidance] generation failed ({type(exc).__name__}: {exc})"
+                  f" - no guidance block this turn")
             _skill_guidance = ""
         if _skill_guidance:
             payload = append_skill_guidance(payload, _skill_guidance)
@@ -5458,8 +5552,8 @@ async def agent_loop_stream(
             from core.plan import append_plan_reminder, build_plan_reminder
             _plan_note = build_plan_reminder(session_id, new_turn=(turn == 0))
         except Exception as exc:  # 不静默，但也不阻断对话
-            print(f"[plan_reminder] 生成失败（{type(exc).__name__}: {exc}）"
-                  f" —— 本轮不带计划模式提醒")
+            print(f"[plan_reminder] generation failed ({type(exc).__name__}: {exc})"
+                  f" - no plan-mode reminder this turn")
             _plan_note = ""
         if _plan_note:
             payload = append_plan_reminder(payload, _plan_note)
@@ -5474,8 +5568,8 @@ async def agent_loop_stream(
             from core.incidents import append_incident_note, build_note
             _incident_note = build_note()
         except Exception as exc:  # 不静默，但也不阻断对话
-            print(f"[incidents] 生成失败（{type(exc).__name__}: {exc}）"
-                  f" —— 本轮不带事故摘要")
+            print(f"[incidents] generation failed ({type(exc).__name__}: {exc})"
+                  f" - no incident summary this turn")
             _incident_note = ""
         if turn == 0 and _incident_note:
             payload = append_incident_note(payload, _incident_note)
@@ -5499,8 +5593,8 @@ async def agent_loop_stream(
             _bal = check_history(payload)
             if not _bal.balanced:
                 _bal_reported = True
-                print(f"[history] 消息历史不平衡（{_bal.problems} 处）：{_bal.explain()}"
-                      f" —— 发回上游大概率 400，而报错会说是上游的问题")
+                print(f"[history] message history unbalanced ({_bal.problems} spots): {_bal.explain()}"
+                      f" - likely a 400 upstream")
 
         # 请求快照 —— 与 sync 逐字同位置（锁步纪律）
         request_snapshot.set_current(request_snapshot.capture(
@@ -5795,57 +5889,57 @@ async def agent_loop_stream(
                         # 与 sync 逐字同一条（锁步）。
                         tool_result_content = _unknown_tool_message(tool_name)
                         _denied = True
-                        print(f"[tools] 拒绝执行不存在的工具 '{tool_name}'"
-                              f" —— 注册表里没有这个名字")
+                        print(f"[tools] refusing to run unknown tool '{tool_name}'"
+                              f" - not in registry")
                     # 属于被屏蔽的插件 —— 与 sync 同位置、同顺序（锁步）
                     elif (owner := _quarantined_owner(tool_name)) is not None:
                         tool_result_content = _QUARANTINE.blocked_message(
                             tool_name, owner, _QUARANTINE.reason_for(owner))
                         _denied = True
-                        print(f"[quarantine] 拒绝 '{tool_name}'：它属于**已被屏蔽**的插件"
+                        print(f"[quarantine] refusing '{tool_name}': belongs to blocked plugin"
                               f" '{owner}'")
                     # 属于被用户停用的 MCP —— 与 sync 同位置、同顺序（锁步）
                     elif (owner := _disabled_owner(tool_name)) is not None:
                         tool_result_content = _disabled_message(tool_name, owner)
                         _denied = True
-                        print(f"[mcp] 拒绝 '{tool_name}'：它属于**已被用户停用**的 MCP "
-                              f"服务器 '{owner}'")
+                        print(f"[mcp] refusing '{tool_name}': belongs to user-disabled MCP "
+                              f"server '{owner}'")
                     # 属于被用户停用的技能 —— 与 sync 同位置、同顺序（锁步）
                     elif (owner := _skill_disabled_owner(tool_name)) is not None:
                         tool_result_content = _skill_disabled_message(tool_name, owner)
                         _denied = True
-                        print(f"[skill] 拒绝 '{tool_name}'：它属于**已被用户停用**的"
-                              f"技能 '{owner}'")
+                        print(f"[skill] refusing '{tool_name}': belongs to user-disabled"
+                              f" skill '{owner}'")
                     # 呈现与执行同一个判定 —— 与 sync 同位置、同顺序
                     elif not is_tool_active(session_id, tool_name):
                         tool_result_content = _not_offered_message(tool_name)
                         _denied = True
-                        print(f"[tools] 拒绝执行未呈现的工具 '{tool_name}'"
-                              f" —— 它不在本会话的暴露集里（常驻 ∪ 已发现）")
+                        print(f"[tools] refusing to run tool not offered '{tool_name}'"
+                              f" - not in this session's exposed set")
                     # 参数坏了不许带着空参跑 —— 与 sync 同位置、同顺序
                     elif _args_err is not None:
                         tool_result_content = _bad_args_message(
                             tool_name, _args_err, tc["function"]["arguments"])
                         _denied = True
-                        print(f"[tools] 参数不是合法 JSON，拒绝派发 '{tool_name}'"
-                              f" —— {_args_err}"
-                              f" · {_args_fragment_report(tc['function']['arguments'])}")
+                        print(f"[tools] args are not valid JSON, refusing dispatch '{tool_name}'"
+                              f" - {_args_err}"
+                              f"; {_args_fragment_report(tc['function']['arguments'])}")
 
                     # 参数压根没到也不许跑 —— 与 sync 同位置、同顺序
                     elif (missing := _missing_required_args(tool_name, tool_args)):
                         tool_result_content = _empty_args_message(tool_name, missing)
                         _denied = True
-                        print(f"[tools] '{tool_name}' 的参数是空的、而它有必填字段，拒绝派发"
-                              f" —— 缺 {missing}")
+                        print(f"[tools] '{tool_name}' has empty args but required fields, refusing dispatch"
+                              f" - missing {missing}")
 
                     # 参数名不认识也不许跑 —— 与 sync 同位置、同顺序
                     elif (unknown := _unknown_tool_args(tool_name, tool_args)):
                         tool_result_content = _unknown_args_message(
                             tool_name, unknown, _known_tool_args(tool_name))
                         _denied = True
-                        print(f"[tools] '{tool_name}' 带了不认识的参数 {unknown}，"
-                              f"拒绝派发 —— 它接受 "
-                              f"{_known_tool_args(tool_name) or '（无参数）'}")
+                        print(f"[tools] '{tool_name}' has unknown args {unknown},"
+                              f" refusing dispatch - it accepts "
+                              f"{_known_tool_args(tool_name) or '(no args)'}")
 
                     # 计划模式：执行侧的闸 —— 与 sync 同位置、同顺序
                     # 只接一条路是看不见的（流式是分叉副本，
@@ -5856,8 +5950,8 @@ async def agent_loop_stream(
                               tool_name, tool_args, session_id)):
                         tool_result_content = plan_deny_message(tool_name, session_id)
                         _denied = True
-                        print(f"[plan] 拒绝 '{tool_name}'：本会话在计划模式"
-                              f"（只读 + 计划文件）")
+                        print(f"[plan] refusing '{tool_name}': session is in plan mode"
+                              f" (read-only + plan file)")
 
                     # 完全权限，不问而放 —— 与 sync 逐字同一条
                     elif _full_access_gate(session_id, tool_name, tool_args,
@@ -5875,8 +5969,7 @@ async def agent_loop_stream(
                                 or _destructive_gate_needed(session_id, tool_name))):
                         tool_result_content = _approval_in_cron_message(tool_name)
                         _denied = True
-                        print(f"[cron] 拒绝 '{tool_name}'：定时任务那一轮没有人可以回答审批"
-                              f"（模式不是自动 —— 见 _cron_may_use_auto）")
+                        print(f"[cron] refusing '{tool_name}': no one can answer approvals in a cron turn")
 
                     # 子 agent 里不许开启审批 —— 与 sync 同位置、同顺序
                     # 兜底闸要问的那些同属这一条（同 sync）。
@@ -5885,8 +5978,8 @@ async def agent_loop_stream(
                             or _destructive_gate_needed(session_id, tool_name)):
                         tool_result_content = _approval_in_child_message(tool_name)
                         _denied = True
-                        print(f"[subagent] 拒绝 '{tool_name}'：子 agent 没有可提问的那一轮"
-                              f"（深度 {subagent.depth()}）")
+                        print(f"[subagent] refusing '{tool_name}': subagent has no turn to ask"
+                              f" (depth {subagent.depth()})")
 
                     # 自动模式：分类器代答 —— 与 sync 同位置、同顺序
                     # 两条路必须锁步：只接一条的话，一开流式
@@ -5902,22 +5995,22 @@ async def agent_loop_stream(
                         tool_result_content = _destructive_pending_payload(
                             tool_name, tool_args)
                         _denied = True
-                        print(f"[tools] 挂起 '{tool_name}'：它不可逆、而没有自己的审批发射点"
-                              f" —— 已请用户确认")
+                        print(f"[tools] pausing '{tool_name}': irreversible, no approval hook of its own"
+                              f" - user confirmation requested")
 
                     # 只读档 —— 两条路同位置、同顺序
                     elif subagent.readonly() and subagent.is_write_like(tool_name):
                         tool_result_content = subagent.readonly_denied_message(tool_name)
                         _denied = True
-                        print(f"[subagent] 拒绝 '{tool_name}'：这一趟是只读的"
-                              f"（深度 {subagent.depth()}）")
+                        print(f"[subagent] refusing '{tool_name}': this run is read-only"
+                              f" (depth {subagent.depth()})")
 
                     # 记忆抽取 fork 的白名单 —— 与 sync 同位置、同顺序
                     elif _tool_allowlist is not None and tool_name not in _tool_allowlist:
                         tool_result_content = _allowlist_denied_message(
                             tool_name, _tool_allowlist)
                         _denied = True
-                        print(f"[fork] 拒绝 '{tool_name}'：不在本上下文的白名单里")
+                        print(f"[fork] refusing '{tool_name}': not in this context's allowlist")
 
                     # 子 agent —— 与 sync 同位置、同顺序
                     elif tool_name == "run_subagent":
@@ -6008,7 +6101,7 @@ async def agent_loop_stream(
                         tool_result_content = json.dumps(
                             result, ensure_ascii=False, default=json_default)
                         print(f"[tools] search_tools({tool_args.get('query', '')!r}) "
-                              f"→ {found} (+{added} new)")
+                              f"-> {found} (+{added} new)")
 
                     else:
                         # 与 sync 逐字同一条 —— 预取到的直接用，异常原样抛。
@@ -6052,8 +6145,8 @@ async def agent_loop_stream(
                 if _pend is not None:
                     if _origin == "cron":
                         tool_result_content = _approval_in_cron_replacement(_pend)
-                        print(f"[cron] 中和 '{tool_name}' 的待审批（{_pend.get('kind')}）："
-                              f"定时任务那一轮没有人可以回答")
+                        print(f"[cron] neutralizing pending approval for '{tool_name}' ({_pend.get('kind')}):"
+                              f" no one can answer in a cron turn")
                     elif subagent.depth() > 0 and _child_ask is not None:
                         # 与 sync 逐字同一条（锁步）：子的审批就地解决。
                         (tool_result_content, _child_err,
@@ -6136,8 +6229,8 @@ async def agent_loop_stream(
             _mb_n, _mb_saved = _enforce_message_tool_budget(
                 messages, _batch_start, tool_calls_list)
             if _mb_n:
-                print(f"[tool-budget] 本批结果总量超 {_MESSAGE_TOOL_RESULT_BUDGET} 字符 —— "
-                      f"把最大的 {_mb_n} 条落盘（省约 {_mb_saved} 字符，指针可读）")
+                print(f"[tool-budget] batch results exceed {_MESSAGE_TOOL_RESULT_BUDGET} chars - "
+                      f"persisted largest {_mb_n} (~{_mb_saved} chars saved, pointers readable)")
 
             # 这一轮（LLM 往返 + 其全部工具调用）结束 —— 与 sync 同位置。
             # 漏了它，`turn.start` 就没有收尾：`turn.end` 是 durable 而
@@ -6148,8 +6241,7 @@ async def agent_loop_stream(
             # 判据见 sync 那条注释；停在整批之后，不是碰到第一条就停
             # （后者会让同一批里后面的 `tool_call` 悬空，上游 400）。
             if _saw_pending:
-                print("[approval] 本批有一条待审批 —— 本轮就地停下"
-                      "（模型绕不过去，也不会去写「我在等批准」）")
+                print("[approval] this batch has a pending approval - stopping this turn")
                 _attach_artifacts(messages, _artifacts)
                 yield (accumulated_content or "", messages, session_chunks, tokens_used)
                 return
@@ -6177,8 +6269,8 @@ async def agent_loop_stream(
             messages.append(_cut)
             messages.append({"role": "user", "content": OUTPUT_RECOVERY_MSG,
                              "kind": OUTPUT_RECOVERY_KIND})
-            print("[truncated] finish_reason=length —— 同一轮里注入续写"
-                  "（还剩 %d 次）" % _recovery_left)
+            print("[truncated] finish_reason=length - injecting continuation this turn"
+                  " (%d left)" % _recovery_left)
             _end_turn(_turn_no, _t_turn, _tool_count)
             yield (accumulated_content or "", messages, session_chunks, tokens_used)
             # 三个累积量不用在这里清 —— 循环头（`_turn_no = ...` 那三行）
@@ -6475,7 +6567,7 @@ def _tool_result_of(result, tool_name: str):
     走这条路的人不要在别处再调 `as_text`：那会让图片回执被
     `json.dumps` 成一段 base64 文本（5 MB 的字符串）。
     """
-    if isinstance(result, ImageToolResult):
+    if isinstance(result, (ImageToolResult, TrustedText)):
         return result
     return as_text(result, tool_name)
 
@@ -6741,7 +6833,7 @@ def _grant_for_kind(kind: str, pend: dict, scope: str) -> bool:
             wm.grant_one_time_approval(scope)
             return True
     except Exception as exc:                                # noqa: BLE001
-        print(f"[hooks] PermissionRequest 的放行发不出去（这一条退回问人）："
+        print(f"[hooks] PermissionRequest allow cannot be delivered (falling back to asking):"
               f"{type(exc).__name__}: {exc}")
     return False
 
@@ -6774,7 +6866,7 @@ def _permission_hook_decide(session_id: str, tool_name: str, tool_args,
             detail=str(pend.get("body") or ""),
             call_id=str(call_id or ""))
     except Exception as exc:                                # noqa: BLE001
-        print(f"[hooks] PermissionRequest 跑不起来（照常问人）："
+        print(f"[hooks] PermissionRequest failed to run (asking as usual):"
               f"{type(exc).__name__}: {exc}")
         return None, None
     if out.get("deny"):
@@ -6783,8 +6875,8 @@ def _permission_hook_decide(session_id: str, tool_name: str, tool_args,
     if not out.get("allow"):
         return None, None
     if not _grant_for_kind(kind, pend, _auto_review_scope()):
-        print(f"[hooks] PermissionRequest 说 allow，但 kind={kind!r} "
-              f"没有对应的授权载体 —— 照常问人")
+        print(f"[hooks] PermissionRequest said allow but kind={kind!r} "
+              f"has no grant carrier - asking as usual")
         return None, None
     try:
         result = handler(**(tool_args or {}))
@@ -6792,7 +6884,7 @@ def _permission_hook_decide(session_id: str, tool_name: str, tool_args,
         # 预授权已经发出去了，而工具没跑成，退回弹窗（用户仍能拒绝），
         #    不把异常当成一次工具错误泼给模型 —— 那会看起来像"用户批了、
         #    工具坏了"，而真实原因是钩子替人按了同意却没跑通。
-        print(f"[hooks] PermissionRequest 放行后重跑失败（退回问人）："
+        print(f"[hooks] PermissionRequest rerun after allow failed (falling back to asking):"
               f"{type(exc).__name__}: {exc}")
         return None, None
     _record_tool_artifacts(artifacts, tool_name, result)
@@ -6930,10 +7022,10 @@ def _write_outside_auto_decide(session_id: str, exc, messages, provider,
             if wm is not None and exc.subject:
                 wm.grant_target_once("write_outside", exc.subject,
                                      _auto_review_scope())
-                print("[full-access] 不问而放：工作区外写 `%s`" % exc.subject)
+                print("[full-access] allowing without asking: write outside workspace `%s`" % exc.subject)
                 return True
         except Exception as exc2:                            # noqa: BLE001
-            print(f"[full-access] 区外写预授权失败（退回问人）："
+            print(f"[full-access] out-of-workspace pre-authorization failed (falling back to asking):"
                   f"{type(exc2).__name__}: {exc2}")
         return None
 
@@ -6944,8 +7036,8 @@ def _write_outside_auto_decide(session_id: str, exc, messages, provider,
     if AC.should_fall_back(st):
         AC.reset_total(st)
         AC.note_stat("fallback")
-        print(f"[auto] 连续/累计被拦超限（最近：{st.last_blocked!r}）"
-              f" —— 退回问人，计数器清零")
+        print(f"[auto] block limit exceeded (last: {st.last_blocked!r})"
+              f" - falling back to asking, counter reset")
         return None                       # 熔断，退回问人（= 手动模式的今天）
 
     action = "写文件到工作区之外的目录 `%s`（目标文件 `%s`）" % (
@@ -6961,16 +7053,16 @@ def _write_outside_auto_decide(session_id: str, exc, messages, provider,
     if verdict.unavailable:
         AC.note_stat("unavailable")
         _audit_auto(tool_name, "unavailable", verdict.reason)
-        print(f"[auto] 分类器没答上来（{verdict.reason}）—— 判定没作出，拒这一次")
+        print(f"[auto] classifier gave no answer ({verdict.reason}) - denying this call")
         # 不记账（"设施故障不计入熔断"）—— 数的是"判了多少次危险"。
         return False
 
     if not verdict.allowed:
         AC.note_stat("blocked")
         AC.record_denial(st, action)
-        print("[auto] 拦下「区外写」"
-              + (("〔%s〕" % verdict.rule) if verdict.rule else "")
-              + f"：{verdict.reason}")
+        print("[auto] blocked out-of-workspace write"
+              + ((" [%s]" % verdict.rule) if verdict.rule else "")
+              + f": {verdict.reason}")
         return False
 
     AC.note_stat("allowed")
@@ -6985,9 +7077,9 @@ def _write_outside_auto_decide(session_id: str, exc, messages, provider,
         wm.grant_target_once("write_outside", exc.subject,
                              _auto_review_scope())
     except Exception as exc2:                                # noqa: BLE001
-        print(f"[auto] 区外写预授权失败（退回问人）：{type(exc2).__name__}: {exc2}")
+        print(f"[auto] out-of-workspace pre-authorization failed (falling back to asking): {type(exc2).__name__}: {exc2}")
         return None
-    print("[auto] 判为安全，已预授权：工作区外写 `%s`" % exc.subject)
+    print("[auto] judged safe, pre-authorized: write outside workspace `%s`" % exc.subject)
     return True
 
 
@@ -7022,13 +7114,13 @@ def _write_outside_result(tool_name: str, exc, *, session_id, origin, messages,
     except Exception:                                        # noqa: BLE001
         _sub = False
     if _sub:
-        print(f"[subagent] 拒绝 '{tool_name}'：它要往工作区外写，"
-              f"而子 agent 没有可提问的那一轮")
+        print(f"[subagent] refusing '{tool_name}': it writes outside the workspace,"
+              f" and a subagent has no turn to ask")
         return ((_approval_in_child_message(tool_name)
                  + "\n（这条要往 **%s** 写 —— 工作区之外。）" % (exc.subject or "?")),
                 "subagent: write outside workspace")
     if str(origin or "") == "cron":
-        print(f"[cron] 拒绝 '{tool_name}'：定时任务那一轮不许挂起审批")
+        print(f"[cron] refusing '{tool_name}': cron turns must not pause for approval")
         return (("[框架] 这次调用**没有执行** —— 它要往工作区之外（`%s`）写文件，"
                  "而**定时任务那一轮不能挂起等用户点头**。"
                  "★ 无人值守的活应当在**工作区里**干活；"
@@ -7041,7 +7133,7 @@ def _write_outside_result(tool_name: str, exc, *, session_id, origin, messages,
         _auto = _write_outside_auto_decide(session_id, exc, messages, provider,
                                            origin=origin)
     except Exception as _ae:                                 # noqa: BLE001
-        print(f"[auto] 区外写判定失败（退回问人）：{type(_ae).__name__}: {_ae}")
+        print(f"[auto] out-of-workspace check failed (falling back to asking): {type(_ae).__name__}: {_ae}")
         _auto = None
 
     if _auto is True and retry is not None:
@@ -7052,7 +7144,7 @@ def _write_outside_result(tool_name: str, exc, *, session_id, origin, messages,
         except Exception as _re:                             # noqa: BLE001
             # 重跑仍然失败，退回审批载荷，而不是把一句里面的话报上去：
             #    "批了却什么都没发生"正是这一批要消灭的那种静默。
-            print(f"[auto] 预授权后重跑仍失败（改问用户）："
+            print(f"[auto] rerun after pre-authorization still failed (asking user):"
                   f"{type(_re).__name__}: {_re}")
     if _auto is False:
         return ("[框架] 这次**没有写任何东西** —— 它要往工作区之外的 `%s` 写，"
@@ -7078,7 +7170,7 @@ def _tool_artifacts(result) -> list:
     try:
         return _artifacts_mod.collect_tool_artifacts(result)
     except Exception as exc:                     # noqa: BLE001
-        print(f"[artifact] 收集失败（{type(exc).__name__}: {exc}）")
+        print(f"[artifact] collection failed ({type(exc).__name__}: {exc})")
         return []
 
 
@@ -7139,7 +7231,7 @@ def _media_artifacts(response) -> list:
                 str(item.get("data_url") or ""),
                 name=str(item.get("name") or ""), origin="model")
         except Exception as exc:                 # noqa: BLE001
-            print(f"[artifact] 上游媒体落盘失败（{type(exc).__name__}: {exc}）")
+            print(f"[artifact] failed to persist upstream media ({type(exc).__name__}: {exc})")
             continue
         if rec:
             out.append(rec)
@@ -7156,7 +7248,7 @@ def _link_artifacts(text: str) -> list:
     try:
         return _artifacts_mod.collect_local_links(text)
     except Exception as exc:                     # noqa: BLE001
-        print(f"[artifact] 链接产物收集失败（{type(exc).__name__}: {exc}）")
+        print(f"[artifact] failed to collect link artifacts ({type(exc).__name__}: {exc})")
         return []
 
 
@@ -7247,14 +7339,18 @@ def _format_tool_result(
     #   一个对象。顺带：图片回执永远不可能是审批载荷（工具自己知道），
     #   所以两条路不会撞。
     _blocks: list = []
+    _trusted = isinstance(content, TrustedText)
+    _prefix = ""
     if isinstance(content, ImageToolResult):
+        _trusted = bool(content.trusted_text) or _trusted
+        _prefix = str(content.trusted_prefix or "")
         _blocks = list(content.blocks)
-        content = content.render()
+        content = content.render_untrusted()
     elif not isinstance(content, str):
         # 不许静默当文本（读不到 ≠ 0 的同族）——
         # 走到这儿说明有人绕过了 `_tool_result_of`，而它今天只产两种形状。
-        print("[tool] 回执形状不是 str 也不是 ImageToolResult（%s）—— "
-              "按纯文本视图处理，请检查调用点" % type(content).__name__)
+        print("[tool] receipt is neither str nor ImageToolResult (%s) - "
+              "treating as plain text, check the call site" % type(content).__name__)
         content = _tool_result_text(content)
 
     _approval_payload = _parse_approval_payload(content)
@@ -7268,7 +7364,7 @@ def _format_tool_result(
     # （`tests/test_content_sanitizer.py` 的兜底方向那条）。
     # 加第二层的理由见 `core/tool_output_kind.py` 的 docstring
     # （"读家族的工具集构建期固定"这个前提已经不成立）。
-    _needs_isolation = (_isolation_decision_for(tool_name)
+    _needs_isolation = ((not _trusted) and _isolation_decision_for(tool_name)
                         and not _approval_payload)
 
     # 顾问行拼在消息上，不写进正文 —— 正文会被落盘成制品，
@@ -7286,7 +7382,7 @@ def _format_tool_result(
         hits = find_injection_indicators(content)
         if hits:
             print(f"[security] Injection heuristics matched in tool result "
-                  f"from '{tool_name}': {', '.join(hits)} — content left UNMODIFIED")
+                  f"from '{tool_name}': {', '.join(hits)} - content left UNMODIFIED")
             advisory = advisory_line(hits, tool_name) + "\n\n"
 
     if max_chars <= 0 or len(content) <= max_chars:
@@ -7299,7 +7395,8 @@ def _format_tool_result(
     if _needs_isolation:
         body = wrap_as_user_document(body, source=tool_name)
 
-    out = advisory + body + tail
+    out = (((_prefix + "\n\n") if _prefix else "")
+           + advisory + body + tail)
     if not _blocks:
         return out
     # 组装：文本块在前、图片块在后
@@ -7388,8 +7485,8 @@ def _shrink_approval_payload(data: dict, max_chars: int) -> tuple[str, str]:
         data[key] = (f"{cur[:keep]}\n"
                      f"…（这段因过长被截掉 {len(cur) - keep:,} 字符；"
                      f"**下面同意的是完整的那条**）")
-        print(f"[approval] 载荷字段 {key!r} 因超预算被截断 "
-              f"（{len(cur):,} -> {keep:,} 字符）—— 审批内容仍可识别")
+        print(f"[approval] payload field {key!r} truncated to budget "
+              f"({len(cur):,} -> {keep:,} chars)")
 
     out = _dump()
     if len(out) > max_chars:
@@ -7401,8 +7498,8 @@ def _shrink_approval_payload(data: dict, max_chars: int) -> tuple[str, str]:
                 if k in data}
         data["note"] = (f"审批载荷过大（{len(out):,} 字符），正文无法完整呈现。"
                         f"完整内容已存到 `{path}`。请把命令/列表改小后重试。")
-        print(f"[approval] 载荷缩到最小集仍然超预算（{len(out):,} > "
-              f"{max_chars}）—— 完整内容存到 {path}")
+        print(f"[approval] payload still over budget after minimal set ({len(out):,} > "
+              f"{max_chars}) - full content at {path}")
         out = _dump()
     return out, ""
 

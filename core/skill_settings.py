@@ -106,7 +106,7 @@ def load(skill_name: str) -> dict:
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception as exc:                              # noqa: BLE001
-        print("[skill-settings] %s 读不出来：%s: %s" % (p, type(exc).__name__, exc))
+        print("[skill-settings] %s unreadable: %s: %s" % (p, type(exc).__name__, exc))
         return {}
     return data if isinstance(data, dict) else {}
 

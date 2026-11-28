@@ -154,7 +154,8 @@ class MCPManager:
                 if server and server._tools:
                     from mcpx.client import register_external_server
                     n = register_external_server(
-                        server, trusted_output=cfg.get("trusted_output") is True)
+                        server, trusted_output=cfg.get("trusted_output") is True,
+                        egress=cfg.get("egress"))
                     self._external_servers[name] = server
                     total += n
                     print(f"[mcp] External '{name}': {n} tools ({transport})")
@@ -415,6 +416,13 @@ def _entries_from_servers(servers: dict, default_root: str | None = None) -> lis
         #   只收真 True —— 与消费点同一条严格判定，字符串 "true" 不算。
         if cfg.get("trusted_output") is True:
             entry["trusted_output"] = True
+
+        # 出网声明（P4）：MCP 工具也要能被能力目录看见，否则它就是一条
+        # 不受声明的 egress（`core/egress_channels` 的读者会点名）。形状与
+        # 技能 manifest 的 `egress:` 段同一张表：channel / target / route_for /
+        # auto / audit。只收对象；坏的让 `declare` 出声拒绝。
+        if isinstance(cfg.get("egress"), dict):
+            entry["egress"] = dict(cfg["egress"])
 
         command = cfg.get("command", "")
         args = cfg.get("args", [])

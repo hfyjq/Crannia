@@ -111,7 +111,7 @@ def _image_data_url(item) -> str:
     if isinstance(url, str) and url:
         if url.startswith("data:"):
             return url
-        print("[media] 忽略外链图片（不下载，绕开出网闸）：%s" % url[:80])
+        print("[media] ignoring external image (not downloaded): %s" % url[:80])
         return ""
     b64 = _fld(item, "b64_json")
     if isinstance(b64, str) and b64:
@@ -316,11 +316,11 @@ class OpenAICompatProvider(BaseProvider):
             return
         self._window_claim_warned = True
         print(
-            f"[window] prompt={prompt_tokens:,} 已超过声明窗口 "
-            f"{self._context_window:,} —— 声明值错了"
-            f"（来源={self._window_source}，model={self._model}）。"
-            f"压缩闸门按声明值算（{int(self._context_window * 0.85):,}），"
-            f"会永远够不着。"
+            f"[window] prompt={prompt_tokens:,} exceeds declared window "
+            f"{self._context_window:,} -- declared value is wrong"
+            f" (source={self._window_source}, model={self._model})."
+            f" compression gate uses the declared value"
+            f" ({int(self._context_window * 0.85):,})"
         )
 
     # ------------------------------------------------------------------
@@ -761,8 +761,8 @@ class OpenAICompatProvider(BaseProvider):
                 # 超长先判、且不重试：换 key / 重试对它一点用都没有
                 #（不是权限也不是限流，是请求本身太大），重试只会再爆一次。
                 #: 与流式那条同一行格式（同一处诊断口径）。
-                print(f"[llm] 调用失败（{type(e).__name__}: {str(e)[:200]}）"
-                      f" —— model={self._model} base={self._base_url}"
+                print(f"[llm] call failed ({type(e).__name__}: {str(e)[:200]})"
+                      f" -- model={self._model} base={self._base_url}"
                       f" kind={kind or classify_transport_error(e) or 'unknown'}")
                 if kind == "context_overflow":
                     log_context_overflow(self._model, e, where="chat")
@@ -781,12 +781,12 @@ class OpenAICompatProvider(BaseProvider):
                     _head = headline(e, kind=eff)
                     llm_retry.note(_session_key(), n, kind=eff, text=_head,
                                    phase=action)
-                    print(f"[llm] {eff or 'unknown'} —— {delay}ms 后重试"
-                          f"（{action} {n}）")
+                    print(f"[llm] {eff or 'unknown'} -- retrying in {delay}ms"
+                          f" ({action} {n})")
                     #: 可打断的等待 —— 用户按了打断就立刻停，
                     #:   把原异常抛回（同步这条路没有"取消"专用分支）。
                     if not llm_retry.wait(_session_key(), delay):
-                        print("[llm] 用户打断了这一轮 —— 不再重试")
+                        print("[llm] user interrupted this turn -- not retrying")
                         raise
                     continue
 
@@ -967,8 +967,8 @@ class OpenAICompatProvider(BaseProvider):
                 #: 出声 —— 只把异常吞成一个裸串时，控制台上除了
                 #:   `(error: …)` 什么都没有，事后没法分清"断网 / 超时 /
                 #:   上游 5xx"。
-                print(f"[llm] 流式失败（{type(e).__name__}: {str(e)[:200]}）"
-                      f" —— model={self._model} base={self._base_url}"
+                print(f"[llm] stream failed ({type(e).__name__}: {str(e)[:200]})"
+                      f" -- model={self._model} base={self._base_url}"
                       f" kind={kind or transport or 'unknown'}")
                 if kind == "context_overflow":
                     # 流式这条必须认得出超长：否则用户只看到裸的上游原文，
@@ -991,12 +991,12 @@ class OpenAICompatProvider(BaseProvider):
                     _head = headline(e, kind=eff)
                     llm_retry.note(_session_key(), n, kind=eff, text=_head,
                                    phase=action)
-                    print(f"[llm] {eff or 'unknown'} —— {delay}ms 后重试"
-                          f"（{action} {n}）")
+                    print(f"[llm] {eff or 'unknown'} -- retrying in {delay}ms"
+                          f" ({action} {n})")
                     #: 可打断。用户一按打断就交一片空 chunk，
                     #:   循环顶部的取消检查会接手（那条路会回「已按你的要求中断」）。
                     if not await llm_retry.wait_async(_session_key(), delay):
-                        print("[llm] 用户打断了这一轮 —— 不再重试")
+                        print("[llm] user interrupted this turn -- not retrying")
                         llm_retry.clear(_session_key())
                         yield StreamChunk(content="")
                         return

@@ -75,7 +75,7 @@ def is_enabled() -> bool:
         # 读不到，关。这一条的失败方向与"信息层读不到，关"同源：
         #    ICE 整体是增强（`ICE_DEFAULT_ON = False`），读不出设置时
         #    不启用它，而不是凭空启用一套会拦人的东西。
-        print(f"[ice] 网络层开关读不到（按关处理）：{type(exc).__name__}: {exc}")
+        print(f"[ice] network layer switch unreadable (treating as off): {type(exc).__name__}: {exc}")
         return False
 
 
@@ -106,7 +106,7 @@ def note_trip(where: str, hits, session_key: str = "") -> None:
     会话号取不到（有人在循环外直接调工具），只打控制台，绝不因此弄挂一次调用。
     """
     shown = "、".join(hits) if hits else ""
-    print(f"[ice] 金丝雀触发（{where}）：{shown} —— 已阻断并报警")
+    print(f"[ice] canary triggered ({where}): {shown} - blocked and reported")
 
     key = str(session_key or "")
     if not key:
@@ -124,7 +124,7 @@ def note_trip(where: str, hits, session_key: str = "") -> None:
                              where=str(where), hits=list(hits or ()))
     except Exception as exc:  # noqa: BLE001
         # 报警失败不许吞掉整次调用 —— 但也不许静默（判据 4）。
-        print(f"[ice] 报警事件发送失败：{type(exc).__name__}: {exc}")
+        print(f"[ice] alert event send failed: {type(exc).__name__}: {exc}")
 
 
 def check_outbound(text: str, *, where: str, session_key: str = "") -> Dict | None:

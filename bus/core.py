@@ -160,7 +160,7 @@ def _tool_skill_entries(primary: Path) -> list[Path]:
                 # 而包路径里排在前面的正是随包目录 —— 症状是"同名工具用了内置的
                 # 实现，用户独有的工具在装载或首次调用时 AttributeError"。
                 if e.name in named:
-                    print("[bus] 跳过用户技能 %r：与随包技能同名（随包优先）"
+                    print("[bus] skipping user skill %r: same name as bundled skill (bundled wins)"
                           % e.name)
                     continue
                 named.add(e.name)
@@ -212,15 +212,13 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
         from bus.quarantine import load as _load_quarantine
         _q = _load_quarantine()
         if _q:
-            print(f"[bus] 屏蔽账本：{len(_q)} 个插件仍在屏蔽中"
-                  f"（{'、'.join(sorted(_q))}）")
+            print(f"[bus] quarantine ledger: {len(_q)} plugins still quarantined ({', '.join(sorted(_q))})")
         #: 紧接着重判一次（只判静态那几条）：包被修好之后就应当能回来 ——
         #:   账本是持久的，而"修好也没救"是这条机制最容易长出来的死结。
         from bus.quarantine import review_static_quarantines as _review
         _review(skills_dir="skills")
     except Exception as _e:                                         # noqa: BLE001
-        print(f"[bus] WARNING: 屏蔽账本读不进来（{type(_e).__name__}: {_e}）"
-              f" —— 本次不屏蔽任何插件")
+        print(f"[bus] WARNING: quarantine ledger unreadable ({type(_e).__name__}: {_e}) - no plugin quarantined")
 
     # 用户停用的 MCP 也在这里进闸门 —— 与上面那段同一处。
     #   它与屏蔽是两个集合、一个判定点（`registry.get_active_tool_names` 那一行并集）。
@@ -229,11 +227,9 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
         from bus.mcp_disabled import load as _load_mcp_disabled
         _d = _load_mcp_disabled()
         if _d:
-            print(f"[bus] MCP 停用账本：{len(_d)} 个服务器已停用"
-                  f"（{'、'.join(sorted(_d))}）")
+            print(f"[bus] MCP disabled ledger: {len(_d)} servers disabled ({', '.join(sorted(_d))})")
     except Exception as _e:                                         # noqa: BLE001
-        print(f"[bus] WARNING: MCP 停用账本读不进来（{type(_e).__name__}: {_e}）"
-              f" —— 本次不停用任何一个")
+        print(f"[bus] WARNING: MCP disabled ledger unreadable ({type(_e).__name__}: {_e}) - none disabled")
 
     # 模型的「配置条目」账本 —— 这是它唯一一次带播种的装载。
     #   理由见 `core/model_configs.load()` 的 docstring（一句话：播种挂在"读"上会
@@ -246,8 +242,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
         from core import model_configs as _model_configs
         _model_configs.load(seed=True)
     except Exception as _e:                                         # noqa: BLE001
-        print(f"[bus] WARNING: 模型配置账本读不进来（{type(_e).__name__}: {_e}）"
-              f" —— 本次沿用 config.yaml 的 model:")
+        print(f"[bus] WARNING: model config ledger unreadable ({type(_e).__name__}: {_e}) - using model from config.yaml:")
     t0 = _time.time()
 
     # -- Load settings for workspace config --
@@ -306,7 +301,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
     #   （判据在 `bus/registry._session_extra_tools`：普通对话不该为它付税）。
     register_group_tool()
     from core.shell import bash_path as _bash_path
-    print(f"[bus] run_command registered (bash: {_bash_path() or '未找到'})")
+    print(f"[bus] run_command registered (bash: {_bash_path() or 'not found'})")
 
     # -- todo_write --
     # 同为框架级工具。模型侧的计划载体：多步任务里「做到哪一步」
@@ -333,6 +328,16 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
     from bus.registry import register_file_tools
     register_file_tools()
     print("[bus] file tools registered (read_file/write_file/edit_file/glob/grep)")
+
+    # -- 带自定义头的 HTTP 请求（出网权限重构 P2）--
+    # 每角色：出网审批 + 头白名单 + 审计。没配凭据条目也能用（只是没有注入）。
+    from core.web_request import register as register_web_request_tool
+    register_web_request_tool()
+
+    # -- 技能配置的受控写入口（P3）--
+    # 兜底闸会在派发前问一次（它 destructive 且没有自己的发射点）。
+    from core.skill_config import register as register_skill_config_tool
+    register_skill_config_tool()
 
     # -- 代码符号查询（按配置注册）--
     # 没配语言服务器时不注册：这个工具的 schema 一个字节都不发（每请求零成本）。
@@ -405,7 +410,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
     # 第一次实跑要盯的是"是不是弹了两次"。
     from bus.registry import register_ice_reveal_tool
     register_ice_reveal_tool()
-    print("[bus] pii_reveal registered (ICE 放行真值)")
+    print("[bus] pii_reveal registered (ICE reveals real values)")
     print("[bus] history_search registered (read-only short_term.db)")
 
     # -- Workspace Manager --
@@ -491,8 +496,8 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
                     # "我没有这个工具"（拒绝装载 = 用户的工具消失，而那是看不见的）。
                     #装载可以继续，但必须出声。
                     print(f"[bus] WARNING: Failed to read manifest of "
-                          f"'{entry.name}': {type(e).__name__}: {e} —— "
-                          f"该 skill 的所有工具本次**不会注册**")
+                          f"'{entry.name}': {type(e).__name__}: {e} - "
+                          f"all tools of this skill will not be registered this time")
                     _report.note(entry.name, "discover", False,
                                  "manifest 读不出来：%s: %s"
                                  % (type(e).__name__, e))
@@ -512,10 +517,12 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
                 except Exception as e:                          # noqa: BLE001
                     # 这道闸自己不许拦路（同屏蔽闸那条判据）
                     _why = ""
-                    print(f"[bus] WARNING: 能力闸出问题（{type(e).__name__}: {e}）"
-                          f" —— '{entry.name}' 照常装载")
+                    print(f"[bus] WARNING: capability gate error ({type(e).__name__}: {e}) - '{entry.name}' loads as usual")
                 if _why:
-                    print(f"[bus]   (skip) {entry.name} —— {_why}")
+                    # 详情留在技能卡片（`_report` 里那份是中文的，给人看）；
+                    #   日志行只说结论 —— 日志不许夹带中文。
+                    print(f"[bus]   (skip) {entry.name} - capability check failed "
+                          f"(details in the skill card)")
                     _report.note(entry.name, "compatibility", False, _why)
                     continue
                 # `optional` 缺能力不拦：技能自带降级路，这里只记一行（卡片/诊断看得到）。
@@ -526,7 +533,8 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
                     _reduced = []
                 if _reduced:
                     _note = "能力缺失：" + "、".join(_reduced) + "（当前为兼容状态运行）"
-                    print(f"[bus]   (degraded) {entry.name} —— {_note}")
+                    print(f"[bus]   (degraded) {entry.name} - missing capabilities: "
+                          f"{', '.join(_reduced)} (running in compatibility mode)")
                     _report.note(entry.name, "compatibility", True, _note)
 
                 # 装载前的一道闸。
@@ -541,8 +549,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
                         continue
                 except Exception as e:                          # noqa: BLE001
                     # 这道闸自己不许拦路 —— 它出问题照旧装（同体检器那条判据）
-                    print(f"[bus] WARNING: 屏蔽闸出问题（{type(e).__name__}: {e}）"
-                          f" —— '{entry.name}' 照常装载")
+                    print(f"[bus] WARNING: quarantine gate error ({type(e).__name__}: {e}) - '{entry.name}' loads as usual")
 
                 strategy = manifest.get("load_strategy", "eager")
                 try:
@@ -578,9 +585,9 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
             from bus import skill_state
             _off = skill_state.refresh()
             if _off:
-                print("[bus] 已停用的技能：%s" % ", ".join(sorted(_off)))
+                print("[bus] disabled skills: %s" % ", ".join(sorted(_off)))
         except Exception as exc:                                # noqa: BLE001
-            print("[bus] WARNING: 读取技能启用状态失败（%s: %s）"
+            print("[bus] WARNING: reading skill enable state failed (%s: %s)"
                   % (type(exc).__name__, exc))
 
     # 技能的后台服务：只有声明了 start(ctx) 的技能会被导入并启动。
@@ -592,7 +599,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
         for _name, _err in _svc.get("failed", ()):
             _report.note(_name, "start", False, _err)
     except Exception as exc:                                    # noqa: BLE001
-        print("[service] 启动技能服务失败（不影响启动）：%s: %s"
+        print("[service] failed to start skill service (does not affect startup): %s: %s"
               % (type(exc).__name__, exc))
 
     # 出站工具排在技能之后：描述里要列出技能注册的动作名。
@@ -600,7 +607,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
         from bus.registry import register_outbound_tool
         register_outbound_tool()
     except Exception as exc:                                    # noqa: BLE001
-        print("[bus] WARNING: 注册出站工具失败（%s: %s）"
+        print("[bus] WARNING: failed to register outbound tools (%s: %s)"
               % (type(exc).__name__, exc))
 
     # 把"真的坏了"的那两类同步进事故账本（`#02` 的数据源）。
@@ -619,7 +626,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
                 _inc.note(_name, "skill_start", "技能的后台服务启动失败",
                           _item.get("message", ""))
     except Exception as exc:                                    # noqa: BLE001
-        print("[incidents] 同步技能装载结果失败（%s: %s）"
+        print("[incidents] failed to sync skill load results (%s: %s)"
               % (type(exc).__name__, exc))
 
     # -- Channels --
@@ -643,8 +650,7 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
             if p.is_dir() and (p / "manifest.yaml").exists())
     else:
         _startup_stats["provider_count"] = 0
-        print(f"[bus] WARNING: 供应商目录不存在：{providers_dir} "
-              f"—— 本次一个 provider 都没有装载")
+        print(f"[bus] WARNING: providers directory does not exist: {providers_dir} - no provider loaded")
     skill_count = 0
     skills_d = _paths.asset_dir("skills")
     if skills_d.is_dir():
@@ -659,13 +665,13 @@ def init_bus(config: dict, **channel_deps) -> SecurityGuard:
         from bus.registry import undeclared_report
         print(undeclared_report())
     except Exception as e:
-        print(f"[bus] WARNING: 权限档汇总没跑成（{type(e).__name__}: {e}）")
+        print(f"[bus] WARNING: permission tier summary failed ({type(e).__name__}: {e})")
     # 第二根轴（`destructive`）的同一行。
     # 它可能报"一个都没声明" —— 那行不是故障，是"还没做决定"。
     try:
         from bus.registry import undeclared_destructive_report
         print(undeclared_destructive_report())
     except Exception as e:
-        print(f"[bus] WARNING: destructive 汇总没跑成（{type(e).__name__}: {e}）")
+        print(f"[bus] WARNING: destructive summary failed ({type(e).__name__}: {e})")
     print(f"[bus] Initialization complete ({_startup_stats['total_seconds']}s)")
     return security

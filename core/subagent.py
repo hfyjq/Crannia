@@ -463,7 +463,7 @@ def run_child(*, snapshot, assistant_msg: dict, task: str, provider,
                 system=snapshot.system, tools=snapshot.tools,
                 force=force, threshold=_FORCE_RATIO)
         except Exception as exc:  # noqa: BLE001 —— 压缩失败不该弄挂子这一趟
-            print(f"[subagent] 上下文压缩失败（{type(exc).__name__}: {exc}）")
+            print(f"[subagent] context compression failed ({type(exc).__name__}: {exc})")
             return None
         return new if done else None
 

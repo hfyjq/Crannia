@@ -1,0 +1,106 @@
+kind: skill
+name: diagram
+version: "0.1.0"
+draft: false
+load_strategy: on_demand
+description: "结构化绘图 —— 流程图 / 思维导图 → SVG（默认），可选 PNG；支持 Mermaid 子集，不引 Node/Graphviz"
+summary: "流程图与思维导图"
+
+api: 1
+requires:
+  - artifacts
+  - workspace
+
+# 绘图是本地确定性操作：写工作区、可逆、不花钱、不出网。
+# 不进自动模式分类器（与 media_gen 同一条理由），否则每画一张图都弹一次窗。
+review_input: none
+
+# graph-layout 是纯 Python 包（MIT），不是外部程序 —— 走 requires 的 Python 依赖，
+# 不在这里声明 external:。缺了不阻止装载，工具调用时给可读提示。
+
+tools:
+  - name: create_flowchart
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      把节点和连线画成**分层流程图**（SVG 默认，落工作区）。
+      两种输入二选一：(1) `nodes` + `edges` 结构化数据；(2) `source` 传 Mermaid
+      `flowchart TD` / `graph LR` 文本子集。节点可写 kind: rect/decision/start/end。
+      ★ 用于流程/决策/依赖/时序；统计图表（柱折饼）请用 plot_excel_data；
+      从无到有画插画请用 generate_image。
+      出图后用 deliver_file 发给用户；要 PNG 用 render_diagram。
+      上限 200 个节点 / 400 条连线；超了请分几张图。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        source:
+          type: string
+          description: "Mermaid 子集：flowchart TD / graph LR，如 'A[开始] --> B{判断} -->|是| C[完]'"
+        nodes:
+          type: array
+          description: "节点数组：[{id,label,kind}]；kind 可 rect/decision/start/end"
+          items: {type: object}
+        edges:
+          type: array
+          description: "边数组：[{source,target,label}] 或 [[source,target,label]]；label 可选"
+          items: {}
+        orientation:
+          type: string
+          enum: [top-to-bottom, bottom-to-top, left-to-right, right-to-left]
+          default: top-to-bottom
+        title: {type: string}
+        output_name: {type: string, default: "flowchart"}
+
+  - name: create_mindmap
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      把树画成**思维导图**（整齐树布局，SVG 默认，落工作区）。
+      两种输入二选一：(1) `nodes` + `edges` + 可选 `root`；(2) `source` 传 Mermaid
+      `mindmap` 文本（按缩进建树）。默认从左到右展开。
+      ★ 用于脑图/目录树/组织架构；流程/依赖图请用 create_flowchart。
+      上限 200 个节点；树必须从 root 连得通（边的方向是 父 → 子）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        source:
+          type: string
+          description: "Mermaid mindmap 子集：首行根，下面按缩进写子节点"
+        nodes:
+          type: array
+          description: "节点数组：[{id,label}]"
+          items: {type: object}
+        edges:
+          type: array
+          description: "边数组：[{source,target}]，方向是父 → 子"
+          items: {}
+        root:
+          type: string
+          description: "根节点 id；不填取第一个节点（Mermaid 输入时自动取首行）"
+        orientation:
+          type: string
+          enum: [left-to-right, right-to-left, top-to-bottom, bottom-to-top]
+          default: left-to-right
+        title: {type: string}
+        output_name: {type: string, default: "mindmap"}
+
+  - name: render_diagram
+    permission: write
+    destructive: false
+    output_kind: structured
+    description: >
+      把已有的 SVG 转成 **PNG**（走框架已有的 resvg_py，不引 cairosvg）。
+      默认 SVG 不用转；只有用户明确要位图时才调。
+      PPTX 请用 office_parser 的 svgs_to_pptx（要按 slide 序列组织）。
+    inputSchema:
+      $schema: "https://json-schema.org/draft/2020-12/schema"
+      type: object
+      properties:
+        file_path: {type: string, description: "上一步生成的 .svg 路径"}
+        target: {type: string, enum: [png], default: "png"}
+        output_name: {type: string}
+      required: [file_path]

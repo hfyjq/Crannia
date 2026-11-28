@@ -333,7 +333,7 @@ class TelegramChannel(Channel):
         #:   再处理一遍（去重缓存重启后是空的，拦不住）。
         offset = _load_offset()
         if offset:
-            print("[telegram] 从上次的游标接着收（update_id >= %d）" % offset)
+            print("[telegram] resuming from last cursor (update_id >= %d)" % offset)
 
         while self._running:
             retries = 0
@@ -386,14 +386,14 @@ class TelegramChannel(Channel):
         except Exception:                                  # noqa: BLE001
             chat_id = None
         if chat_id is None or self._bot is None:
-            print("[telegram] 这条消息没处理成，且没有可用的会话回话 —— 只能记日志")
+            print("[telegram] could not handle message and no chat to reply to -- logging only")
             return
         try:
             await self._bot.send_message(
                 chat_id=chat_id,
                 text="⚠️ 消息遗失，未接收，需要时请重新发送。")
         except Exception as e:                             # noqa: BLE001
-            print(f"[telegram] 「消息遗失」提醒没发出去："
+            print(f"[telegram] failed to send lost-message notice: "
                   f"{type(e).__name__}: {e}")
 
     async def terminate(self) -> None:
@@ -441,7 +441,7 @@ class TelegramChannel(Channel):
                 and not tg_media.addressed_to_bot(
                     getattr(update, "message", None),
                     self._bot_username, self._bot_id)):
-            print("[telegram] 群里这条不是在跟我说话，跳过（chat=%s）"
+            print("[telegram] group message not addressed to me, skipped (chat=%s)"
                   % session.session_id)
             return None
 
@@ -493,7 +493,7 @@ class TelegramChannel(Channel):
             try:
                 await self._drain_delivered(self._make_session(update))
             except Exception as e:                                # noqa: BLE001
-                print(f"[telegram] 发待交付文件时出错（{type(e).__name__}: {e}）")
+                print(f"[telegram] error sending pending delivery files ({type(e).__name__}: {e})")
 
     async def send(self, session: MessageSession, content: str | MessageChain) -> bool:
         """没有 Bot 就是没送达 —— 以前这一支什么都不做、也不出声。
@@ -505,11 +505,11 @@ class TelegramChannel(Channel):
           这条路上，那是文件唯一的出口（同微信 / 飞书 / 钉钉）。
         """
         if not self._bot:
-            print(f"[telegram] 没有 Bot 实例，这条没有送达：{session.session_id}")
+            print(f"[telegram] no Bot instance, not delivered: {session.session_id}")
             return False
         chat_id = _chat_id_of(session)
         if chat_id is None:
-            print(f"[telegram] 会话 id 不是数字，发不出去：{session.session_id!r}")
+            print(f"[telegram] chat id is not numeric, cannot send: {session.session_id!r}")
             return False
         text = content if isinstance(content, str) else content.content
         delivered = False
@@ -528,7 +528,7 @@ class TelegramChannel(Channel):
         （用户先看到文件、再看到回答）。判据见 `channels/base.py::send_note`。
         """
         if not self._bot:
-            print(f"[telegram] 没有 Bot 实例，这句旁白没送达：{session.session_id}")
+            print(f"[telegram] no Bot instance, note not delivered: {session.session_id}")
             return False
         chat_id = _chat_id_of(session)
         if chat_id is None or not str(text or "").strip():
@@ -571,15 +571,15 @@ class TelegramChannel(Channel):
         签名，`deliver_file` 那侧按属性存在认通道。
         """
         if not self._bot:
-            print("[telegram] 没有 Bot 实例，附件发不出去")
+            print("[telegram] no Bot instance, cannot send attachment")
             return False
         p = Path(str(file_path or ""))
         if not p.is_file():
-            print("[telegram] 要发的文件不存在：%s" % (file_path or "（空）"))
+            print("[telegram] file to send does not exist: %s" % (file_path or "(empty)"))
             return False
         chat_id = _chat_id_of(session)
         if chat_id is None:
-            print(f"[telegram] 会话 id 不是数字，附件发不出去：{session.session_id!r}")
+            print(f"[telegram] chat id is not numeric, cannot send attachment: {session.session_id!r}")
             return False
         name = filename or p.name
         kind = tg_media.outbound_kind(name)
@@ -595,9 +595,9 @@ class TelegramChannel(Channel):
                         self._bot.send_document, chat_id=chat_id,
                         document=upload)
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[telegram] 附件发送失败（{type(exc).__name__}: {exc}）")
+            print(f"[telegram] attachment send failed ({type(exc).__name__}: {exc})")
             return False
-        print("[telegram] 附件已发送：%s（%s）" % (name, kind))
+        print("[telegram] attachment sent: %s (%s)" % (name, kind))
         return True
 
     async def _drain_delivered(self, session: MessageSession) -> int:
@@ -616,7 +616,7 @@ class TelegramChannel(Channel):
                 channel="telegram_channel",
                 user_id=str(getattr(session, "session_id", "") or ""))
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[telegram] 取待发文件失败（{type(exc).__name__}: {exc}）")
+            print(f"[telegram] failed to fetch pending files ({type(exc).__name__}: {exc})")
             return 0
         sent = 0
         for rec in recs:
@@ -653,11 +653,11 @@ class TelegramChannel(Channel):
         for item in tg_media.items_of(tg_msg):
             file_id = str(item.get("file_id") or "")
             if not file_id:
-                print("[telegram] 媒体没有 file_id，跳过（kind=%s）" % item.get("kind"))
+                print("[telegram] media has no file_id, skipped (kind=%s)" % item.get("kind"))
                 continue
             size = int(item.get("size") or 0)
             if size > tg_media.MAX_DOWNLOAD_BYTES:
-                print("[telegram] 附件太大（%d 字节 > %d），没有下载：%s"
+                print("[telegram] attachment too large (%d bytes > %d), not downloaded: %s"
                       % (size, tg_media.MAX_DOWNLOAD_BYTES, item.get("name")))
                 continue
             try:
@@ -667,10 +667,10 @@ class TelegramChannel(Channel):
                     tg_media.ext_of(item)))
                 await tg_file.download_to_drive(path)
                 out.append((item, str(path)))
-                print("[telegram] 附件已落盘：%s（%s，%d 字节）"
+                print("[telegram] attachment saved: %s (%s, %d bytes)"
                       % (path.name, item.get("kind"), size))
             except Exception as exc:                              # noqa: BLE001
-                print(f"[telegram] 取附件失败（{type(exc).__name__}: {exc}）")
+                print(f"[telegram] failed to fetch attachment ({type(exc).__name__}: {exc})")
         return out
 
     # ------------------------------------------------------------------
@@ -697,7 +697,7 @@ class TelegramChannel(Channel):
             wait = _retry_after_of(exc)
             if wait is None:
                 raise
-            print("[telegram] 被限流，%.0f 秒后重试一次" % wait)
+            print("[telegram] rate limited, retrying once in %.0f s" % wait)
             await asyncio.sleep(wait)
             return await fn(*args, **kwargs)
 
@@ -730,7 +730,7 @@ def _load_offset(path: Path | None = None) -> int:
     except FileNotFoundError:
         return 0
     except Exception as exc:                                      # noqa: BLE001
-        print("[telegram] 游标读不出来，从 0 开始（可能重放积压）：%s: %s"
+        print("[telegram] cannot read cursor, starting from 0 (backlog may replay): %s: %s"
               % (type(exc).__name__, exc))
         return 0
     try:
@@ -749,7 +749,7 @@ def _save_offset(value: int, path: Path | None = None) -> None:
         tmp.replace(p)
     except Exception as exc:                                      # noqa: BLE001
         # 写不进去也要出声：否则下次重启静默重放
-        print("[telegram] 游标写不进去（重启会重放积压）：%s: %s"
+        print("[telegram] cannot write cursor (backlog replays on restart): %s: %s"
               % (type(exc).__name__, exc))
 
 

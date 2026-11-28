@@ -97,7 +97,12 @@ def _shift(name: str, fam: str, l: float, s: float) -> tuple:
         #: 保留层次：浅色里"正文 / 次要 / 灰"的明度差在这里要继续存在，
         #:   所以给 0.52–0.94 这个跨度，而不是把它们压成同一档。
         l2 = 0.52 + l * 0.42
-        if name in ("--green", "--green-dark", "--clay"):
+        #: `--c-code-lang-fg` 是代码块语言标签的暖色强调 —— 默认分支会把
+        #:   饱和度清零（与正文同形）；它要比品牌三色更饱和一档，否则深色
+        #:   推出来是浅茶色，"橙色"看不出来。
+        if name == "--c-code-lang-fg":
+            s2 = min(1.0, s * 1.1)
+        elif name in ("--green", "--green-dark", "--clay"):
             s2 = s * 0.75
         elif any(w in name for w in tinted):
             #: 状态色同一枚令牌身兼两职（红底白字 / 深色文字），

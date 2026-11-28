@@ -153,6 +153,51 @@ def main() -> int:
         check("a read-only tool gets no grant at all",
               ok is False and not wm.grants, str(wm.grants))
 
+        # 2e. 接管的载体是逐应用授权（不是"不知道就退回问人"）
+        print("\n-- 2e. computer: per-app carrier --")
+        from core import agent_loop as A
+        from core.computer import session as CS
+
+        class _W:
+            exe = "photoshop.exe"
+
+        saved_get, saved_auth, saved_authorize = (
+            CS.get_window, CS.is_authorized, CS.authorize)
+        granted: list = []
+        try:
+            CS.get_window = lambda wid: _W()
+            CS.is_authorized = lambda exe: False
+            CS.authorize = lambda exe: granted.append(exe)
+            check("observation of an unauthorized app asks",
+                  A._computer_needs_approval(
+                      {"action": "get_window_state", "window": "w1"}) is True, "")
+            check("full access pre-grants that app",
+                  A._grant_computer_app(
+                      {"action": "get_window_state", "window": "w1"}) is True
+                  and granted == ["photoshop.exe"], str(granted))
+            CS.is_authorized = lambda exe: True
+            check("an authorized app does not ask",
+                  A._computer_needs_approval(
+                      {"action": "get_window_state", "window": "w1"}) is False, "")
+            granted.clear()
+            CS.authorize = lambda exe: granted.append(exe)
+            check("launch_app carrier uses the exe basename",
+                  A._grant_computer_app(
+                      {"action": "launch_app", "app": "C:/x/Notepad.exe"}) is True
+                  and granted == ["notepad.exe"], str(granted))
+        finally:
+            CS.get_window, CS.is_authorized, CS.authorize = (
+                saved_get, saved_auth, saved_authorize)
+        check("input actions do not ask (auth happened at observation)",
+              A._computer_needs_approval(
+                  {"action": "press_key", "window": "w1"}) is False, "")
+        check("list/cursor never ask",
+              A._computer_needs_approval({"action": "list_windows"}) is False
+              and A._computer_needs_approval({"action": "cursor_position"}) is False, "")
+        check("launch_app may ask",
+              A._computer_needs_approval(
+                  {"action": "launch_app", "app": "notepad.exe"}) is True, "")
+
         # 3. 定时任务不继承
         print("\n-- 3. cron does not inherit --")
         wm.grants.clear()

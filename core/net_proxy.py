@@ -406,9 +406,9 @@ def warn_if_socks_unsupported() -> None:
     只提醒一次（每次出网都打一行就是噪声）。
     """
     if _socks_env_without_pysocks():
-        print("[net_proxy] 环境里给的是 SOCKS 代理，但这台机器没装 PySocks ⇒ "
-              "requests 系调用会报 Missing dependencies for SOCKS support。"
-              "装一下：pip install PySocks（或把代理地址写成 http://）。")
+        print("[net_proxy] environment specifies a SOCKS proxy but PySocks is not installed => "
+              "requests calls will fail with Missing dependencies for SOCKS support. "
+              "Install it: pip install PySocks (or use an http:// proxy address).")
 
 
 def requests_proxies() -> dict | None:

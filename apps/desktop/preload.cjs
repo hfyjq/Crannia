@@ -100,4 +100,15 @@ contextBridge.exposeInMainWorld("crannia", {
   // 装技能时选目录：只回一个绝对路径（空串 = 用户取消）。
   //   与上面同一条最小白名单：只给具名动作，不给 `ipcRenderer` 裸句柄。
   pickSkillDir: () => ipcRenderer.invoke("dialog:pick-skill-dir"),
+  // 写剪贴板：主进程写，绕开渲染进程的权限/焦点不确定性（Windows/Linux 同一条）。
+  //   只收一个字符串、只回布尔；主进程那侧同样按最小白名单与来源核对。
+  copyToClipboard: (text) => ipcRenderer.invoke("clipboard:write", String(text == null ? "" : text)),
+  // 任务完成 / 有待回答时的系统通知。
+  //   判据在壳那一侧：主窗在前台就不弹（在不在活跃对话无关）。
+  //   同一条最小白名单：只给三个字符串，不给 `ipcRenderer` 裸句柄。
+  notifyTask: (kind, title, body) => ipcRenderer.send("notify:task", {
+    kind: String(kind || ""),
+    title: String(title || ""),
+    body: String(body || ""),
+  }),
 });

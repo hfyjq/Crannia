@@ -1,0 +1,30 @@
+Update notes - regular update (2026/11/28) v1.2.0
+
+Experience:
+1. TUI endpoint-config tips and the UI onboarding are more detailed now.
+2. The GUI background-task panel timer now updates instantly.
+3. Adjusted the pre-approved domain list.
+4. When the window is not focused, finished tasks or pending approvals now raise a system notification.
+
+Fixes:
+1. Fixed several issues that could cause model configuration errors.
+2. Fixed an issue that could cause abnormal config reads.
+3. Fixed a pane display issue.
+4. Fixed an issue with approval output under full access.
+5. Removed deprecated code and comments.
+
+UI:
+1. Updated the interface style in takeover mode.
+2. Adjusted some translation displays.
+3. Added memory-feedback display.
+4. Added UI for ICE canary triggers.
+
+Performance & features:
+1. The Linux version is now available — feedback welcome!
+2. Added code copying inside replies.
+3. Improved takeover-mode performance; takeover can now be started and stopped in the TUI.
+4. Improved support for some applications.
+5. Improved compatibility and support for various providers.
+6. Refactored parts of the networking layer, extending the framework's capability boundary.
+7. Upgraded the in-conversation drawing tool.
+8. Optimized some architectural design.

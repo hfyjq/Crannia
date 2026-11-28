@@ -82,6 +82,12 @@ def boot_registry() -> tuple[int, int]:
     # 工具编排：生产里同样由 `init_bus` 注册；漏了它，显式表里那些名字
     # 会变成"注册表里不存在"。
     R.register_program_tool()
+    # 自定义头的 HTTP 请求（P2）：生产里由 `init_bus` 注册。
+    # 它不在常驻集里，但权限/隔离/能力表的读者按名字反查得到它。
+    from core.web_request import register as _register_web_request
+    _register_web_request()
+    from core.skill_config import register as _register_skill_config
+    _register_skill_config()
 
     # MCP 内置工具（web_search / web_fetch）也必须注册 —— 生产里由
     # `init_mcp` 注册。漏掉它们会让这份测量少算两个工具，并把它们从

@@ -72,7 +72,7 @@ class WeChatMessageConverter(MessageConverter):
                 # 连 `image_item` / `media` 的键名一起打：这正是要查的那件事
                 #   （是真的没有地址，还是字段叫别的名字 / `media` 没解析成 dict）。
                 if not _img_url:
-                    print("[wechat] 图片消息里**没有下载地址** —— 跳过了。"
+                    print("[wechat] image message has no download URL - skipped."
                           " image_item=%s media=%s"
                           % (sorted(img.keys()),
                              sorted(media.keys()) if isinstance(media, dict)

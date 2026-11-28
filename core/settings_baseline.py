@@ -92,12 +92,12 @@ def baseline(path: Optional[Path] = None) -> dict:
     except FileNotFoundError:
         if not _warned:
             _warned = True
-            print(f"[settings] 出厂基准读不到（{p}）—— 「恢复默认」会变成空操作")
+            print(f"[settings] factory baseline unreadable ({p}) - restore defaults will become a no-op")
         return {}
     except (OSError, ValueError) as exc:
         if not _warned:
             _warned = True
-            print(f"[settings] 出厂基准坏了（{p}）：{type(exc).__name__}: {exc}")
+            print(f"[settings] factory baseline broken ({p}): {type(exc).__name__}: {exc}")
         return {}
     if not isinstance(raw, dict):
         return {}

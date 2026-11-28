@@ -94,7 +94,7 @@ def _read() -> dict[str, dict]:
     except FileNotFoundError:
         return {}
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[quarantine] 账本读不动（{type(exc).__name__}: {exc}）—— 按空账本走")
+        print(f"[quarantine] ledger unreadable ({type(exc).__name__}: {exc}) - treating as empty")
         return {}
 
 
@@ -178,8 +178,7 @@ def quarantine(owner: str, *, code: str, reason: str = "",
             _write(data)
         except Exception as exc:                                # noqa: BLE001
             # 写不进去也要屏蔽（本进程内是真的）—— 落盘失败只影响"下次启动还认不认"。
-            print(f"[quarantine] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**仍然屏蔽** '{owner}'")
+            print(f"[quarantine] ledger write failed ({type(exc).__name__}: {exc}) - still quarantined for this run '{owner}'")
         _sync_registry(data)
     # 记账之后才发信号：
     #   「信号必须在"它让你去读的那份 state"可读之后才发」——
@@ -207,8 +206,7 @@ def _emit_blocked(entry: dict) -> None:
     except Exception as exc:                                    # noqa: BLE001
         # 事件发不出去不影响屏蔽本身（账本里那条是真的、闸也已经生效）——
         #    只是这一次没有"实时"那一下，前端下一次拉的时候照样看得到。
-        print(f"[quarantine] 事件没发出去（{type(exc).__name__}: {exc}）"
-              f" —— 屏蔽本身照旧生效")
+        print(f"[quarantine] event not sent ({type(exc).__name__}: {exc}) - quarantine still applies")
 
 
 def release(owner: str) -> bool:
@@ -224,7 +222,7 @@ def release(owner: str) -> bool:
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[quarantine] 账本写不进去（{type(exc).__name__}: {exc}）")
+            print(f"[quarantine] ledger write failed ({type(exc).__name__}: {exc})")
         _sync_registry(data)
     return True
 
@@ -278,14 +276,14 @@ def gate_skill_dir(skill_dir) -> Any:
         from bus.registry import list_tools
         registered = set(list_tools())
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[quarantine] 体检进不去（{type(exc).__name__}: {exc}）—— 这次不拦")
+        print(f"[quarantine] health check could not run ({type(exc).__name__}: {exc}) - not blocking this time")
         return None
     try:
         diag = SD.examine(skill_dir, registered_names=registered)
     except Exception as exc:                                    # noqa: BLE001
         # 体检器自己炸了，不拦
         # （体检是给"别人写坏了"用的，它自己出问题不该连累用户）。
-        print(f"[quarantine] 体检炸了（{type(exc).__name__}: {exc}）—— 这次不拦")
+        print(f"[quarantine] health check crashed ({type(exc).__name__}: {exc}) - not blocking this time")
         return None
 
     hit, reason = should_quarantine(diag)
@@ -295,7 +293,7 @@ def gate_skill_dir(skill_dir) -> Any:
                        reason=reason, path=getattr(diag, "path", ""),
                        detail="；".join("%s: %s" % (f.code, f.message)
                                        for f in diag.by_severity("fail")))
-    print(describe(entry) + " —— **本次不装载**")
+    print(describe(entry) + " - not loaded this time")
     return diag
 
 
@@ -326,13 +324,12 @@ def review_static_quarantines(skills_dir: str | Path = "skills") -> list[str]:
         try:
             diag = gate_probe(pkg)
         except Exception as exc:                        # noqa: BLE001
-            print(f"[quarantine] 重判 '{owner}' 时出错（{type(exc).__name__}: {exc}）"
-                  f" —— 维持屏蔽")
+            print(f"[quarantine] re-judging '{owner}' failed ({type(exc).__name__}: {exc}) - keeping quarantine")
             continue
         if diag is None:                                # 体检过了，放它出来
             release(owner)
             out.append(owner)
-            print(f"[quarantine] '{owner}' 这次体检过了 —— **已解封**，本次会正常装载")
+            print(f"[quarantine] '{owner}' passed health check - unquarantined, will load normally")
     return out
 
 
@@ -347,7 +344,7 @@ def gate_probe(skill_dir) -> Any:
         from bus.registry import list_tools
         diag = SD.examine(skill_dir, registered_names=set(list_tools()))
     except Exception as exc:                            # noqa: BLE001
-        print(f"[quarantine] 体检进不去（{type(exc).__name__}: {exc}）—— 这次不判")
+        print(f"[quarantine] health check could not run ({type(exc).__name__}: {exc}) - not judging this time")
         return None
     return diag if should_quarantine(diag)[0] else None
 

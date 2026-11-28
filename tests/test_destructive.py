@@ -373,6 +373,15 @@ _DESTRUCTIVE_TRUE = frozenset({
     #   `scripts/measure_request.boot_registry` 没注册出站工具，
     #   于是这三个"枚举全注册表"的读者都少算了一个。补注册之后才照出来。
     "send_outbound",
+    # SSH 三件（决定 5/§7）：
+    #   ssh_exec - 远端执行能改配置、删文件、装东西；
+    #   ssh_upload - 本地文件外发（读出即收不回）；
+    #   ssh_download - 会覆盖本地同名文件。
+    # 三件都在 _APPROVAL_CAPABLE_TOOLS 里（自己的审批发射点），闸跳过它们。
+    "ssh_exec", "ssh_upload", "ssh_download", "ssh_forward",
+    # 技能配置写（P3）：写的是持久安全配置（口令/密码）——
+    # 它没有自己的审批发射点，靠兜底闸先问一次。
+    "skill_config_write",
 })
 
 
@@ -429,7 +438,9 @@ def test_the_gate_blast_radius_is_exactly_five():
     assert hits == ["cron_create", "cron_delete", "memory_delete",
                     "recalculate_excel_formulas",
                     "remove_excel_duplicates", "run_program",
-                    "send_email", "send_outbound"], (
+                    "send_email", "send_outbound",
+                    # P3：技能配置写（写持久安全配置，靠兜底闸每次问）
+                    "skill_config_write"], (
         "闸一落地就会问这几个工具：%r\n"
         "  （期望 ['cron_create', 'cron_delete', 'recalculate_excel_formulas', "
         "'remove_excel_duplicates', 'send_email']）\n"

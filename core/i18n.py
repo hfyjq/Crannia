@@ -131,7 +131,7 @@ def _pack(lang: str) -> dict:
             raise ValueError("top level is %s, not an object" % type(data).__name__)
         data = {str(k): str(v) for k, v in data.items() if isinstance(v, str)}
     except Exception as exc:                       # noqa: BLE001
-        print("[i18n] %s 读不出来，回落中文：%s: %s"
+        print("[i18n] %s unreadable, falling back to zh: %s: %s"
               % (p, type(exc).__name__, exc))
         data = {}
     with _lock:
@@ -255,7 +255,7 @@ def current() -> str:
         lang = DEFAULT_LANG
         if not _cache["bad_noted"]:
             _cache["bad_noted"] = True
-            print("[i18n] 设置里的 %s=%r 认不出 —— 按中文处理"
+            print("[i18n] setting %s=%r not recognized - treating as zh"
                   % (SETTING_KEY, code))
     with _lock:
         _cache["cur"].update(mtime=mtime, lang=lang)

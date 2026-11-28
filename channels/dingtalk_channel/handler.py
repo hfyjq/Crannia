@@ -56,7 +56,7 @@ def _report_future_error(fut: Any) -> None:
     except Exception:                                             # noqa: BLE001
         return
     if exc is not None:
-        print("[dingtalk] 处理这条消息时抛了异常（这一条没能进入管线）：%s: %s"
+        print("[dingtalk] exception while handling message (not entering pipeline): %s: %s"
               % (type(exc).__name__, exc))
 
 
@@ -236,7 +236,7 @@ class DingTalkChannel(Channel):
     def _dispatch(self, info: dict) -> None:
         """把一条消息投递到主循环（SDK 线程里只做这一步）。"""
         if not self._main_loop or not self._running:
-            print("[dingtalk] 通道还没就绪（main_loop/running），这条消息丢了：type=%s"
+            print("[dingtalk] channel not ready (main_loop/running), message dropped: type=%s"
                   % (info.get("msgtype") or "?"))
             return
         try:
@@ -244,11 +244,11 @@ class DingTalkChannel(Channel):
             # 没人取的 Future 等于没报错 —— 见 `_report_future_error`。
             fut.add_done_callback(_report_future_error)
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 投递事件失败（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] failed to dispatch event ({type(exc).__name__}: {exc})")
 
     async def _handle(self, info: dict) -> None:
         """主循环上的处理：建链子 → 取附件 → 提交事件 → 管线。"""
-        print("[dingtalk] 收到消息 type=%s conv_type=%s group=%s"
+        print("[dingtalk] message received type=%s conv_type=%s group=%s"
               % (info.get("msgtype") or "?",
                  info.get("conversation_type") or "?",
                  bool(info.get("is_group"))))
@@ -256,7 +256,7 @@ class DingTalkChannel(Channel):
         if chain.is_empty:
             if info.get("msgtype") == "text":
                 return                    # 空文字消息：不打扰模型
-            print("[dingtalk] 收到一条没有可用内容的消息（type=%s）"
+            print("[dingtalk] message has no usable content (type=%s)"
                   % (info.get("msgtype") or "?"))
             return
 
@@ -315,13 +315,13 @@ class DingTalkChannel(Channel):
         if response.strip():
             ok = self._send_webhook(info, response)
             if not ok:
-                print("[dingtalk] 这一轮的回答没能送到（webhook 失败，见上一条日志）")
+                print("[dingtalk] reply not delivered (webhook failed, see previous log)")
         # 本轮登记要发的文件 —— 排在回复之后（判据见 `core/delivery_outbox`：
         #   工具只登记，通道在自己的循环里发；用户先看到那句话，再收到附件）。
         try:
             self._drain_delivered(event.session, info)
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 发待交付文件时出错（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] error sending pending delivery files ({type(exc).__name__}: {exc})")
 
     # ------------------------------------------------------------------
     # 出站：回复（sessionWebhook）
@@ -338,7 +338,7 @@ class DingTalkChannel(Channel):
 
         hook = str((info or {}).get("session_webhook") or "")
         if not hook:
-            print("[dingtalk] 这条消息没有 sessionWebhook，回不了")
+            print("[dingtalk] message has no sessionWebhook, cannot reply")
             return False
         #: 群里 @ 提问的人（单聊里这个字段无害，但没必要带）
         at_ids = []
@@ -353,11 +353,11 @@ class DingTalkChannel(Channel):
                 resp = requests.post(hook, json=payload, timeout=15,
                                      proxies=_np.requests_proxies())
             except Exception as exc:                              # noqa: BLE001
-                print(f"[dingtalk] 回复出错（{type(exc).__name__}: {exc}）")
+                print(f"[dingtalk] reply error ({type(exc).__name__}: {exc})")
                 ok = False
                 continue
             if resp.status_code != 200:
-                print("[dingtalk] 回复被拒（HTTP %d）：%s"
+                print("[dingtalk] reply rejected (HTTP %d): %s"
                       % (resp.status_code, (resp.text or "")[:200]))
                 ok = False
                 continue
@@ -366,7 +366,7 @@ class DingTalkChannel(Channel):
             except ValueError:
                 body = {}
             if int((body or {}).get("errcode") or 0) != 0:
-                print("[dingtalk] 回复被拒（errcode=%s %s）"
+                print("[dingtalk] reply rejected (errcode=%s %s)"
                       % (body.get("errcode"), body.get("errmsg", "")))
                 ok = False
         return ok
@@ -388,7 +388,7 @@ class DingTalkChannel(Channel):
         try:
             await asyncio.to_thread(self._drain_delivered, session, None)
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 发待交付文件时出错（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] error sending pending delivery files ({type(exc).__name__}: {exc})")
         return ok
 
     async def send_note(self, session: MessageSession, text: str,
@@ -413,12 +413,12 @@ class DingTalkChannel(Channel):
             return False
         # 没配凭据，不联网、直接说没送到（测试与"没配"这条路都不该打网络）
         if not self._app_key or not self._app_secret:
-            print("[dingtalk] 没配 app_key / app_secret，主动推送发不出去")
+            print("[dingtalk] app_key / app_secret not configured, cannot push proactively")
             return False
         try:
             token = self._access_token()
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 拿不到 access token（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] failed to get access token ({type(exc).__name__}: {exc})")
             return False
 
         is_group = session.message_type == MessageType.GROUP
@@ -446,14 +446,14 @@ class DingTalkChannel(Channel):
                          "Content-Type": "application/json"},
                 proxies=_np.requests_proxies())
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 调 OpenAPI 出错（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] OpenAPI call error ({type(exc).__name__}: {exc})")
             return False
         try:
             payload = resp.json()
         except ValueError:
             payload = {}
         if resp.status_code != 200 or (payload or {}).get("code"):
-            print("[dingtalk] 发送被拒（HTTP %d）：%s"
+            print("[dingtalk] send rejected (HTTP %d): %s"
                   % (resp.status_code, (resp.text or "")[:200]))
             return False
         return True
@@ -481,26 +481,26 @@ class DingTalkChannel(Channel):
         """上传拿 media_id，再用机器人的 `sampleImageMsg` / `sampleFile` 发出去。"""
         p = Path(str(file_path or ""))
         if not p.is_file():
-            print("[dingtalk] 要发的文件不存在：%s" % (file_path or "（空）"))
+            print("[dingtalk] file to send does not exist: %s" % (file_path or "(empty)"))
             return False
         if not self._app_key or not self._app_secret:
-            print("[dingtalk] 没配 app_key / app_secret，附件发不出去")
+            print("[dingtalk] app_key / app_secret not configured, cannot send attachment")
             return False
         name = filename or p.name
         try:
             data = p.read_bytes()
         except OSError as exc:
-            print(f"[dingtalk] 读不出要发的文件（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] cannot read file to send ({type(exc).__name__}: {exc})")
             return False
         if len(data) > dt_media.MAX_UPLOAD_BYTES:
-            print("[dingtalk] 文件太大（%d 字节 > %d），没有上传：%s"
+            print("[dingtalk] file too large (%d bytes > %d), not uploaded: %s"
                   % (len(data), dt_media.MAX_UPLOAD_BYTES, name))
             return False
         kind = dt_media.kind_for(name)
         try:
             token = self._access_token()
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 拿不到 access token（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] failed to get access token ({type(exc).__name__}: {exc})")
             return False
         media_id = self._upload_media(data, kind, name, token)
         if not media_id:
@@ -512,7 +512,7 @@ class DingTalkChannel(Channel):
         body["robotCode"] = self._app_key
         ok = self._post_robot(path, body, token)
         if ok:
-            print("[dingtalk] 附件已发送：%s（%s）" % (name, kind))
+            print("[dingtalk] attachment sent: %s (%s)" % (name, kind))
         return ok
 
     def _upload_media(self, data: bytes, kind: str, name: str,
@@ -539,10 +539,10 @@ class DingTalkChannel(Channel):
                 files={"media": (name, data, mime)},
                 timeout=120, proxies=_np.requests_proxies())
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 附件上传出错（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] attachment upload error ({type(exc).__name__}: {exc})")
             return ""
         if resp.status_code != 200:
-            print("[dingtalk] 附件上传被拒（HTTP %d）：%s"
+            print("[dingtalk] attachment upload rejected (HTTP %d): %s"
                   % (resp.status_code, (resp.text or "")[:200]))
             return ""
         try:
@@ -550,12 +550,12 @@ class DingTalkChannel(Channel):
         except ValueError:
             body = {}
         if int((body or {}).get("errcode") or 0) != 0:
-            print("[dingtalk] 附件上传被拒（errcode=%s %s）"
+            print("[dingtalk] attachment upload rejected (errcode=%s %s)"
                   % (body.get("errcode"), body.get("errmsg", "")))
             return ""
         media_id = str((body or {}).get("media_id") or "")
         if not media_id:
-            print("[dingtalk] 附件上传没拿到 media_id：%s" % (str(body)[:200],))
+            print("[dingtalk] attachment upload got no media_id: %s" % (str(body)[:200],))
         return media_id
 
     def _drain_delivered(self, session: MessageSession, info: dict | None) -> None:
@@ -575,7 +575,7 @@ class DingTalkChannel(Channel):
                 channel="dingtalk_channel",
                 user_id=str(getattr(session, "session_id", "") or ""))
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[dingtalk] 取待发文件失败（{type(exc).__name__}: {exc}）")
+            print(f"[dingtalk] failed to fetch pending files ({type(exc).__name__}: {exc})")
             return
         for rec in recs:
             if self._send_media_sync(session, rec.get("path", ""),
@@ -668,23 +668,23 @@ class DingTalkChannel(Channel):
             try:
                 data = await asyncio.to_thread(self._download_file, code)
             except Exception as exc:                              # noqa: BLE001
-                print(f"[dingtalk] 取附件失败（{type(exc).__name__}: {exc}）")
+                print(f"[dingtalk] failed to fetch attachment ({type(exc).__name__}: {exc})")
                 continue
             if not data:
-                print("[dingtalk] 取回来的附件是空的（kind=%s code=%s…）"
+                print("[dingtalk] fetched attachment is empty (kind=%s code=%s...)"
                       % (kind, str(code)[:8]))
                 continue
             if len(data) > dt_media.MAX_DOWNLOAD_BYTES:
-                print("[dingtalk] 附件太大（%d 字节），没有下载：%s"
+                print("[dingtalk] attachment too large (%d bytes), not downloaded: %s"
                       % (len(data), code))
                 continue
             name = getattr(comp, "name", "") or ""
             try:
                 path = await asyncio.to_thread(self._save_media, data, kind, code, name)
             except Exception as exc:                              # noqa: BLE001
-                print(f"[dingtalk] 附件落盘失败（{type(exc).__name__}: {exc}）")
+                print(f"[dingtalk] failed to save attachment ({type(exc).__name__}: {exc})")
                 continue
             comp.local_path = str(path)
             if hasattr(comp, "size_bytes"):
                 comp.size_bytes = len(data)
-            print("[dingtalk] 附件已落盘：%s（%d 字节）" % (path.name, len(data)))
+            print("[dingtalk] attachment saved: %s (%d bytes)" % (path.name, len(data)))

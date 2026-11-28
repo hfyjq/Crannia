@@ -114,17 +114,17 @@ def run(provider, messages, *, session_id: str, directive: str, header: str,
         resp = provider.chat(payload, tools, system=system,
                              thinking=thinking_for(session_id))
     except Exception as exc:                       # noqa: BLE001 —— 不吞错：原样报
-        print(f"[{tag}] 失败：{type(exc).__name__}: {exc}")
+        print(f"[{tag}] failed: {type(exc).__name__}: {exc}")
         return f"#{tag}-回复异常"
 
     text = (getattr(resp, "content", "") or "").strip()
     if not text:
         # 静默返回"没有回应"的原形就是这个分支 ——
         #   用户看不出是模型没说话还是框架坏了。
-        print(f"[{tag}] 空回答（模型只回了工具调用或空白）")
+        print(f"[{tag}] empty reply (model returned only tool calls or blank)")
         return f"#{tag}-模型没有给出回复，可在主对话重试"
 
     if len(text) > MAX_CHARS:
         text = text[:MAX_CHARS].rstrip() + " …（截断）"
-    print(f"[{tag}] 回了 {len(text)} 字符")
+    print(f"[{tag}] replied {len(text)} chars")
     return f"{header}\n{text}"

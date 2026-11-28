@@ -163,7 +163,7 @@ def _load_cost_table() -> tuple[dict, dict]:
                 if isinstance(row, dict):
                     lookup[(str(prov), str(name))] = row
     except Exception as exc:  # noqa: BLE001 —— 见上：坏掉只是"一律未定价"
-        print(f"[cost] 价格表读不了（一律按未定价处理）：{type(exc).__name__}: {exc}")
+        print(f"[cost] failed to read price table (treating all as unpriced): {type(exc).__name__}: {exc}")
         table, lookup = {}, {}
     _cost_table, _cost_lookup = table, lookup
     return table, lookup
@@ -291,20 +291,20 @@ def record_token_usage(prompt: int, completion: int,
     calls = _token_counter["api_calls"]
     if not _cache_probe_done and cache_hit is not None:
         _cache_probe_done = True
-        print(f"[cache] 上游报了缓存字段：本次命中 {cache_hit} / 输入 {prompt}"
-              f" —— 命中率指标可用")
+        print(f"[cache] upstream reported cache fields: this hit {cache_hit} / input {prompt}"
+              f" -- hit-rate metric available")
     if calls % _CACHE_REPORT_EVERY == 0:
         _rp = _token_counter["cache_reported_prompt_tokens"]
         if _rp > 0:
             _ht = _token_counter["cache_hit_tokens"]
-            print(f"[cache] 第 {calls} 次调用 · 本次输入 {prompt:,} · 累计命中 "
+            print(f"[cache] call #{calls} · this input {prompt:,} · cumulative hit "
                   f"{_ht:,}/{_rp:,} = {_ht / _rp:.1%}"
-                  f"（{_token_counter['cache_reported_calls']}/{calls} 次上游报了）")
+                  f" ({_token_counter['cache_reported_calls']}/{calls} calls reported)")
         else:
-            print(f"[cache] 第 {calls} 次调用 · 本次输入 {prompt:,} · 上游一次都没报缓存字段"
-                  "（prompt_tokens_details.cached_tokens / prompt_cache_hit_tokens /"
-                  " cache_read_input_tokens 三个都没有）"
-                  " ⇒ 这个 provider 量不到命中率，**不是命中 0**")
+            print(f"[cache] call #{calls} · this input {prompt:,} · upstream never reported cache fields"
+                  " (none of prompt_tokens_details.cached_tokens / prompt_cache_hit_tokens /"
+                  " cache_read_input_tokens)"
+                  " -> this provider cannot measure hit rate, NOT a hit of 0")
 
     if _token_counter_started == 0.0:
         _token_counter_started = time.time()
@@ -746,10 +746,10 @@ def log_context_overflow(model: str, err: object, *, where: str = "") -> None:
     与 `[cache]` / `[calibrator]` 同款，走 `print`，只到 stdout
     （落盘属于另一层的工作，不在这里顺手做）。
     """
-    print(f"[overflow] 上游报「请求超长」（model={model}"
-          f"{', ' + where if where else ''}）—— "
-          f"**重试 / 换 key 对它无效**（不是权限也不是限流），需要压缩或裁剪。"
-          f" 原文: {str(err)[:300]}")
+    print(f"[overflow] upstream reports request too long (model={model}"
+          f"{', ' + where if where else ''}) -- "
+          f"retry / switch key will not help, need compression or trimming."
+          f" raw: {str(err)[:300]}")
 
 
 def _reply_side_tokens(m: dict, count_tokens) -> int:

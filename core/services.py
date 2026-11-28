@@ -53,7 +53,7 @@ def start_for(names: Iterable[str],
             module = load(key)
         except Exception as exc:                              # noqa: BLE001
             failed.append((key, "import: %s: %s" % (type(exc).__name__, exc)))
-            print("[service] %s 装载失败：%s: %s" % (key, type(exc).__name__, exc))
+            print("[service] %s load failed: %s: %s" % (key, type(exc).__name__, exc))
             continue
         start = getattr(module, "start", None)
         if start is None:
@@ -64,17 +64,17 @@ def start_for(names: Iterable[str],
             ctx = get_context(key)
         except Exception as exc:                              # noqa: BLE001
             failed.append((key, "context: %s: %s" % (type(exc).__name__, exc)))
-            print("[service] %s 取不到上下文：%s: %s" % (key, type(exc).__name__, exc))
+            print("[service] %s context unavailable: %s: %s" % (key, type(exc).__name__, exc))
             continue
 
         # 数据版本：不兼容就不启动，并把原因说清楚。
         _chk = ctx.check_data(getattr(module, "migrate", None))
         if not _chk.get("ok"):
             failed.append((key, "data: " + str(_chk.get("error") or "")))
-            print("[service] %s 没启动：%s" % (key, _chk.get("error") or ""))
+            print("[service] %s not started: %s" % (key, _chk.get("error") or ""))
             continue
         if _chk.get("migrated"):
-            print("[service] %s 的数据已从 v%s 迁移到 v%s"
+            print("[service] %s data migrated from v%s to v%s"
                   % (key, _chk.get("found"), _chk.get("ours")))
 
         rec = {
@@ -92,7 +92,7 @@ def start_for(names: Iterable[str],
                 _start(_ctx)
             except Exception as exc:                          # noqa: BLE001
                 _rec["error"] = "%s: %s" % (type(exc).__name__, exc)
-                print("[service] %s 启动失败：%s: %s"
+                print("[service] %s start failed: %s: %s"
                       % (_key, type(exc).__name__, exc))
 
         thread = threading.Thread(target=_run, daemon=True,
@@ -102,7 +102,7 @@ def start_for(names: Iterable[str],
             _SERVICES[key] = rec
         thread.start()
         started.append(key)
-        print("[service] 已启动 %s" % key)
+        print("[service] started %s" % key)
     return {"started": started, "skipped": skipped, "failed": failed}
 
 
@@ -118,13 +118,13 @@ def stop_all(timeout: float = STOP_TIMEOUT) -> list:
             try:
                 stop(rec.get("ctx"))
             except Exception as exc:                          # noqa: BLE001
-                print("[service] %s 停止失败：%s: %s"
+                print("[service] %s stop failed: %s: %s"
                       % (name, type(exc).__name__, exc))
         thread = rec.get("thread")
         if thread is not None:
             thread.join(timeout)
         names.append(name)
-        print("[service] 已停止 %s" % name)
+        print("[service] stopped %s" % name)
     return names
 
 

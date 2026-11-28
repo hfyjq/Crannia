@@ -210,6 +210,7 @@ _GOV_INTL: tuple[str, ...] = (
     "bls.gov",
     "bea.gov",
     "federalreserve.gov",
+    "fred.stlouisfed.org",                    # 圣路易斯联储 FRED：序列级宏观/市场数据
     "eur-lex.europa.eu",
     "law.cornell.edu",
     "sec.gov",
@@ -234,8 +235,12 @@ _PLATFORM: tuple[str, ...] = (
     # 办公平台的开放平台 —— 只收开发者文档，不收办公内容
     # （文档 / 表格 / 会话全要登录，抓回来是登录页，理由同表 4）
     "open.feishu.cn",
+    "open.larksuite.com",                     # 飞书国际版 Lark 的开放平台
     "open.dingtalk.com",
-    "developer.work.weixin.qq.com",
+    "developer.work.weixin.qq.com",           # 企业微信开发者文档
+    "developers.weixin.qq.com",               # 微信开发者文档（小程序 / 智能对话 / 开放平台）
+    "open.weixin.qq.com",                     # 微信开放平台入口
+    "core.telegram.org",                      # Telegram Bot API 官方文档
     "developers.notion.com",
     "api.slack.com",
     "developers.zoom.us",
@@ -275,10 +280,61 @@ _FINANCE_CN: tuple[str, ...] = (
     "eastmoney.com",
 )
 
-#: 八张表拼成一张查询集 —— 对外只有一个名字，分表只是让每一份能说清自己管什么。
+#: 表 9｜系统与硬件文档
+#:
+#: 负责：装驱动 / 配开发机 / 查系统调用时用户会贴的官方站 —— 显卡与芯片厂商
+#:       的驱动下载页、Linux 内核与 man pages、单板机文档、创意软件帮助中心、
+#:       游戏平台的开发者文档、开放地图与路线规划的文档/接口。
+#: 不收：第三方驱动下载站（驱动精灵、各种"驱动下载"聚合站）、论坛与问答
+#:       （内容随时变、也不是官方口径）、需要登录才看得到的开发者后台
+#:       （partner.steamgames.com 的登录区抓回来是登录页，但它的公开文档页
+#:        与 Valve 开发者 wiki 是事实标准，故收）。
+#: 中文站与英文站内容同源，但域名是不同身份，逐条列（本表不做子域/别名推导）。
+_SYSTEM_HW: tuple[str, ...] = (
+    # 显卡与芯片厂商驱动（含中文站，域名是不同身份）
+    "nvidia.com",
+    "nvidia.cn",
+    "amd.com",
+    "intel.com",
+    "intel.cn",
+    # 单板机 / 嵌入式开发板（官网与文档子域各自是独立身份，逐条列）
+    "raspberrypi.com",
+    "docs.nvidia.com",                        # Jetson 官方文档（nvidia.com 精确匹配不覆盖子域）
+    "developer.nvidia.com",                   # Jetson 开发者下载区
+    "arduino.cc",
+    "docs.arduino.cc",
+    "st.com",                                 # STM32 Nucleo 官方页（www 形式另列）
+    "www.st.com",
+    "beagleboard.org",                        # BeagleBone 官方站
+    "www.beagleboard.org",
+    "beaglebone.org",                         # 官方别名（301 到 beagleboard.org）
+    "pjrc.com",                               # Teensy 官方站（PJRC）
+    "www.pjrc.com",
+    # Linux / GNU 核心文档
+    "kernel.org",
+    "man7.org",
+    "gnu.org",
+    # Android 源码（developer.android.com 已在表 6）
+    "source.android.com",
+    # HarmonyOS 官网（开发者入口 developer.huawei.com 已在表 6）
+    "harmonyos.com",
+    # 创意软件帮助中心
+    "adobe.com",
+    "helpx.adobe.com",
+    # 游戏平台开发者文档 / 文献库
+    "partner.steamgames.com",
+    "developer.valvesoftware.com",
+    # 开放地图与路线规划（实测 web_fetch 能抓正文/JSON；
+    #   百度/高德地图界面是 JS 壳 + 人机验证，不收）
+    "openstreetmap.org",                      # 地点/POI/坐标的文字结果
+    "project-osrm.org",                       # OSRM 路线规划 API 文档
+    "router.project-osrm.org",                # 路线规划 API：返回距离/时长 JSON
+)
+
+#: 九张表拼成一张查询集 —— 对外只有一个名字，分表只是让每一份能说清自己管什么。
 PREAPPROVED_HOSTS: tuple[str, ...] = (
     _PROGRAMMING + _ACADEMIC + _REFERENCE + _GOV_CN + _GOV_INTL + _PLATFORM
-    + _ARTS + _FINANCE_CN
+    + _ARTS + _FINANCE_CN + _SYSTEM_HW
 )
 
 #: 带路径的条目 —— 做法是 `host + 路径前缀`。

@@ -188,8 +188,7 @@ class SessionMemory:
         也不落半截摘要。
         """
         if not note.strip():
-            print(f"[memory] 拒绝用空内容覆盖会话笔记 ({session_id}) —— "
-                  f"上一次的笔记保持不动")
+            print(f"[memory] refused to overwrite session notes with empty content ({session_id}) - previous notes left unchanged")
             return
 
         note_path = self.get_note_path(session_id)

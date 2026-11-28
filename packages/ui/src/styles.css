@@ -1,4 +1,4 @@
-:root{font-family:"DM Sans","Microsoft YaHei UI","Microsoft YaHei","Noto Sans CJK SC",sans-serif;color:var(--c-app-fg-02);background:var(--c-app-bg-48);font-synthesis:none;-webkit-font-smoothing:antialiased;--ink:var(--th-box-fg);--muted:#829086;--line:#e0e9e1;--side:var(--th-side-bg);--mint:#dcefe1;--green:#4d9a5d;--green-dark:#2e7442;--clay:#a76d42;--c-warn-bg:#fff8e1;--c-warn-line:#e8c96a;--c-warn-fg:#6b5200;
+:root{font-family:"DM Sans","Microsoft YaHei UI","Microsoft YaHei","Noto Sans CJK SC",sans-serif;color:var(--c-app-fg-02);background:var(--c-app-bg-48);font-synthesis:none;-webkit-font-smoothing:antialiased;--ink:var(--th-box-fg);--muted:#829086;--line:#e0e9e1;--side:var(--th-side-bg);--mint:#dcefe1;--green:#4d9a5d;--green-dark:#2e7442;--clay:#a76d42;--c-code-lang-fg:#b4642c;--c-warn-bg:#fff8e1;--c-warn-line:#e8c96a;--c-warn-fg:#6b5200;
   /* ══ 六个主题轴（GUI 的 `theme.js` 只改这六行）══
      它们被下面那六个令牌引用（`--c-*: var(--th-*)`），所以改这里
        那六个落点跟着变；默认值与原有观感逐字相等，不动就一个像素都不变。
@@ -1317,7 +1317,19 @@ h4.md-h,h5.md-h,h6.md-h{font-size:13.5px}
 .md-list li{margin:2px 0}
 .md-icode{padding:1px 4px;border-radius:4px;background:var(--c-app-bg-26);color:var(--c-accent-fg-07);
   font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;font-size:.92em}
-.md-pre{margin:8px 0;padding:9px 11px;border:1px solid var(--c-app-line-14);border-radius:8px;
+/* 代码块：语言标签 + 复制按钮挂在代码上方的窄条里，不挤占代码正文。
+   按钮失败也要看得见（与消息级 .msg-act 同一条纪律）。 */
+.md-codewrap{margin:8px 0;position:relative}
+.md-codebar{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:0 2px 3px;min-height:18px}
+.md-codelang{font-size:10.5px;color:var(--c-code-lang-fg);
+  font-family:ui-monospace,Consolas,"Cascadia Mono",monospace}
+.md-copy{margin-left:auto;display:inline-flex;align-items:center;gap:4px;
+  background:transparent;border:0;color:var(--c-app-fg-31);
+  font-size:11px;cursor:pointer;padding:2px 5px;border-radius:5px}
+.md-copy:hover{background:var(--c-app-bg-26);color:var(--c-app-fg-08)}
+.md-copying{font-size:10.5px;color:var(--c-app-fg-31)}
+.md-pre{margin:0;padding:9px 11px;border:1px solid var(--c-app-line-14);border-radius:8px;
   background:var(--c-app-bg-47);overflow:auto}
 .md-pre code{font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;
   font-size:12px;line-height:1.55;white-space:pre;color:var(--c-app-fg-07)}
@@ -2067,6 +2079,13 @@ h4.md-h,h5.md-h,h6.md-h{font-size:13.5px}
   border:1px solid var(--c-danger-line-04);color:var(--c-danger-fg-04);font-size:12px;line-height:1.5}
 .ep-probe{margin:0;font-size:12px;color:var(--c-app-fg-12);overflow-wrap:anywhere;
   background:var(--c-app-bg-40);border-radius:7px;padding:7px 10px}
+/* 结论来自 llm_errors.explain：那是多行文案（发生了什么 / 下一步 / 原文）。 */
+.ep-probe p{margin:0;white-space:pre-line;line-height:1.55}
+.ep-probe details{margin-top:6px}
+.ep-probe summary{cursor:pointer;opacity:.75;font-size:11.5px}
+.ep-probe pre{margin:4px 0 0;padding:6px 8px;max-height:160px;overflow:auto;
+  white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;
+  background:var(--c-app-bg-40);border-radius:5px}
 .ep-probe.ok{color:var(--c-accent-fg-09);background:var(--c-app-bg-34)}
 .ep-probe.bad{color:var(--c-danger-fg-04);background:var(--c-danger-bg-13)}
 .ep-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -2587,6 +2606,7 @@ code.le-val{font-size:12.5px}
   --green: #a3c8aa;
   --green-dark: #8ac39a;
   --clay: #cdb29e;
+  --c-code-lang-fg: #e6ab81;
   --c-warn-bg: #201b09;
   --c-warn-line: #47402a;
   --c-warn-fg: #eec22f;
@@ -3103,3 +3123,20 @@ code.le-val{font-size:12.5px}
   white-space:pre-wrap;word-break:break-word}
 .btw-wait{display:inline-flex;align-items:center;gap:7px;color:var(--c-app-fg-18)}
 .btw-spin{animation:ui-spin 1.1s linear infinite;color:var(--c-accent-fg-45)}
+
+/* 网络请求凭据子页（`NetCreds.jsx`）—— 两栏：左条目、右编辑。 */
+.settings.netcreds{padding:18px 22px}
+.netcreds-body{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;margin-top:12px}
+.netcreds-list{display:flex;flex-direction:column;gap:6px}
+.netcreds-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:transparent;
+  color:inherit;cursor:pointer;text-align:left}
+.netcreds-item.on{border-color:var(--green)}
+.netcreds-item span{opacity:.7;font-size:12px}
+.netcreds-edit{display:flex;flex-direction:column;gap:10px}
+.netcreds-edit label{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.netcreds-edit input,.netcreds-edit textarea{
+  padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+  background:var(--c-app-bg-48);color:inherit;font:inherit}
+.netcreds-actions{display:flex;gap:8px}
+@media (max-width: 720px){.netcreds-body{grid-template-columns:1fr}}

@@ -37,11 +37,18 @@ import time
 from pathlib import Path
 
 __all__ = [
-    "SETTING_KEY", "MAX_RECORDS", "FIELD_CAP", "enabled", "record_tool",
-    "record_thinking", "snapshot", "reset", "clear_all", "stats",
+    "SETTING_KEY", "MAX_RECORDS", "FIELD_CAP", "PAUSED", "enabled",
+    "record_tool", "record_thinking", "snapshot", "reset", "clear_all", "stats",
 ]
 
 SETTING_KEY = "trace_full"
+
+#: 暂停开关：GUI 先不放出去（2026-11-28 用户决定，优化后再放出）。
+#:
+#: 暂停期间 `enabled()` 恒 False —— 不记录，`/api/status` 也报 false，
+#: 右侧竖栏那一格与设置页的开关因此一起隐去。要放回来：把它改回 False
+#: 并恢复设置页那一行。
+PAUSED = True
 
 #: 每个会话最多留几条（200 条 × 4k ≈ 800KB，够回答"刚才那几步"）。
 MAX_RECORDS = 200
@@ -65,10 +72,12 @@ _seq: dict[str, int] = {}
 
 
 def enabled() -> bool:
-    """开关。读不到 / 坏值，关（默认不打扰）。
+    """开关。读不到 / 坏值，关（默认不打扰）。暂停期间恒关。
 
     每次现读：设置页改完当场生效，不要求重启。
     """
+    if PAUSED:
+        return False
     try:
         raw = json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
         return raw.get(SETTING_KEY) is True

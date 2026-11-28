@@ -674,13 +674,19 @@ def classify_command(command: str, *,
         if _official_toolchain_installer(seg):
             continue
         name = egress[0]
-        return TIER_DENY, (
-            f"`{name}` 是出网类命令，框架不执行它 —— "
-            f"这一档是**确定性拒绝**（不问），因为出网地板"
-            f"（非公网目标一律拒）只对框架自己的联网工具生效，"
-            f"放开 `{name}` 等于把地板绕过去。"
-            f"要用网络请改用 `web_fetch`。"
-        )
+        # 话术按族取路线（core/egress_channels.py 的 DENY_ROUTES）。
+        # 只承诺注册着的工具；路线表覆盖全集由 tests/test_egress_channels.py
+        # 钉着。导入放函数里：只有真要拒时才生成话术。
+        try:
+            from core.egress_channels import deny_message
+            return TIER_DENY, deny_message(name)
+        except Exception as exc:                   # noqa: BLE001
+            print(f"[command_policy] route table unavailable ({type(exc).__name__}: {exc}) - falling back to generic text")
+            return TIER_DENY, (
+                f"`{name}` 是出网类命令，框架不执行它 - "
+                f"这一档是确定性拒绝（不问）。"
+                f"要用网络请改用 `web_fetch`。"
+            )
 
     if relax_guarded:
         return TIER_ALLOW, ""

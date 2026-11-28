@@ -228,6 +228,31 @@ def test_arm_in_full_access_but_not_manual():
         AT.forget()
 
 
+def test_cap_evicts_only_idle():
+    """超上限时只淘汰空闲格 —— 挂着定时器的绝不丢。
+
+    判据：可淘汰的必须是"下一轮 `remember()` 会重新写回来的那种"，
+    不是还没结算的审批。白盒那半（直接置 `timer`）是有意的：
+    `arm()` 要真 loop + 模式 + 设置，而这里要钉的只有淘汰谓词。
+    """
+    with sandbox():
+        _fresh_bad_note()
+        AT.forget()
+        n = AT.MAX_SESSIONS
+        for i in range(n):
+            AT.remember("cap:%d" % i, object())
+        first = "cap:0"
+        AT._timers[first]["timer"] = _Handle()      # 模拟"还没结算的审批"
+        check("先填满到上限", len(AT._timers) == n, str(len(AT._timers)))
+
+        AT.remember("cap:new", object())
+        check("超上限 -> 回落到上限", len(AT._timers) <= n, str(len(AT._timers)))
+        check("★★ 挂着定时器的那格**不许**被淘汰", first in AT._timers, "")
+        check("★ 当前会话自己留下", "cap:new" in AT._timers, "")
+        check("淘汰的是别的空闲格", "cap:1" not in AT._timers, "")
+        AT.forget()
+
+
 def main() -> int:
     tests = [
         test_default_when_absent,
@@ -238,6 +263,7 @@ def main() -> int:
         test_should_arm_in_auto_and_full_access,
         test_arm_and_cancel_and_forget,
         test_arm_in_full_access_but_not_manual,
+        test_cap_evicts_only_idle,
     ]
     before = prod_snapshot()
     for fn in tests:

@@ -374,6 +374,15 @@ class PreparedImage:
 # 可认的标记"。两者是同一条：别让类型成为语义。
 
 
+class TrustedText(str):
+    """框架自己写的一段回执文本 —— 不进 `<user_document>` 隔离。
+
+    只给"整段都是框架的话"的回执用（按键/点击/滚动/按住这类动作回执）。
+    判据：不含任何应用/第三人写的内容 —— 窗口标题、元素树、搜索框名字
+    都不能进；那些仍然走隔离。误标的后果是把不可信内容当成了框架的话。
+    """
+
+
 @dataclass
 class ImageToolResult:
     """工具回执里带图时的形状：一段文本 + N 张已经归一化好的图。
@@ -392,22 +401,19 @@ class ImageToolResult:
     text: str = ""
     #: 已经归一化 + 落盘的图。0 张 = 这就是一条普通的文本回执。
     prepared: list[PreparedImage] = field(default_factory=list)
+    #: 这段文本是不是框架自己的话（见 `TrustedText`）。
+    trusted_text: bool = False
+    #: 框架自己的前置段（读数 / 建议 / 下一步）—— 在 `<user_document>` 之外。
+    #: `text` 那一半仍按不可信内容处理（窗口标题 / 元素树 / 搜索框名字）。
+    trusted_prefix: str = ""
 
     @property
     def blocks(self) -> list[dict]:
         """发到 wire 上的那串块（OpenAI 形状，见模块 docstring 判据 1）。"""
         return [p.block for p in self.prepared]
 
-    def render(self) -> str:
-        """文本部分 = 调用方给的话 + 每张图一行说明 + 它自己的 notes。
-
-        判据 3（超了要说）：`PreparedImage.notes`（已降采样 / EXIF 已剥离 /
-        动图只取首帧 / 已降质量）非空就必须进上下文 —— 空列表 = 一个
-        字节都没动，那时多说一个字都是噪声。
-        这里不写 `_POINTER_TEMPLATE` 那种指针：运行时那句话会被
-        `content_text` 再产一遍，同一张图两个指针，下一轮装回两张图
-        （`paths_in_text` 按出现次数还原）。落库那句指针由 `content_text` 一处产。
-        """
+    def render_untrusted(self) -> str:
+        """不可信那一半：正文 + 每张图一行说明 + 图自己的 notes。"""
         lines: list[str] = []
         if self.text:
             lines.append(self.text)
@@ -416,6 +422,21 @@ class ImageToolResult:
             for note in p.notes:
                 lines.append("   - %s" % note)
         return "\n".join(lines)
+
+    def render(self) -> str:
+        """文本视图 = 可信前置段 + 不可信正文（落库 / 压缩 / 回放都用它）。
+
+        判据 3（超了要说）：`PreparedImage.notes`（已降采样 / EXIF 已剥离 /
+        动图只取首帧 / 已降质量）非空就必须进上下文 —— 空列表 = 一个
+        字节都没动，那时多说一个字都是噪声。
+        这里不写 `_POINTER_TEMPLATE` 那种指针：运行时那句话会被
+        `content_text` 再产一遍，同一张图两个指针，下一轮装回两张图
+        （`paths_in_text` 按出现次数还原）。落库那句指针由 `content_text` 一处产。
+        """
+        body = self.render_untrusted()
+        if self.trusted_prefix:
+            return self.trusted_prefix + ("\n\n" + body if body else "")
+        return body
 
 
 # 三、规范化
@@ -808,7 +829,7 @@ def prepare_chain(components: Iterable[Any]) -> tuple[list[PreparedImage],
                 "它们没有被处理，分开几轮发。"
                 % (rest, _human_bytes(total_bytes),
                    _human_bytes(MAX_TURN_TOTAL_BYTES)))
-            print("[image] 合计字节到顶：%s >= %s，余下 %d 张没收下"
+            print("[image] total bytes at cap: %s >= %s, %d images not taken"
                   % (_human_bytes(total_bytes),
                      _human_bytes(MAX_TURN_TOTAL_BYTES), rest))
             break
@@ -819,10 +840,10 @@ def prepare_chain(components: Iterable[Any]) -> tuple[list[PreparedImage],
         except ImageInputError as exc:
             # 两个出口，两个读者：
             #   给模型的 = 短句（进这一轮正文）；给控制台的 = 完整判据（只 print）。
-            print("[image] 第 %d 张没收下 —— %s" % (idx, exc.detail))
+            print("[image] image %d not taken - %s" % (idx, exc.detail))
             notes.append("%s（第 %d 张）" % (_NO_ACTION_BRIEF % exc.brief, idx))
         except Exception as exc:  # noqa: BLE001 —— 一张坏图不该毁掉整轮
-            print("[image] 第 %d 张没收下（%s）：%s"
+            print("[image] image %d not taken (%s): %s"
                   % (idx, type(exc).__name__, exc))
             notes.append("%s（第 %d 张，%s）"
                          % (_NO_ACTION_BRIEF % "这张图没能读出来",
@@ -1209,7 +1230,7 @@ def prepare_turn(components, *, sees_images: bool = True,
                     " 图片（视觉）能力」为「强制开启」；或者把 `config.yaml` 的"
                     " `model` 段那一行改成 `true` 或删掉它（默认就是开）。"
                     "**这一步由用户决定、用户来做 —— 你不要去改配置。**" % n)
-            print("[image] 能力闸拦下 %d 张（supports_vision 被显式关掉了）" % n)
+            print("[image] capability gate dropped %d images (supports_vision explicitly off)" % n)
             notes.append(note)
             dropped = n
         else:
@@ -1404,7 +1425,7 @@ def content_text(content: Any) -> str:
                     parts.append("[音频 %d]" % n_audio)
         return "\n".join(p for p in parts if p)
     # 认不出来的形状：不抛（一条坏消息不该毁掉整轮），但要说出来
-    print("[image] content 是认不出的类型 %s —— 按空文本处理"
+    print("[image] content has unrecognized type %s - treated as empty text"
           % type(content).__name__)
     return ""
 

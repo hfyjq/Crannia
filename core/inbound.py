@@ -174,7 +174,7 @@ def submit(*, platform: str, kind: str, session_id: str, source: str,
                 try:
                     _reply(text_out)
                 except Exception as exc:                      # noqa: BLE001
-                    print("[inbound] 回复回调失败（%s: %s）"
+                    print("[inbound] reply callback failed (%s: %s)"
                           % (type(exc).__name__, exc))
         event.reply_callback = _cb
 
@@ -187,7 +187,7 @@ def submit(*, platform: str, kind: str, session_id: str, source: str,
     if not queue(key, _job):
         #: 队列满了：这条没排上。回 `accepted: True` 就是撒谎 ——
         #:   调用方会以为投递成功，而用户什么都没等到。
-        print("[inbound] 来源 %s 的队列满了，这条没有投递" % src)
+        print("[inbound] queue for source %s is full, not delivered" % src)
         return {"accepted": False, "error": "会话队列已满，请稍后重试"}
-    print("[inbound] 来源 %s 投递了一条（%s:%s:%s）" % (src, plat, kd, sid))
+    print("[inbound] source %s delivered one (%s:%s:%s)" % (src, plat, kd, sid))
     return {"accepted": True, "session_key": key}

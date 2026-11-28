@@ -100,15 +100,20 @@ def test_tables_shape() -> None:
         check("%s 第 1 次问有选项" % kind, len(opts) >= 2,
               "得到 %r" % [o.key for o in opts])
 
-    # 升级项：第 1 次不在，第 2 次在
-    for kind in ("egress", "command"):
+    # 升级项：第 1 次不在，第 2 次在。
+    # 出网这一格 起没有升级项（四选项，持久面由第 3 项覆盖）；
+    # 命令这一格照旧有一个（"本对话内所有指令自动放行"）。
+    for kind in ("command",):
         esc = [o for o in A._TABLES[kind] if o.escalate_at]
         check("%s 有且只有一个升级项" % kind, len(esc) == 1,
               "得到 %d 个" % len(esc))
         check("  %s 的升级项在第 2 次问时出现" % kind,
               esc[0].key in [o.key for o in A.options_for(kind, 2)])
-        check("  ★ %s 第 1 次问时**不出现**" % kind,
+        check("  %s 第 1 次问时不出现" % kind,
               esc[0].key not in [o.key for o in A.options_for(kind, 1)])
+    check("egress 没有升级项（四选项，第 3 项已覆盖持久面）",
+          not [o for o in A._TABLES["egress"] if o.escalate_at],
+          repr([o.key for o in A._TABLES["egress"]]))
 
     # `command_guarded` 这个 kind 已取消 —— 见下面第 2 条。
     # `plan` 随旧 plan 引擎整体删除后，由专用工具 + 专用 kind
@@ -124,7 +129,8 @@ def test_tables_shape() -> None:
     #   「同一种东西的分档」要统一；而批量的被审批物是"一次批量动作"。
     #   它自己占一格（`pending_delete_bulk`），不共用 `delete` ——
     #   共用是 `command_guarded` 栽三次的形状。
-    check("★ 选项表里只有 12 个 kind（命令一种档位、计划重建、兜底闸、ICE 放行、批量硬闸、区外写、提问、逐应用授权、钩子要求确认）",
+    check("选项表里只有 13 个 kind（命令一种档位、计划重建、兜底闸、ICE 放行、"
+          "批量硬闸、区外写、提问、逐应用授权、钩子要求确认、SSH 主机密钥）",
           set(A._TABLES) == {"cross_zone", "delete", "egress", "command",
                              "destructive", "plan", "ice_reveal", "delete_bulk",
                              # 工作区之外写文件。
@@ -135,7 +141,9 @@ def test_tables_shape() -> None:
                              # 接管的逐应用授权。
                              "computer_app",
                              # 外部命令钩子要求人工确认（`PreToolUse` 的 ask）。
-                             "hook_ask"},
+                             "hook_ask",
+                             # SSH 主机密钥信任（TOFU）。
+                             "ssh_hostkey"},
           repr(sorted(A._TABLES)))
 
 
@@ -310,9 +318,8 @@ def test_detector_increments_per_kind() -> None:
     check("★ 于是跨区第 1 次问时**没有**第 5 项",
           "5" not in [o.key for o in A.options_for(
               "cross_zone", ctx.approval_ask_counts.get("cross_zone", 0) or 1)])
-    check("★ 而出网第 2 次问时**有**第 5 项",
-          "5" in [o.key for o in A.options_for(
-              "egress", ctx.approval_ask_counts.get("egress", 0) or 1)])
+    check("出网没有第 5 项（四选项；持久面由第 3 项覆盖）",
+          "5" not in [o.key for o in A.options_for("egress", 9)])
 
     # ⑤ 载体真的被设上了（不只是计数）
     check("pending_command 被设成 active", ctx.pending_command.get("active") is True)
@@ -434,23 +441,30 @@ def test_settle_writes_both_halves() -> None:
         ctx2 = _Ctx()
         pend2 = {"active": True, "stage": "ask", "kind": "egress",
                  "subject": "other.com"}
+        # 出网四选项里没有"全部放行"；表里不存在键 5，结算什么都不做。
         _settle_egress("5", pend2, ctx2)
-        # 选项 5 是会话级。
-        #它写会话载体，不碰那张持久表（下面 test 9 验那半）。
-        check("★ `5` 写会话载体的通配 `*`（本会话内所有目标）",
-              "*" in (ctx2.session_target_grants.get("egress") or set()),
-              "得到 %r" % (ctx2.session_target_grants,))
-        check("  但本轮的一次性授权照发（本轮的重提交要能过）",
-              wm.has_target_grant("egress", "other.com") is True)
+        check("出网没有键 5（旧的全部放行档已取消）",
+              not ctx2.session_target_grants, "得到 %r" % (ctx2.session_target_grants,))
 
+        # 键 3 = 永久信任：会话载体 + 一次性授权 + 落盘（落盘由
+        #   test_egress_preapproved 单独钉着，这里只看前两半）。
         ctx3 = _Ctx()
         pend3 = {"active": True, "stage": "ask", "kind": "egress",
                  "subject": "no.com"}
         _settle_egress("3", pend3, ctx3)
-        check("★ `3` 拒绝 => 载体**一条都不加**",
-              not ctx3.session_target_grants, "得到 %r" % (ctx3.session_target_grants,))
+        check("3（永久信任）=> 会话载体里有这个目标",
+              ctx3.session_target_grants.get("egress") == {"no.com"},
+              "得到 %r" % (ctx3.session_target_grants,))
+
+        # 键 4 = 不同意：载体一条都不加。
+        ctx4 = _Ctx()
+        pend4 = {"active": True, "stage": "ask", "kind": "egress",
+                 "subject": "never.com"}
+        _settle_egress("4", pend4, ctx4)
+        check("4 拒绝 => 载体一条都不加",
+              not ctx4.session_target_grants, "得到 %r" % (ctx4.session_target_grants,))
         check("  且给模型的话是'没有发出'",
-              "没有被发出" in ctx3.user_message, "得到: %r" % ctx3.user_message)
+              "没有被发出" in ctx4.user_message, "得到: %r" % ctx4.user_message)
     finally:
         REG._registry.pop("workspace_manager", None)
 
@@ -458,10 +472,15 @@ def test_settle_writes_both_halves() -> None:
 # 7. 子状态：`4` 进中间态，且不给选项
 
 def test_substate_gives_text_not_options() -> None:
-    print("\n-- 7. `4 我有话说` 进中间态：要文本、**不给选项** --")
+    print("\n-- 7. `4 我有话说` 进中间态：要文本、不给选项（命令表）--")
     from core.pipeline.stages.pre_process import _SETTLERS
 
-    for kind in ("egress", "command"):
+    # 出网四选项里没有自由文本那一项（用户那句话直接在对话里说）。
+    assert "4" in [o.key for o in A.options_for("egress", 1)]
+    assert not [o for o in A.options_for("egress", 1) if o.stage], \
+        "出网不该有自由文本子状态"
+
+    for kind in ("command",):
         ctx = _Ctx()
         pend = {"active": True, "stage": "ask", "kind": kind, "subject": "x"}
         _SETTLERS[kind]("4", pend, ctx)
@@ -549,9 +568,9 @@ def test_option5_is_session_scoped_and_never_touches_the_file() -> None:
       ① 载体里有 `"*"`（本会话内所有目标都放行）
       ② 持久表里没有它（`/clear` 才能真的清掉）
     """
-    print("\n-- 9. ★★ 选项 5 = 会话级，且**绝不**碰持久表 --")
+    print("\n-- 9. 选项 5 = 会话级（命令表），且绝不碰持久表 --")
     import bus.registry as REG
-    from core.pipeline.stages.pre_process import _settle_egress
+    from core.pipeline.stages.pre_process import _settle_command
 
     WL, _ = _with_tmp_allowlist()
     wm = _RealWM()
@@ -559,28 +578,29 @@ def test_option5_is_session_scoped_and_never_touches_the_file() -> None:
     REG.register_workspace_manager(wm)
     try:
         ctx = _Ctx()
-        _settle_egress("5", {"active": True, "stage": "ask",
-                             "kind": "egress", "subject": "a.com"}, ctx)
-        check("★ 会话载体的 egress 里出现了通配 `*`",
-              "*" in (ctx.session_target_grants.get("egress") or set()),
+        # 键 5 是升级项（第二次被问才出现）—— 载荷里的 ask_index 必须带上，
+        # 结算按"这一次真给出的表"找键，拿 1 去找找不到 5。
+        _settle_command("5", {"active": True, "stage": "ask", "ask_index": 2,
+                              "kind": "command", "subject": "a"}, ctx)
+        check("会话载体的 command 里出现了通配 `*`",
+              "*" in (ctx.session_target_grants.get("command") or set()),
               "得到 %r" % (ctx.session_target_grants,))
-        check("★★ **持久表里一条都没有**（写了它就穿过 /clear，"
+        check("持久表里一条都没有（写了它就穿过 /clear，"
               "而标签说的是「本次对话内」）",
-              WL.list_for("egress") == [],
-              "得到 %r —— 这正是用户实测撞到的那个「权限残留」"
-              % (WL.list_for("egress"),))
+              WL.list_for("command") == [],
+              "得到 %r" % (WL.list_for("command"),))
         check("  本轮的一次性授权照发（重提交要能过）",
-              wm.has_target_grant("egress", "a.com") is True, "")
+              wm.has_target_grant("command", "a") is True, "")
 
         # 选项 2 相反：只记这一个目标，不是 `*`
         ctx2 = _Ctx()
-        _settle_egress("2", {"active": True, "stage": "ask",
-                             "kind": "egress", "subject": "b.com"}, ctx2)
+        _settle_command("2", {"active": True, "stage": "ask",
+                              "kind": "command", "subject": "b"}, ctx2)
         check("选项 2 进会话载体",
-              ctx2.session_target_grants.get("egress") == {"b.com"},
+              ctx2.session_target_grants.get("command") == {"b"},
               "得到 %r" % (ctx2.session_target_grants,))
-        check("★ 选项 2 **不进**持久表（标签写的是「本次对话内」）",
-              "b.com" not in WL.list_for("egress"))
+        check("选项 2 不进持久表（标签写的是「本次对话内」）",
+              "b" not in WL.list_for("command"))
     finally:
         REG._registry.pop("workspace_manager", None)
 

@@ -242,7 +242,7 @@ def _store(read, *, mime: str = "", name: str = "",
         return None
     real = sniff(first)
     if real is None or real not in _EXT_BY_MIME:
-        print("[artifact] 认不出类型，不收（声明为 %r）" % (str(mime or "")[:40]))
+        print("[artifact] unrecognized type, rejected (declared %r)" % (str(mime or "")[:40]))
         return None
     kind = kind_of(real)
     if kind not in _KINDS:
@@ -275,7 +275,7 @@ def _store(read, *, mime: str = "", name: str = "",
             os.replace(tmp_path, p)
         tmp_path = ""
     except OSError as exc:          # noqa: BLE001 — 存不下不该弄挂这一轮
-        print("[artifact] 落盘失败（%s）：%s" % (rid or "?", exc))
+        print("[artifact] save failed (%s): %s" % (rid or "?", exc))
         return None
     finally:
         if tmp_path:
@@ -288,7 +288,7 @@ def _store(read, *, mime: str = "", name: str = "",
     inline = total <= cap
     if not inline:
         # 出声，但不刷屏：这是"存下来了、只是不内联"，不是失败。
-        print("[artifact] %s 超过内联闸（%d > %d 字节），只给下载"
+        print("[artifact] %s exceeds inline cap (%d > %d bytes), download only"
               % (kind, total, cap))
 
     return {

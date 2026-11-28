@@ -191,8 +191,7 @@ class MemoryManager:
         if "max_messages" in short_term_cfg:
             _dead.append("short_term.max_messages")
         if _dead:
-            print(f"[memory] config 里 {'、'.join(_dead)} 已不再读取"
-                  f"（这些键已没有消费者）")
+            print(f"[memory] config keys no longer read: {', '.join(_dead)}")
 
         # Sliding window: hard cap on in-memory message count.
         # This is a safety net — compression should normally keep the list
@@ -293,8 +292,7 @@ class MemoryManager:
             return _mc.instance_for(cid, fallback=self._provider)
         except Exception as exc:                                # noqa: BLE001
             # 出声但不换口径：读不到就沿用开机那条（老行为一个字节不变）。
-            print(f"[memory] 取会话模型失败（沿用进程默认）："
-                  f"{type(exc).__name__}: {exc}")
+            print(f"[memory] session model lookup failed (using process default): {type(exc).__name__}: {exc}")
             return self._provider
 
     def _non_history_cost(self, session_id: str) -> Tuple[str, list]:
@@ -444,19 +442,18 @@ class MemoryManager:
         """打印 `describe_thresholds()` —— 启动时调一次。"""
         r = self.describe_thresholds()
         print(f"[threshold] context_window   {r['context_window']['value']:,} "
-              f"（来源: {r['context_window']['source']}，"
+              f"(source: {r['context_window']['source']}, "
               f"model={r['context_window'].get('model', '?')})")
-        print(f"[threshold] 压缩阈值         "
+        print(f"[threshold] compression threshold   "
               f"{r['compression_threshold']['value']:,} "
-              f"= window × {r['compression_threshold']['ratio']}")
-        print(f"[threshold] 装载上限(balanced) "
-              f"{r['history_ceiling_balanced']['value']:,}  ← 只约束恢复，"
-              f"不约束压缩：两者不在同一条链上")
+              f"= window x {r['compression_threshold']['ratio']}")
+        print(f"[threshold] history loading ceiling (balanced) "
+              f"{r['history_ceiling_balanced']['value']:,}")
         nh = r["non_history_measured"]
-        print(f"[threshold] 非历史实际开销   {nh['value']:,} "
-              f"({nh['raw']:,} x factor {nh['factor']:.4f} —— "
-              f"工具 {nh['tool_tokens']:,} [{nh['tool_count']} 个] + "
-              f"系统 {nh['system_tokens']:,})  ← 这三部分都进压缩闸门")
+        print(f"[threshold] non-history actual cost   {nh['value']:,} "
+              f"({nh['raw']:,} x factor {nh['factor']:.4f} - "
+              f"tools {nh['tool_tokens']:,} [{nh['tool_count']}] + "
+              f"system {nh['system_tokens']:,})")
 
     # ------------------------------------------------------------------
     # Session lifecycle
@@ -528,8 +525,7 @@ class MemoryManager:
         self._token_total[new_sid] = self.short_term.get_token_total(new_sid)
         self._saved_count[new_sid] = n
         self._pending_memory_inject[new_sid] = True
-        print(f"[memory] 分出线程 {new_sid[:14]}…"
-              f"（从 {str(src_sid)[:14]}… 复制 {n} 条，keep={keep}）")
+        print(f"[memory] forked thread {new_sid[:14]}... (from {str(src_sid)[:14]}..., copied {n} messages, keep={keep})")
         return new_sid
 
     def load_session(
@@ -847,8 +843,7 @@ class MemoryManager:
             except Exception as e:
                 # 不能静默：裸 `except: pass` 会让"数失败"与"本来就没东西"
                 # 看起来完全一样。
-                print(f"[memory] /clear 数旧线程失败 for {old_session_id!r}: "
-                      f"{type(e).__name__}: {e}")
+                print(f"[memory] /clear thread count failed for {old_session_id!r}: {type(e).__name__}: {e}")
                 purged = -1
             # 会话笔记：归档，不销毁（判据：「`/clear` = 这段对话及其派生物；
             # 清 ≠ 删」）。
@@ -870,13 +865,11 @@ class MemoryManager:
                 from core.attachment_gc import prune as _gc_attach
                 _st = _gc_attach()
                 if _st.get("deleted"):
-                    print(f"[attachments] 回收 {_st['deleted']} 个未被引用的附件"
-                          f"（{_st['freed']} 字节）")
+                    print(f"[attachments] reclaimed {_st['deleted']} unreferenced attachments ({_st['freed']} bytes)")
                 elif _st.get("skipped") == "db_unreadable":
-                    print("[attachments] 库读不到 ⇒ 本次一个都没删")
+                    print("[attachments] DB unreadable => nothing deleted this time")
             except Exception as _gc_exc:                 # noqa: BLE001
-                print(f"[attachments] 回收失败（不影响会话）："
-                      f"{type(_gc_exc).__name__}: {_gc_exc}")
+                print(f"[attachments] reclaim failed (does not affect session): {type(_gc_exc).__name__}: {_gc_exc}")
             # 改前留档也趁这一下顺手剪
             #   （同一条"顺手剪、不新起线程"的形状）。
             #   它用的是另一把旋钮（`file_history_days`）—— 那些是
@@ -885,8 +878,7 @@ class MemoryManager:
                 from core.file_history import prune as _prune_fh
                 _prune_fh()
             except Exception as _fh_exc:  # noqa: BLE001
-                print(f"[file_history] /clear 顺手剪失败（不影响会话）："
-                      f"{type(_fh_exc).__name__}: {_fh_exc}")
+                print(f"[file_history] /clear trim failed (does not affect session): {type(_fh_exc).__name__}: {_fh_exc}")
 
         # 总是铸一个新的。
         # 通道键与存储 id 是两件事：`bind_session` 把通道键挪到新线程上，
@@ -1029,7 +1021,7 @@ class MemoryManager:
                                        payload_blocked=blocked)
             _emit(EVT_COMPACT_PROGRESS, **payload)
         except Exception as exc:                               # noqa: BLE001
-            print("[memory] 压缩进度事件发不出去（不影响本轮）：%s: %s"
+            print("[memory] compression progress event send failed (does not affect this turn): %s: %s"
                   % (type(exc).__name__, exc))
 
     def repersist_messages(self, session_id: str, messages: List[Dict]) -> None:
@@ -1082,7 +1074,7 @@ class MemoryManager:
         if summary_msg.get("kind") != "history_summary":
             # 压缩器给不出摘要时压根不会走到这里（那时 `was_compressed=False`）。
             # 真走到了就如实出声，别把一条普通消息当摘要钉进库里。
-            print("[memory] 压缩落库跳过：compressed[0] 不是摘要行 "
+            print("[memory] compression persist skipped: compressed[0] is not a summary row "
                   "(kind=%r)" % (summary_msg.get("kind"),))
             return
         self.short_term.append_compaction(
@@ -1132,8 +1124,7 @@ class MemoryManager:
         if not starts:
             return 0
         if len(starts) < n_kept:
-            print(f"[memory] 压缩边界：库里只有 {len(starts)} 个轮首、"
-                  f"内存里有 {n_kept} 个 —— 保守取最早那一行（多留不丢）")
+            print(f"[memory] compression boundary: DB has only {len(starts)} turn starts, memory has {n_kept} - conservatively using the earliest row (keep more, lose nothing)")
             return starts[0]
         return max(starts[len(starts) - n_kept], prev)
     def _apply_sliding_window(
@@ -1205,8 +1196,7 @@ class MemoryManager:
                 break
             start += 1
         if start >= len(body):
-            print(f"[memory] 滑窗跳过：表尾找不到轮边界（{len(messages)} 条，"
-                  f"更愿意超限也不切坏历史）")
+            print(f"[memory] trim skipped: no turn boundary found at table tail ({len(messages)} messages, preferring over-limit over cutting history)")
             return messages, False
 
         heads, tail = body[:keep_heads], body[start:]
@@ -1225,8 +1215,7 @@ class MemoryManager:
         truncated = heads + [note] + tail
 
         print(
-            f"[memory] 冷闸滑窗：{len(messages)} → {len(truncated)} 条"
-            f"（移出 {dropped} 条，max_history={self._max_history}）"
+            f"[memory] cold-gate trim: {len(messages)} -> {len(truncated)} messages (dropped {dropped}, max_history={self._max_history})"
         )
         return truncated, True
 
@@ -1263,8 +1252,7 @@ class MemoryManager:
         if t is None:
             return messages
         if time.time() - t <= gap_min * 60:
-            print(f"[memory] 滑窗跳过：会话仍热（上次活动 {int((time.time()-t)/60)} "
-                  f"分钟前 ≤ 冷闸 {gap_min} 分钟）—— 不剪，护前缀缓存")
+            print(f"[memory] trim skipped: session still hot (last activity {int((time.time()-t)/60)} min ago <= cold gate {gap_min} min) - not trimming, protecting prefix cache")
             return messages
 
         trimmed, was_trimmed = self._apply_sliding_window(session_id, messages)
@@ -1444,8 +1432,7 @@ class MemoryManager:
         try:
             self.short_term.bump_thread_turn(session_id)
         except Exception as exc:  # noqa: BLE001
-            print(f"[memory] 线程名册计数失败（不影响本轮）："
-                  f"{type(exc).__name__}: {exc}")
+            print(f"[memory] thread roster count failed (does not affect this turn): {type(exc).__name__}: {exc}")
 
         # 轮末封印文件留档 —— 盖的是"这一轮改完之后
         #    这个文件长什么样"的哈希，它是回退那半边安全闸的输入
@@ -1457,8 +1444,7 @@ class MemoryManager:
             from core.file_history import seal_turn
             seal_turn(channel_key or session_id)
         except Exception as exc:  # noqa: BLE001
-            print(f"[memory] 文件留档封印失败（不影响本轮）："
-                  f"{type(exc).__name__}: {exc}")
+            print(f"[memory] file archive sealing failed (does not affect this turn): {type(exc).__name__}: {exc}")
 
         # 2. Update token counter
         self._token_total[session_id] = (
@@ -1509,8 +1495,7 @@ class MemoryManager:
             if _turn_no > 0 and _turn_no % 20 == 0:
                 self.short_term.prune_old_tool_messages()
         except Exception as exc:  # noqa: BLE001
-            print(f"[memory] tool 淘汰检查失败（不影响本轮）："
-                  f"{type(exc).__name__}: {exc}")
+            print(f"[memory] tool eviction check failed (does not affect this turn): {type(exc).__name__}: {exc}")
 
         def _update_note_bg() -> None:
             """Background: update the session note .md file via LLM."""
@@ -1549,7 +1534,8 @@ class MemoryManager:
         except Exception as exc:  # noqa: BLE001
             _open = True
             self._note_bg_status(
-                f"[memory] 笔记量闸判不动，退回每轮写：{type(exc).__name__}: {exc}")
+                f"[memory] note gate undecidable; falling back to per-turn writes: "
+                f"{type(exc).__name__}: {exc}")
 
         if not _open:
             _need = (NOTE_UPDATE_TOKENS if current_note.strip()
@@ -1638,8 +1624,7 @@ class MemoryManager:
                         group, session_id, messages,
                         self._provider_for(session_id), turn_no)
             except Exception as exc:                            # noqa: BLE001
-                print(f"[group_minutes] 触发失败（不影响本轮）："
-                      f"{type(exc).__name__}: {exc}")
+                print(f"[group_minutes] trigger failed (does not affect this turn): {type(exc).__name__}: {exc}")
 
         # 3.5. （滑窗不在这里。）
         #      轮末无条件剪（超 max_history 就剪）是最坏的位置：滑窗从表头
@@ -1712,7 +1697,7 @@ class MemoryManager:
                 )
             except Exception as e:  # noqa: BLE001 —— 闸门本身不许成为故障源
                 self._note_bg_status(
-                    f"[memory] 记忆巩固调度失败：{type(e).__name__}: {e}"
+                    f"[memory] memory organize scheduling failed: {type(e).__name__}: {e}"
                 )
 
         # 4. 长期记忆的写入有两条路：后台 fork 抽取器（写 `memory_store`，

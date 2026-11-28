@@ -77,7 +77,7 @@ def _read() -> dict[str, dict]:
     except FileNotFoundError:
         return {}
     except Exception as exc:                                    # noqa: BLE001
-        print("[group_minutes] 账本读不动（%s: %s）—— 按空账本走"
+        print("[group_minutes] ledger unreadable (%s: %s) - treating as empty"
               % (type(exc).__name__, exc))
         return {}
     return raw if isinstance(raw, dict) else {}
@@ -298,17 +298,17 @@ def update_now(group: dict, storage_id: str, messages: list[dict],
         )
         text = parse_minutes(getattr(resp, "content", "") or "")
     except Exception as exc:                                     # noqa: BLE001
-        print("[group_minutes] 生成失败（%s: %s）—— 保留旧纪要"
+        print("[group_minutes] generation failed (%s: %s) - keeping previous minutes"
               % (type(exc).__name__, exc))
         return ""
     if not text:
-        print("[group_minutes] 模型没有给出纪要 —— 保留旧纪要")
+        print("[group_minutes] model returned no minutes - keeping previous minutes")
         return ""
     try:
         set(storage_id, group_id=str((group or {}).get("id") or ""),
             text=text, turns=int(turn_no or 0))
     except Exception as exc:                                     # noqa: BLE001
-        print("[group_minutes] 落盘失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[group_minutes] persist failed (%s: %s)" % (type(exc).__name__, exc))
         return ""
     return text
 
@@ -345,5 +345,5 @@ def spawn_update(group: dict, storage_id: str, messages: list[dict],
         t = threading.Thread(target=_run, name="group-minutes", daemon=True)
         t.start()
     except Exception as exc:                                     # noqa: BLE001
-        print("[group_minutes] 后台线程起不来（%s: %s）"
+        print("[group_minutes] background thread could not start (%s: %s)"
               % (type(exc).__name__, exc))

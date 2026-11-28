@@ -531,7 +531,7 @@ def mark_pending(manifest, downloaded_path) -> None:
             "at": time.time(),
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as exc:
-        print("[update] 记不下待安装标记：%s" % exc)
+        print("[update] cannot write pending install marker: %s" % exc)
 
 
 def clear_pending(remove_file: bool = False) -> None:
@@ -760,7 +760,7 @@ def mark_pending_code_pack(manifest, new_dir, app_dir, backup_dir) -> None:
             "at": time.time(),
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as exc:
-        print("[update] 记不下代码包待安装标记：%s" % exc)
+        print("[update] cannot write pending code-pack install marker: %s" % exc)
 
 
 def pending_code_pack() -> dict | None:

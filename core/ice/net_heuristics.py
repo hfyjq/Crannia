@@ -175,7 +175,7 @@ def note_signals(url: str, *, where: str, session_key: str = "") -> List[Signal]
     if not sigs:
         return []
     shown = "；".join(s.why for s in sigs)
-    print("[ice] 网络侧弱信号（%s）：%s" % (where, shown))
+    print("[ice] network weak signals (%s): %s" % (where, shown))
 
     key = str(session_key or "")
     if not key:
@@ -194,5 +194,5 @@ def note_signals(url: str, *, where: str, session_key: str = "") -> List[Signal]
                              keys=[s.key for s in sigs],
                              reasons=[s.why for s in sigs])
     except Exception as exc:  # noqa: BLE001
-        print("[ice] 弱信号事件发失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[ice] weak-signal event send failed (%s: %s)" % (type(exc).__name__, exc))
     return sigs

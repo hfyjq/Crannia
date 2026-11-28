@@ -515,7 +515,7 @@ def current_level(session_id: str = "") -> int:
             level = configured_level()
             _frozen[key] = level
             # 出声（一次会话一行）：改档是冷启动这件事得看得见。
-            print("[tier] 投入档 %d（%s）—— 本会话冻结" % (level, TIERS[level].name))
+            print("[tier] effort level %d (%s) - frozen for this session" % (level, TIERS[level].name))
         return level
 
 
@@ -594,7 +594,7 @@ def set_level(session_id: str, level: int) -> None:
     key = session_id or ""
     with _freeze_lock:
         _frozen[key] = int(level)
-    print("[tier] 投入档 → %d（%s）—— 本会话，**不落盘**"
+    print("[tier] effort level -> %d (%s) - this session only, not persisted"
           % (int(level), TIERS[int(level)].name))
 
 

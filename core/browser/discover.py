@@ -21,19 +21,44 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+#: (product, user-data 目录, exe 名, 显示名, 环境基准)
+#: 环境基准 LOCALAPPDATA / APPDATA —— Opera 把 user-data 放在 Roaming，
+#: 其余 Chromium 系放 Local。加新浏览器必须先确认它也有「审批式调试开关」
+#: （`<scheme>://inspect/#remote-debugging` 里的 "Allow remote debugging"），
+#: 否则 `--remote-debugging-port` 在默认 profile 上被忽略（Chrome 136+），
+#: 只加路径是接不到真实登录态的。
+_PRODUCT_LOCAL = "LOCALAPPDATA"
+_PRODUCT_ROAMING = "APPDATA"
+
 PRODUCTS = (
-    # (product, user-data 目录, exe 名, 显示名)
-    ("edge", Path("Microsoft") / "Edge" / "User Data", "msedge.exe", "Edge"),
-    ("edge", Path("Microsoft") / "Edge Beta" / "User Data", "msedge.exe", "Edge Beta"),
-    ("edge", Path("Microsoft") / "Edge Dev" / "User Data", "msedge.exe", "Edge Dev"),
-    ("edge", Path("Microsoft") / "Edge SxS" / "User Data", "msedge.exe", "Edge Canary"),
-    ("chrome", Path("Google") / "Chrome" / "User Data", "chrome.exe", "Chrome"),
-    ("chrome", Path("Google") / "Chrome Beta" / "User Data", "chrome.exe", "Chrome Beta"),
-    ("chrome", Path("Google") / "Chrome Dev" / "User Data", "chrome.exe", "Chrome Dev"),
-    ("chrome", Path("Google") / "Chrome SxS" / "User Data", "chrome.exe", "Chrome Canary"),
+    # (product, user-data 目录, exe 名, 显示名, 环境基准)
+    ("edge", Path("Microsoft") / "Edge" / "User Data", "msedge.exe", "Edge", _PRODUCT_LOCAL),
+    ("edge", Path("Microsoft") / "Edge Beta" / "User Data", "msedge.exe", "Edge Beta", _PRODUCT_LOCAL),
+    ("edge", Path("Microsoft") / "Edge Dev" / "User Data", "msedge.exe", "Edge Dev", _PRODUCT_LOCAL),
+    ("edge", Path("Microsoft") / "Edge SxS" / "User Data", "msedge.exe", "Edge Canary", _PRODUCT_LOCAL),
+    ("chrome", Path("Google") / "Chrome" / "User Data", "chrome.exe", "Chrome", _PRODUCT_LOCAL),
+    ("chrome", Path("Google") / "Chrome Beta" / "User Data", "chrome.exe", "Chrome Beta", _PRODUCT_LOCAL),
+    ("chrome", Path("Google") / "Chrome Dev" / "User Data", "chrome.exe", "Chrome Dev", _PRODUCT_LOCAL),
+    ("chrome", Path("Google") / "Chrome SxS" / "User Data", "chrome.exe", "Chrome Canary", _PRODUCT_LOCAL),
+    # 以下 Chromium 家族：同为 CDP + Accessibility.getFullAXTree，能力面一致。
+    ("chromium", Path("Chromium") / "User Data",
+     "chrome.exe", "Chromium", _PRODUCT_LOCAL),
+    # Opera 在 Roaming，且目录就是 user-data 本身（无 User Data 子层）
+    ("opera", Path("Opera Software") / "Opera Stable",
+     "opera.exe", "Opera", _PRODUCT_ROAMING),
+    ("opera", Path("Opera Software") / "Opera GX Stable",
+     "opera.exe", "Opera GX", _PRODUCT_ROAMING),
 )
 
 _MARKER = "DevToolsActivePort"
+
+#: 各产品的 inspect 页 —— setup_hint 里逐条列出，别让用户猜 scheme
+_INSPECT = {
+    "edge": "edge://inspect/#remote-debugging",
+    "chrome": "chrome://inspect/#remote-debugging",
+    "chromium": "chrome://inspect/#remote-debugging",
+    "opera": "opera://inspect/#remote-debugging",
+}
 
 
 @dataclass
@@ -52,17 +77,24 @@ class Candidate:
         return "ws://127.0.0.1:%d%s" % (self.port, self.ws_path)
 
 
+def _base_for(env_key: str) -> Path:
+    raw = os.environ.get(env_key) or ""
+    if raw:
+        return Path(raw)
+    leaf = "Local" if env_key == _PRODUCT_LOCAL else "Roaming"
+    return Path.home() / "AppData" / leaf
+
+
 def _local_appdata() -> Path:
-    raw = os.environ.get("LOCALAPPDATA") or ""
-    return Path(raw) if raw else Path.home() / "AppData" / "Local"
+    """兼容旧调用者；新代码用 `_base_for()`。"""
+    return _base_for(_PRODUCT_LOCAL)
 
 
 def candidates() -> list[Candidate]:
-    """按优先级（Edge 稳定版 → Chrome 稳定版 → 各 Beta/Dev）列出候选。"""
-    base = _local_appdata()
+    """按 PRODUCTS 声明顺序（Edge → Chrome → 其他 Chromium）列出候选。"""
     out: list[Candidate] = []
-    for product, rel, exe, label in PRODUCTS:
-        ud = base / rel
+    for product, rel, exe, label, env_key in PRODUCTS:
+        ud = _base_for(env_key) / rel
         marker = ud / _MARKER
         if not marker.is_file():
             continue
@@ -85,13 +117,17 @@ def candidates() -> list[Candidate]:
 
 def setup_hint() -> str:
     """用户没勾开关时那句能照着做的话（不是"连接失败"）。"""
+    pages = " / ".join(
+        "`%s`" % _INSPECT[p] for p in ("edge", "chrome", "opera"))
     return (
-        "没有找到浏览器调试端口。请在 Edge/Chrome 里：\n"
-        "1) 地址栏打开 `edge://inspect/#remote-debugging`"
-        "（Chrome 用 `chrome://inspect/#remote-debugging`）；\n"
+        "没有找到浏览器调试端口。在你用的 Chromium 系浏览器里：\n"
+        "1) 地址栏打开对应检查页：" + pages + "；\n"
         "2) 勾选「Allow remote debugging for this browser instance」；\n"
         "3) 回到这里重试**一次**（连接时浏览器会弹「Allow remote debugging?」，点允许）；\n"
         "   **不要连续重试** —— 还是不行就直接走下面的兜底。\n"
         "★ 这一下「允许」**不算干预**：它发生在进入操作检测之前（先连、后 arm）。\n"
+        "⚠️ 浏览器需 145+（审批式开关）；Chrome 136+ 会忽略默认 profile 上的"
+        " `--remote-debugging-port`，所以别指望命令行参数，要走上面的开关。\n"
         "⚠️ 不想开这个开关也可以**直接用 `computer` 操作浏览器窗口**"
-        "（桌面接管已验证：截图 + 0–1000 比例 + 点击红十字）。")
+        "（桌面接管已验证：截图 + 0–1000 比例 + 点击红十字）。"
+        " Firefox 不走 CDP，只能用这条兜底。")

@@ -139,7 +139,7 @@ def test_save_refuses_empty_content():
 
         assert sm.load("probe") == GOOD_NOTE, \
             "save('') 把已有笔记覆盖了 —— 这条不变量没了"
-        assert "拒绝" in printed, \
+        assert "refused to overwrite" in printed, \
             f"拒绝写入必须是**出声**的（静默兜底 = 没有兜底）。实得: {printed!r}"
     print("  [ok] save() refuses empty content, and says so out loud")
 

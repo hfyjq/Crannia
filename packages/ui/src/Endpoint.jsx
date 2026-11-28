@@ -200,7 +200,7 @@ export function Endpoint({ client, notify, connected }) {
               <span className="ep-logo">
                 {logo ? <img src={logo} alt="" /> : <RelayGlyph />}
               </span>
-              <b>{c.label}</b>
+              <b>{t(c.label)}</b>
               <span className="muted">{cardSubtitle(c, limits.maxPerCard)}</span>
             </button>
           );
@@ -215,14 +215,14 @@ export function Endpoint({ client, notify, connected }) {
         <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
           <section className="ep-panel">
             <div className="settings-head">
-              <div><small>{t("管理此配置")}</small><h2>{card.label}</h2></div>
+              <div><small>{t("管理此配置")}</small><h2>{t(card.label)}</h2></div>
               <button className="round" onClick={close}><X size={18} /></button>
             </div>
 
             {/* ── 上：这一类已经配好的 ─────────────────────────────── */}
             <div className="ep-list">
               {!card.configs.length && (
-                <p className="muted">{t("「{card.label}」还没有配置 —— 在下面建一条。", { "card.label": card.label })}</p>
+                <p className="muted">{t("「{card.label}」还没有配置 —— 在下面建一条。", { "card.label": t(card.label) })}</p>
               )}
               {card.configs.map((row) => (
                 <div className={"ep-row" + (row.is_default ? " ep-row-default" : "")} key={row.id}>
@@ -286,7 +286,7 @@ export function Endpoint({ client, notify, connected }) {
 
               <label className="field"><span>{t("配置名称")}</span>
                 <input value={form.name} maxLength={limits.maxName}
-                       placeholder={card.label}
+                       placeholder={t(card.label)}
                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></label>
 
               {/* 模型名的范例跟着卡片变（见 `provider-icons.js::MODEL_EXAMPLE`）。
@@ -354,10 +354,16 @@ export function Endpoint({ client, notify, connected }) {
               )}
 
               {probe && (
-                <p className={"ep-probe" + (probe.pending ? "" : (probe.ok ? " ok" : " bad"))}>
-                  {probe.text}
-                  {probe.scope_note ? " " + probe.scope_note : ""}
-                </p>
+                <div className={"ep-probe" + (probe.pending ? "" : (probe.ok ? " ok" : " bad"))}>
+                  <p>{probe.text}{probe.scope_note ? " " + probe.scope_note : ""}</p>
+                  {/* 上游原样回了什么 —— 排查要看的就是这一段。 */}
+                  {probe.detail ? (
+                    <details>
+                      <summary>{t("上游返回的内容")}</summary>
+                      <pre>{probe.detail}</pre>
+                    </details>
+                  ) : null}
+                </div>
               )}
 
               <div className="ep-actions">
@@ -385,8 +391,8 @@ export function Endpoint({ client, notify, connected }) {
               </div>
 
               <p className="ep-note">
-                {t("设为默认后，")}<b>{t("新开的对话")}</b>{t("将会启用此配置；正在跑的框架需")}<b>{t("重启一次")}</b>{t("以更换，")}
-                {t("所有对话共用一个默认。")}
+                {/* 整句一条 key：拆成几段拼会在英文里丢空格、也钉死了语序。 */}
+                {t("设为默认后，新开的对话将会启用此配置；正在跑的框架需重启一次以更换，所有对话共用一个默认。")}
               </p>
             </div>
           </section>

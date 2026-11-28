@@ -249,7 +249,7 @@ class RgRun:
                 yield ev
                 if time.monotonic() > deadline:
                     self.timed_out = True
-                    print("[rg] 超过 %.1fs —— 收工（已拿到的照常用）" % self._timeout)
+                    print("[rg] exceeded %.1fs - stopping (results so far kept)" % self._timeout)
                     return
         finally:
             if time.monotonic() > deadline:

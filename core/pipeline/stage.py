@@ -94,6 +94,9 @@ class StageContext:
     pending_hook_ask: dict = field(default_factory=dict)
     #: 出网审批（`web_fetch` / `send_email` 的目标）。
     pending_egress: dict = field(default_factory=dict)
+    #: SSH 主机密钥信任（TOFU）。自己一格（一格只许一个 kind 用）-
+    #: 被审批物是"这个指纹"，不是目标的授权范围。
+    pending_ssh_hostkey: dict = field(default_factory=dict)
     #: 执行审批（`run_command`）。
     #: 命令的审批只有一种档位（没有「危险档」）——
     #: 所以这一格只装 `command` 一种 kind。但读者仍然取自载荷

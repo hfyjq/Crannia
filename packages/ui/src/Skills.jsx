@@ -395,7 +395,7 @@ export function Skills({ skills, connected, client, notify, onRefresh }) {
                 <Wrench size={17} />
                 <div className="skill-main">
                   <b>{s.name}</b>
-                  <span className="skill-desc">{s.summary || s.description || t("CRANNIA 技能")}</span>
+                  <span className="skill-desc">{t(s.summary || s.description || "CRANNIA 技能")}</span>
                   <span className="skill-meta">
                     <i className={"skill-badge skill-badge-" + badge.cls}>{badge.text}</i>
                     {s.kind === "prompt" && <i className="skill-badge skill-badge-prompt">{t("指令型")}</i>}
@@ -672,7 +672,7 @@ export function Skills({ skills, connected, client, notify, onRefresh }) {
                                 onClick={(e) => { e.stopPropagation(); setOpenCard(""); }}>×</button>
                       )}
                     </div>
-                    <span className="skill-desc">{s.summary || s.description || t("CRANNIA 技能")}</span>
+                    <span className="skill-desc">{t(s.summary || s.description || "CRANNIA 技能")}</span>
                     <span className="skill-meta">
                       {s.kind === "prompt" && <i className="skill-badge skill-badge-prompt">{t("指令型")}</i>}
                       {isBlocked(s) && (

@@ -120,13 +120,13 @@ def _workspace_plugins_ok() -> bool:
         from core.plugin_packages import workspace_plugins_allowed
         ok = workspace_plugins_allowed()
     except Exception as exc:                                  # noqa: BLE001
-        print("[skills] 读工作区插件开关失败（按关处理）：%s: %s"
+        print("[skills] reading workspace plugin switch failed (treating as off): %s: %s"
               % (type(exc).__name__, exc))
         return False
     if not ok and not _WS_PLUGIN_NOTE_SHOWN:
         _WS_PLUGIN_NOTE_SHOWN = True
-        print("[skills] 工作区插件包里的技能没有加载：要先在"
-              "「设置 → 安全设置 → 工作区插件」里打开（与钩子、MCP 服务器同一个开关）。")
+        print("[skills] skills from workspace plugin packages were not loaded: enable "
+              "Settings -> Security -> Workspace Plugins first (same switch as hooks and MCP servers).")
     return ok
 
 
@@ -143,8 +143,8 @@ def _workspace_plugins_ok() -> bool:
 #: 只列随框架发布的那些。测试夹具（draft、从不装载、不进安装包）不在这张表里 ——
 #: 登记一个包里没有的名字，会让用户自己装的同名技能被标成"内置"而藏起来。
 BUILTIN_SKILLS: frozenset[str] = frozenset({
-    "entertainment", "file_parser", "github", "mail_parser", "media_gen",
-    "office_parser", "ppt-master",
+    "diagram", "entertainment", "file_parser", "github", "mail_parser",
+    "media_gen", "netops", "office_parser", "ppt-master", "ssh",
 })
 
 

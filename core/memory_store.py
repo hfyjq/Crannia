@@ -252,7 +252,7 @@ def list_entries(scope: str = DEFAULT_SCOPE) -> List[Dict]:
     for p in sorted(root.glob("*.md")):
         entry = parse_entry(p)
         if entry is None:
-            print(f"[memory_store] 跳过 {p} —— frontmatter 缺失或坏掉（不猜不救）")
+            print(f"[memory_store] skipped {p} - frontmatter missing or broken (not guessing or rescuing)")
             continue
         out.append(entry)
     out.sort(key=lambda e: e["slug"])
@@ -279,7 +279,7 @@ def load_tombstones() -> Dict[str, Dict]:
         tob = data.get("tombstones") or {}
         return tob if isinstance(tob, dict) else {}
     except Exception as exc:
-        print(f"[memory_store] tombstones 读不出来（{type(exc).__name__}）—— 本次视为空账本")
+        print(f"[memory_store] tombstones unreadable ({type(exc).__name__}) - treating as empty")
         return {}
 
 
@@ -380,7 +380,7 @@ def remove_tombstone(name_or_slug: str) -> Dict:
         _save_tombstones(tob)
     except OSError as exc:
         return {"success": False, "error": f"账本写失败（{exc}）。"}
-    print(f"[memory_store] 解除封条 {slug}（{erased.get('name') or slug}）")
+    print(f"[memory_store] unsealed {slug} ({erased.get('name') or slug})")
     return {"success": True, "slug": slug, "name": erased.get("name") or slug}
 
 
@@ -443,7 +443,7 @@ def delete_entry(name: str, scope: str = DEFAULT_SCOPE, *,
     except OSError as exc:
         return {"success": False,
                 "error": f"删文件失败（{exc}）—— 账本已记，重试即可。"}
-    print(f"[memory_store] 删除记忆 {entry['slug']}.md（已记 tombstone）")
+    print(f"[memory_store] deleted memory {entry['slug']}.md (tombstone recorded)")
     return {"success": True, "slug": entry["slug"], "name": entry["name"],
             "sealed": _sealed}
 
@@ -495,8 +495,7 @@ def delete_all(scope: str = DEFAULT_SCOPE, *, seal: bool | None = None) -> Dict:
             except OSError as exc:
                 failed.append({"slug": e["slug"], "error": str(exc)})
         tail = f"，失败 {len(failed)}" if failed else ""
-        print(f"[memory_store] 清空记忆库：删 {len(deleted)} 条、"
-              f"落 {len(deleted)} 条封条{tail}")
+        print(f"[memory_store] cleared memory store: deleted {len(deleted)}, wrote {len(deleted)} tombstones{tail}")
         return {"success": not failed, "deleted": deleted, "failed": failed,
                 "count": len(deleted)}
 
@@ -594,7 +593,7 @@ def write_entry(name: str, description: str, content: str,
     except OSError as exc:
         return {"success": False, "error": f"写失败（{exc}）。"}
 
-    print(f"[memory_store] {'更新' if existed else '新建'}记忆 {slug}.md")
+    print(f"[memory_store] {'updated' if existed else 'created'} memory {slug}.md")
     return {
         "success": True,
         "path": path.as_posix(),
@@ -662,8 +661,7 @@ def build_memory_index(scope: str = DEFAULT_SCOPE) -> str:
         lines.append(line)
         chars += len(line) + 1
     if truncated_by:
-        print(f"[memory_store] 索引超过 {truncated_by} —— 只列了前 {len(lines)} 条"
-              f"（该做一次「记忆巩固」把它降下来）")
+        print(f"[memory_store] index exceeds {truncated_by} - listing only first {len(lines)} (consider running memory consolidation to reduce it)")
 
     return sanitize_text("\n".join(lines))
 

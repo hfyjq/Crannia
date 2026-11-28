@@ -17,6 +17,7 @@ from __future__ import annotations
 import ctypes
 import sys
 import time
+from contextlib import contextmanager
 from ctypes import wintypes
 
 from . import win32
@@ -176,6 +177,18 @@ def parse_combo(combo: str) -> list[str]:
     return out
 
 
+#: 单字符标点 -> 虚拟键码。快捷键里写 `ctrl+'` 比 `ctrl+quote` 自然，
+#: 而 `parse_combo` 不会替它查英文名 —— 没有这张表就只有英文名能用。
+#: 实测留档（2026-11-27 订正）：Photoshop 的 `Ctrl+'`（视图 > 显示 > 网格）
+#: 这条快捷键人手动也按不出来（用户实测），所以"发不进去"不是注入的问题；
+#: 同一条路发 `Ctrl+Shift+;` 是生效的，标点键本身没问题。这类快捷键请走菜单，
+#: 别在按键上花时间。
+_SYMBOL_VK: dict[str, int] = {
+    "'": 0xDE, ",": 0xBC, "-": 0xBD, ".": 0xBE, "/": 0xBF, ";": 0xBA,
+    "=": 0xBB, "`": 0xC0, "[": 0xDB, "\\": 0xDC, "]": 0xDD,
+}
+
+
 def _vk_of(token: str) -> tuple[int, bool]:
     """返回 `(虚拟键码, 是否扩展键)`。"""
     if token in _VK:
@@ -184,6 +197,8 @@ def _vk_of(token: str) -> tuple[int, bool]:
         ch = token.upper()
         if "A" <= ch <= "Z" or "0" <= ch <= "9":
             return ord(ch), False
+    if token in _SYMBOL_VK:
+        return _SYMBOL_VK[token], False
     if token.startswith("vk_"):
         try:
             return int(token[3:], 0), False
@@ -193,9 +208,32 @@ def _vk_of(token: str) -> tuple[int, bool]:
 
 
 # 事件构造
+#: 虚拟键 -> scan code 的缓存。
+#:
+#: 只发 `wVk` 而不发 `wScan` 时，事件能到窗口，但接收方拿不到"是哪个键"
+#: （文本控件收到的键名是空的）；修饰键状态仍然对 —— 那是按 VK 读的。
+#: 所以坏的那一半只表现为"普通按键不起作用"，看起来像键盘根本没发出去。
+_SCAN_CACHE: dict[int, int] = {}
+
+
+def _scan_of(vk: int) -> int:
+    """虚拟键码 -> scan code。查不到回 0（那时退回只发 VK）。"""
+    try:
+        got = _SCAN_CACHE.get(int(vk))
+        if got is None:
+            got = int(win32.user32.MapVirtualKeyW(int(vk), 0))    # MAPVK_VK_TO_VSC
+            _SCAN_CACHE[int(vk)] = got
+        return got
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
 def _key_event(vk: int, flags: int, scan: int = 0) -> "INPUT":
     ev = INPUT()
     ev.type = INPUT_KEYBOARD
+    #: `KEYEVENTF_UNICODE` 那一支的 scan 是字符本身，`wVk` 必须是 0 —— 不许改写。
+    if scan == 0 and vk and not (flags & KEYEVENTF_UNICODE):
+        scan = _scan_of(vk)
     ev.u.ki = KEYBDINPUT(wVk=vk, wScan=scan, dwFlags=flags, time=0, dwExtraInfo=0)
     return ev
 
@@ -241,13 +279,78 @@ def move_to(x: int, y: int) -> None:
     time.sleep(0.02)
 
 
-def _button_flags(button: str) -> tuple[int, int]:
+def _button_flags(button: str) -> tuple[int, int, int]:
+    """返回 `(down_flag, up_flag, mouseData)`。
+
+    侧键不用（不是所有鼠标都有），但保留 mouseData 位是为了让
+    left/right/middle 与 XDOWN/XUP 共用一条发送路径，将来要扩也只改这张表。
+    """
     button = (button or "left").lower()
     return {
-        "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
-        "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
-        "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
-    }.get(button, (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP))
+        "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0),
+        "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0),
+        "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
+    }.get(button, (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0))
+
+
+def button_down(button: str) -> None:
+    """只按下鼠标键，不松开。供脚本的 down/up 与多键拖用。"""
+    down, _up, data = _button_flags(button)
+    _send([_mouse_event(down, data=data)])
+
+
+def button_up(button: str) -> None:
+    _down, up, data = _button_flags(button)
+    _send([_mouse_event(up, data=data)])
+
+
+#: 修饰键按下后、与松开前的静置时间（秒）。
+#:
+#: 为什么必须有：`SendInput` 是一串独立调用，`held_keys` 的按下、
+#: 动作里的鼠标事件、`finally` 里的松开之间只隔几微秒。消息循环快的
+#: 程序当场就处理完；但重绘重、循环慢的程序常把鼠标事件压到下一帧
+#: 再读键盘状态 —— 那时修饰键已经抬了，表现为"动作生效了，但修饰键
+#: 没生效"（选中态没跟着变，只有指针挪过去）。人手按住修饰键时会保持
+#: 几百毫秒，所以人工操作从不复现这一档。
+KEY_SETTLE = 0.04
+KEY_RELEASE_SETTLE = 0.06
+
+#: 连按同一个键时，两次完整按下之间的距离。取值按人手连按的节奏，
+#: 让重绘慢的程序有机会处理完上一次按下/松开。
+#: 它不是"防丢键"的开关：实测有程序对连按次数本身有阈值，把间隔拉到
+#: 300 ms 照样整批失效 —— 那不是时序能解决的，只能分成几次按。
+REPEAT_GAP = 0.06
+
+
+@contextmanager
+def held_keys(combo: str, *, settle: float = KEY_SETTLE,
+              release_settle: float = KEY_RELEASE_SETTLE):
+    """按住修饰键执行一段动作，退出时逆序释放——异常也走 finally。
+
+    修饰键跟随单次动作（不跨轮持有）：调用者把 click/drag/scroll 包在
+    `with held_keys("ctrl+shift")` 里，就不会出现"模型忘了松开"的卡键。
+    护栏在 tools 层过 guard.combo_decision，这里只管按下与释放。
+
+    `settle` / `release_settle` 见上面那两个常量的注释：它们是给目标应用
+    读键盘状态用的，不是给我们自己。脚本里每一步都带修饰键时可以传小一点
+    （`_run_script` 就这么做——那里一次脚本最多 64 步，全按默认会白等几秒）。
+    """
+    tokens = parse_combo(combo)
+    if not tokens:
+        yield []
+        return
+    vks = [(_vk_of(t)) for t in tokens]
+    for vk, ext in vks:
+        _send([_key_event(vk, KEYEVENTF_EXTENDEDKEY if ext else 0)])
+    if settle > 0:
+        time.sleep(settle)
+    try:
+        yield tokens
+    finally:
+        if release_settle > 0:
+            time.sleep(release_settle)
+        for vk, ext in reversed(vks):
+            _send([_key_event(vk, KEYEVENTF_KEYUP | (KEYEVENTF_EXTENDEDKEY if ext else 0))])
 
 
 @win32.dpi_wrapped
@@ -271,13 +374,13 @@ def _legacy_click(x: int, y: int, *, button: str = "left", count: int = 1) -> No
     """`SetCursorPos` + `mouse_event` —— 与 SendInput 并存的那条路。"""
     if not win32.IS_WINDOWS:
         raise InputError("接管模式只支持 Windows 桌面（当前系统 %s）" % sys.platform)
-    down, up = _button_flags(button)
+    down, up, data = _button_flags(button)
     n = max(1, min(3, int(count or 1)))
     _legacy_move_to(int(x), int(y))
     for i in range(n):
-        win32.user32.mouse_event(down, 0, 0, 0, 0)
+        win32.user32.mouse_event(down, 0, 0, data, 0)
         time.sleep(0.01)
-        win32.user32.mouse_event(up, 0, 0, 0, 0)
+        win32.user32.mouse_event(up, 0, 0, data, 0)
         if i + 1 < n:
             time.sleep(0.05)
 
@@ -304,18 +407,18 @@ def click(x: int, y: int, *, button: str = "left", count: int = 1,
     if req == "legacy":
         _legacy_click(x, y, button=button, count=n)
         return "legacy"
-    down, up = _button_flags(button)
+    down, up, data = _button_flags(button)
     try:
         move_to(x, y)
         for i in range(n):
-            _send([_mouse_event(down), _mouse_event(up)])
+            _send([_mouse_event(down, data=data), _mouse_event(up, data=data)])
             if i + 1 < n:
                 time.sleep(0.05)
         return "sendinput"
     except InputError:
         if req not in ("", "auto"):
             raise
-        print("[input] SendInput 点击失败，退到 legacy 真实鼠标")
+        print("[input] SendInput click failed, falling back to legacy real mouse")
         _legacy_click(x, y, button=button, count=n)
         return "legacy"
 
@@ -335,15 +438,21 @@ def scroll(x: int, y: int, *, vertical: int = 0, horizontal: int = 0) -> None:
 
 
 @win32.dpi_wrapped
-def drag(x1: int, y1: int, x2: int, y2: int, *, duration: float = 0.3) -> None:
+def drag(x1: int, y1: int, x2: int, y2: int, *, duration: float = 0.3,
+         button: str = "left") -> None:
+    """两点间拖拽。button 换成中键/右键就是 3D 软件的平移/旋转导航。"""
+    down, up, data = _button_flags(button)
     move_to(x1, y1)
-    _send([_mouse_event(MOUSEEVENTF_LEFTDOWN)])
-    steps = max(2, min(30, int(duration / 0.02)))
-    for i in range(1, steps + 1):
-        t = i / steps
-        move_to(int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t))
-        time.sleep(max(0.0, duration / steps - 0.02))
-    _send([_mouse_event(MOUSEEVENTF_LEFTUP)])
+    _send([_mouse_event(down, data=data)])
+    try:
+        steps = max(2, min(30, int(duration / 0.02)))
+        for i in range(1, steps + 1):
+            t = i / steps
+            move_to(int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t))
+            time.sleep(max(0.0, duration / steps - 0.02))
+    finally:
+        # 中途异常也要松开，否则目标软件会一直以为键还按着。
+        _send([_mouse_event(up, data=data)])
 
 
 def type_text(text: str) -> None:
@@ -466,19 +575,336 @@ def press_key(combo: str, *, backend: str = "auto") -> list[str]:
         _legacy_press_key(tokens)
         return tokens
     vks = [(_vk_of(t)) for t in tokens]
-    events: list["INPUT"] = []
-    for vk, ext in vks:                      # 按下：从左到右
-        events.append(_key_event(vk, KEYEVENTF_EXTENDEDKEY if ext else 0))
-    for vk, ext in reversed(vks):            # 松开：从右到左
-        events.append(_key_event(vk, KEYEVENTF_KEYUP | (KEYEVENTF_EXTENDEDKEY if ext else 0)))
+    down = [_key_event(vk, KEYEVENTF_EXTENDEDKEY if ext else 0)
+            for vk, ext in vks]              # 按下：从左到右
+    up = [_key_event(vk, KEYEVENTF_KEYUP | (KEYEVENTF_EXTENDEDKEY if ext else 0))
+          for vk, ext in reversed(vks)]      # 松开：从右到左
     try:
-        _send(events)
+        #: 按下与松开分两次发，中间留一段时间。挤在同一次调用里时，
+        #: 重绘重的程序处理到 keydown 时 keyup 已经躺在队列里 —— 快捷键
+        #: 常常因此不触发（人手按键天然有几十毫秒的持续）。
+        _send(down)
+        if KEY_SETTLE > 0:
+            time.sleep(KEY_SETTLE)
+        _send(up)
     except InputError:
+        #: 部分发送时可能有 down 已经进队列、up 被拦 —— 键会卡住。
+        #: 先补一次 up（对没按下的键松开无害），再决定要不要退 legacy。
+        try:
+            _send(up)
+        except InputError:
+            pass
         if req not in ("", "auto"):
             raise
-        print("[input] SendInput 按键失败，退到 legacy keybd_event")
+        print("[input] SendInput key failed, falling back to legacy keybd_event")
         _legacy_press_key(tokens)
     return tokens
+
+
+VK_CAPITAL = 0x14
+
+#: 中文输入法的 LANGID（简/繁/香港/新加坡）。这些布局下字母键可能被 IME
+#: 截获成候选框；英文布局不会，所以不必碰大写锁定。
+_CJK_LANGIDS = frozenset({0x0804, 0x0404, 0x0C04, 0x1004})
+#: 英语（美国）—— 临时切换的目标布局，只认已安装的那份。
+EN_US_LANGID = 0x0409
+
+
+def caps_lock_on() -> bool | None:
+    """大写锁定现在开着吗？读不到返回 `None`（不猜）。
+
+    低 bit 是开关态（caps / num / scroll），这是 `GetKeyState` 的文档语义；
+    `GetAsyncKeyState` 的低 bit 是"上次查询之后按过"，两者不是一件事，
+    别替换。代价是它按线程的消息队列取值 —— 后台线程可能读到旧值，所以
+    读数里拿不准时一律写"读不到"，不猜成"关"。
+    """
+    if not win32.IS_WINDOWS:
+        return None
+    try:
+        return bool(int(win32.user32.GetKeyState(VK_CAPITAL)) & 0x0001)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def needs_ime_bypass(tokens: list[str]) -> bool:
+    """这个组合键会不会被输入法截获（=值不值得为它临时开大写锁定）。
+
+    只认"没有修饰键的单字母"。实测：`Ctrl+1` / `Ctrl+0` / `Alt+F` 都原样
+    到达目标窗口，`Tab` / `F10` 也一样 —— 输入法截获的是裸字母（拿去拼
+    候选框）。给别的键也开大写锁定，只会让用户的指示灯闪一下、外加两次
+    多余的注入。
+    """
+    if len(tokens) != 1:
+        return False
+    tok = tokens[0]
+    return len(tok) == 1 and "a" <= tok <= "z"
+
+
+#: 常见键盘布局的 LANGID -> 给人看的名字。只列会进"读数"的那几类；
+#: 其余按 `0xXXXX` 原样报出 —— 不猜语言。
+_LANG_NAMES = {
+    0x0409: "英语（美国）",
+    0x0804: "中文（简体）",
+    0x0404: "中文（繁体）",
+    0x0C04: "中文（香港）",
+    0x1004: "中文（新加坡）",
+    0x0411: "日语",
+    0x0412: "韩语",
+}
+
+
+def keyboard_layout(hwnd: int | None = None) -> tuple[int, str] | None:
+    """目标窗口线程的键盘布局 `(langid, 名字)`；读不到返回 None。
+
+    必须按目标窗口的线程取。`GetKeyboardLayout(0)` 问的是调用线程，
+    而框架跑在后台工作线程里 —— 那个线程的布局可能一直停在进程启动时，
+    与用户此刻在目标应用里用的输入法无关（症状：中文输入法在吃键，框架
+    却判成英文布局，大写锁定旁路因此从不触发）。
+    """
+    if not win32.IS_WINDOWS:
+        return None
+    hkl = None
+    try:
+        if hwnd:
+            hkl = win32.keyboard_layout_of(hwnd)
+        else:
+            hkl = int(win32.user32.GetKeyboardLayout(0) or 0)
+    except Exception:                                # noqa: BLE001
+        return None
+    langid = int(hkl or 0) & 0xFFFF
+    if not langid:
+        return None
+    return langid, _LANG_NAMES.get(langid, "0x%04X" % langid)
+
+
+def ime_may_intercept(hwnd: int | None = None) -> bool:
+    """目标窗口的布局是不是中文（IME 可能把字母键转成候选框）。
+
+    *hwnd* 不给时退回调用线程的布局 —— 只为兼容旧调用点与测试；
+    真实动作一律传目标窗口。
+    """
+    lay = keyboard_layout(hwnd)
+    return bool(lay and lay[0] in _CJK_LANGIDS)
+
+
+def ime_open(hwnd: int) -> bool | None:
+    """目标窗口的输入法此刻开着吗？读不到返回 None（不猜）。
+
+    TSF 系输入法（如搜狗）不归 IMM32 管：`ImmGetContext` 可能拿不到
+    上下文，或拿得到但开关状态与用户看到的候选框无关 —— 那种情况如实
+    报"读不到"，不拿它当"输入法是关的"。
+    """
+    if not win32.IS_WINDOWS:
+        return None
+    himc = None
+    try:
+        imm = ctypes.windll.imm32
+        himc = imm.ImmGetContext(int(hwnd))
+        if not himc:
+            return None
+        return bool(imm.ImmGetOpenStatus(himc))
+    except Exception:                                # noqa: BLE001
+        return None
+    finally:
+        if himc:
+            try:
+                ctypes.windll.imm32.ImmReleaseContext(int(hwnd), himc)
+            except Exception:                        # noqa: BLE001
+                pass
+
+
+#: 会"卡住"的修饰键 / 鼠标键 —— 读数里报出来，让模型知道有没有残留的
+#: 按下状态（框架自己的 finally 会松，但崩溃 / 外部注入可能留下）。
+_HELD_VKS = ((0x11, "ctrl"), (0x10, "shift"), (0x12, "alt"),
+             (0x5B, "win"), (0x5C, "win"), (0x01, "鼠标左键"),
+             (0x02, "鼠标右键"), (0x04, "鼠标中键"))
+
+
+def pressed_keys() -> list[str] | None:
+    """此刻还按着的修饰键 / 鼠标键；读不到返回 None（不猜成"没有"）。"""
+    if not win32.IS_WINDOWS:
+        return None
+    try:
+        out: list[str] = []
+        for vk, name in _HELD_VKS:
+            down = win32.key_is_down(vk)
+            if down is None:                     # 读不到 ≠ 没按着
+                return None
+            if down and name not in out:
+                out.append(name)
+        return out
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def keyboard_focus(hwnd: int) -> dict | None:
+    """目标线程此刻的键盘焦点是不是"在目标窗口里"。
+
+    返回 `{"active": "类名「标题」", "within": bool}`；读不到返回 None。
+    判据是活动窗口的根窗口 == 目标窗口。活动窗口是另一个顶层窗口
+    （例如 Photoshop 的浮动操作栏 `OS_ViewContainer`）时，键盘事件不会到
+    目标窗口 —— 而"前台"仍可能是目标窗口，两者不是一件事。
+    """
+    if not win32.IS_WINDOWS:
+        return None
+    tid = win32.thread_id_of(hwnd)
+    active, _focus = win32.thread_focus(tid)
+    if not active:
+        return None
+    try:
+        within = win32.root_of(active) == int(hwnd)
+    except Exception:                                # noqa: BLE001
+        return None
+    return {"active": win32.window_brief(active),
+            "class": win32.class_name_of(active),
+            "within": bool(within)}
+
+
+def input_context(hwnd: int) -> dict:
+    """按目标窗口读一组事实（回执的「框架读数」段用它；从不抛）。
+
+    五个格：`layout` / `ime_open` / `caps` / `held` / `focus`。读不到的格
+    是 None —— 调用方必须把 None 渲染成"读不到"，不许当成 False。
+    """
+    return {
+        "layout": keyboard_layout(hwnd),
+        "ime_open": ime_open(hwnd),
+        "caps": caps_lock_on(),
+        "held": pressed_keys(),
+        "focus": keyboard_focus(hwnd),
+    }
+
+
+@contextmanager
+def caps_lock_guard(active: bool):
+    """必要时临时打开大写锁定，退出时按原状态还原。
+
+    为什么有用：中文输入法在大写模式下不把字母键转成候选框，而目标程序的
+    快捷键不区分大小写 —— 这是"不用换输入法"的一条旁路。
+
+    什么时候动它：调用方说需要（中文布局）且现在确实关着。读不到状态
+    （`None`）时不动 —— 不知道用户原本什么状态，就不该改。
+    """
+    if not active:
+        yield False
+        return
+    was = caps_lock_on()
+    if was is None or was:
+        yield False
+        return
+    try:
+        press_key("capslock")
+        yield True
+    finally:
+        try:
+            press_key("capslock")
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+@contextmanager
+def ime_muted(hwnd: int):
+    """注入按键期间临时关掉目标窗口的输入法；退出时按原状态恢复。
+
+    中文输入法会截获字母键、转成候选框，目标程序收不到原始按键 ——
+    症状是"键盘完全没反应，而鼠标一切正常"，且换到英文输入法就恢复。
+    这里只动这个窗口的 IME 上下文，不改用户全局的输入法。
+
+    产物是"这次有没有真的关过"（True/False）：没关成也不报错 ——
+    TSF 系的输入法不归 IMM32 管，那种情况只能如实告诉调用方。
+    """
+    if not win32.IS_WINDOWS:
+        yield False
+        return
+    himc = None
+    imm = None
+    was_open = False
+    try:
+        imm = ctypes.windll.imm32
+        himc = imm.ImmGetContext(int(hwnd))
+        if himc:
+            was_open = bool(imm.ImmGetOpenStatus(himc))
+            if was_open:
+                imm.ImmSetOpenStatus(himc, False)
+    except Exception:                                # noqa: BLE001
+        himc = None
+    try:
+        yield was_open
+    finally:
+        if himc is not None:
+            try:
+                if was_open:
+                    imm.ImmSetOpenStatus(himc, True)
+                imm.ImmReleaseContext(int(hwnd), himc)
+            except Exception:                        # noqa: BLE001
+                pass
+
+
+def _pick_english_layout(installed) -> int | None:
+    """从 `[(HKL, langid)]` 里挑英语（美国）；没有返回 None（不替用户装）。"""
+    for hkl, langid in installed or ():
+        if langid == EN_US_LANGID:
+            return int(hkl)
+    return None
+
+
+def english_layout_hkl() -> int | None:
+    """已安装的英语（美国）布局 HKL；没装返回 None。"""
+    return _pick_english_layout(win32.installed_layouts())
+
+
+def _wait_layout(hwnd: int, langid: int, timeout: float = 0.4) -> bool:
+    """等目标线程的布局变成 *langid*；超时返回 False。"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        now = keyboard_layout(hwnd)
+        if now and now[0] == langid:
+            return True
+        time.sleep(0.02)
+    return False
+
+
+@contextmanager
+def english_layout_guard(hwnd: int, active: bool):
+    """为这次注入临时把目标窗口切到英语布局，退出时还原。
+
+    为什么用 `WM_INPUTLANGCHANGEREQUEST`：它是系统给"窗口级输入语言切换"
+    的官方消息，作用在目标线程上；注入 Win+Space 既被护栏禁止（Win 键），
+    真机也按不出来。实测中文 0x0804 <-> 英语 0x0409 都切得动、读得回。
+
+    只在"中文布局 + 这个键会被 IME 吃掉"时动（判据与 caps_lock_guard
+    同源）。产物是 `{"switched": bool, "restored": bool}`：没切成功就
+    如实报 swapped=False；切成功但还原失败时 restored=False —— 调用方
+    必须把这件事告诉模型（用户的状态被留在英语了）。
+    """
+    res = {"switched": False, "restored": True}
+    if not active:
+        yield res
+        return
+    lay = keyboard_layout(hwnd)
+    if not lay or lay[0] not in _CJK_LANGIDS:
+        yield res
+        return
+    hkl = english_layout_hkl()
+    if hkl is None:
+        yield res
+        return
+    before = win32.keyboard_layout_of(hwnd)
+    if not before or not win32.post_input_language_change(hwnd, hkl):
+        yield res
+        return
+    if not _wait_layout(hwnd, EN_US_LANGID):
+        # 消息可能晚到：走之前先试着还原，不能把用户留在英语。
+        win32.post_input_language_change(hwnd, before)
+        _wait_layout(hwnd, lay[0], timeout=0.2)
+        yield res
+        return
+    res["switched"] = True
+    try:
+        yield res
+    finally:
+        win32.post_input_language_change(hwnd, before)
+        res["restored"] = _wait_layout(hwnd, lay[0])
 
 
 def paste_text(text: str, *, backend: str = "auto") -> None:

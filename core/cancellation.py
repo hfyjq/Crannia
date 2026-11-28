@@ -112,7 +112,7 @@ def kill_processes(session_key: str) -> int:
     try:
         from core.shell import _kill_tree
     except Exception as exc:                      # noqa: BLE001
-        print("[cancel] 拿不到 _kill_tree（%s: %s）—— 杀不掉，命令会继续跑"
+        print("[cancel] cannot get _kill_tree (%s: %s) - command keeps running"
               % (type(exc).__name__, exc))
         return 0
     killed = 0
@@ -120,9 +120,9 @@ def kill_processes(session_key: str) -> int:
         try:
             _kill_tree(proc)
             killed += 1
-            print("[cancel] 已掐掉一条命令：%s" % (cmd or "(空)"))
+            print("[cancel] killed a command: %s" % (cmd or "(empty)"))
         except Exception as exc:                  # noqa: BLE001
-            print("[cancel] 掐命令失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[cancel] kill failed (%s: %s)" % (type(exc).__name__, exc))
     return killed
 
 

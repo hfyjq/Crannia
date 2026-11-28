@@ -100,6 +100,17 @@ def main() -> int:
     check("attachRows never attaches a row id to a receipt",
           "!isReceipt(next[i])" in app, "")
 
+    # 渲染列表的内存守卫：判据在纯函数里（node 上面那组），App 只管接线。
+    #   少了它，长会话的 React 状态与 DOM 只增不减（重载才释放）。
+    check("App imports trimHistory from the pure module",
+          "trimHistory }" in app or "trimHistory}" in app, "")
+    check("task.end trims the rendered list (not a render-time filter)",
+          "setMessages((x) => trimHistory(x.filter(" in app, "")
+    check("the trim boundary is rendered (count is visible, not silent)",
+          'm.role === "trimmed"' in app, "")
+    check("the boundary uses one localized sentence",
+          "已收起更早的 {n} 条消息" in app, "")
+
     print("\n" + "=" * 62)
     if _FAILED:
         print("FAILED:")

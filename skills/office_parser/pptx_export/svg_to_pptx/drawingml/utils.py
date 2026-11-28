@@ -227,8 +227,8 @@ def _warn_fonts_unreadable_once() -> None:
     if _FONT_AVAIL_WARNED:
         return
     _FONT_AVAIL_WARNED.append(True)
-    print("  [font] 本机字体清单读不到（非 Windows 且没有 fontconfig？）--"
-          "表外的字体族按原样写进产物，字体替换那一层今天没生效")
+    print("  [font] local font list unavailable --"
+          " writing unlisted font families as-is")
 
 
 def _note_font_substitution(original: str, replacement: str) -> None:
@@ -237,7 +237,7 @@ def _note_font_substitution(original: str, replacement: str) -> None:
     if item in _FONT_SUBSTITUTED or len(_FONT_SUBSTITUTED) >= 32:
         return
     _FONT_SUBSTITUTED.append(item)
-    print("  [font] 本机没有 %r -> 产物里写成 %r" % (original, replacement))
+    print("  [font] font %r not found, written as %r" % (original, replacement))
 
 
 def take_font_substitutions() -> list:

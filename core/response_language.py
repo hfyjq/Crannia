@@ -127,7 +127,7 @@ def configured_language() -> str | None:
     lang = normalize(val)
     if lang is None and not _bad_noted:
         _bad_noted = True
-        print("[language] 设置里的 %s=%r 认不出 —— 按「跟随系统」处理"
+        print("[language] configured %s=%r unrecognized - following system"
               % (SETTING_KEY, val))
     return lang
 

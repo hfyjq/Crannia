@@ -283,7 +283,7 @@ def note_observed(path, session_id: str | None = None) -> None:
         _note_read(_sid() if session_id is None else session_id, Path(path))
     except Exception as exc:                                  # noqa: BLE001
         # 记账失败不许影响读取本身（同 `security._note_touched` 的规矩）
-        print("[observe] 读态记账失败（不影响本次读写）：%s: %s"
+        print("[observe] read-state record failed (read/write unaffected): %s: %s"
               % (type(exc).__name__, exc))
 
 
@@ -811,7 +811,7 @@ def write_file(file_path: str = "", content=None) -> dict:
 
     _note_read(session_id, path)          # 纪律 ②：写完把新 stat 记回去
     print("[file] write_file %s (%d bytes, %s)"
-          % (_posix(path), len(data), "覆盖" if existed else "新建"))
+          % (_posix(path), len(data), "overwrite" if existed else "created"))
 
     lines = payload.count("\n") + (0 if payload.endswith("\n") or not payload else 1)
     out = {
@@ -1081,7 +1081,7 @@ def _finish_edit(file_path, path, session_id, new_text, enc, replaced_bytes,
 
     _note_read(session_id, path)          # 纪律 ②
 
-    print("[file] edit_file %s (%d 处, %s)"
+    print("[file] edit_file %s (%d places, %s)"
           % (_posix(path), n, _eol_name(used_eol or eol)))
 
     out = {

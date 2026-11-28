@@ -21,9 +21,10 @@
 3. 大类隐含协议 —— `claude` 卡 = Anthropic 协议，**其余（含「其他」）=
    OpenAI 兼容**，没有单独的"协议"字段。
    若某个服务两种协议都不沾，今天没有落点。
-4. 凭据与配置分两个文件 —— 配置可以随便看、将来要能导出；
-   凭据不行。本模块只有一个出口把明文交出去（`api_for`），
-   其余读取者拿到的都是打码过的（`has_api` + 尾 4 位）。
+4. 存储是一份文件（2026-11-19 放宽：账本与 `api` 同文件，用户能手改）。
+   但内存层仍分离 —— 条目出本模块时不带 `api`，导出与界面在结构上
+   拿不到明文；明文只有 `api_for` 一个出口，其余读取者拿 `masked()`
+   （`has_api` + 尾 4 位）。代价：整份复制那个文件 = 带着密钥走。
 5. 超限拒、不截断（截断改的是用户起的名）。
 6. id 是铸出来的（`m` + 8 位十六进制），不是会话键 ——
    `/clear` 会复用会话键。
@@ -52,12 +53,14 @@ from pathlib import Path
 # 落点
 # ----------------------------------------------------------------------
 
-#: 账本。运行数据一律进 `data/runtime/`。
+#: 单文件存储：账本 + 每条的 `api` 同一份，用户能手改。
+#: 它同时要进 `core/security.py::DEFAULT_FORBIDDEN_PATHS` —— 否则模型
+#: 读得到自己的 key（兜底那一档翻成 `READ_ONLY` 之后，那份清单就是
+#: "读不到"的唯一依据）。
 LEDGER_PATH = Path("data/runtime/model_configs.json")
 
-#: 凭据单独一个文件（判据 4）。它同时要进
-#: `core/security.py::DEFAULT_FORBIDDEN_PATHS` —— 否则模型读得到自己的 key
-#: （兜底那一档翻成 `READ_ONLY` 之后，那份清单就是"读不到"的唯一依据）。
+#: 老形状的凭据文件（单文件之前那份）。只用于迁移读取 ——
+#: `load()` 把它并进单文件后删掉；第二处明文不许留着。
 CREDS_PATH = Path("data/runtime/provider_credentials.json")
 
 
@@ -206,7 +209,7 @@ def _read(path: Path) -> dict:
         # 读不动，当空。判据同 `groups._read`：宁可让用户重配一次，
         #   不可凭一个读不动的文件把界面上那几张卡渲染成半截。
         #   但不重播种 —— 重播会把用户删掉的条目复活（见 `load()`）。
-        print(f"[model_configs] 账本读不动（{type(exc).__name__}: {exc}）—— 按空账本走")
+        print(f"[model_configs] ledger unreadable ({type(exc).__name__}: {exc}) - treating as empty")
         return {}
     return raw if isinstance(raw, dict) else {}
 
@@ -231,6 +234,44 @@ def _empty() -> dict:
     """空账本的形状。 `default` 与 `configs` 同一个文件 ——
     一个写者、一把锁、一次原子写（分成两个文件就要回答"写了一半怎么办"）。"""
     return {"configs": {}, "default": "", "seeded_at": 0.0}
+
+
+def _split_api(configs: dict) -> tuple[dict, dict]:
+    """把 `api` 从条目里剥出来（`configs 不含 api`, `creds = {id: api}`）。
+
+    内存层仍分离（判据 4 的后半条没有放宽）：`all_entries()` /
+    `_snapshot()` 交出去的条目一个都不带 `api`，所以导出包与界面
+    在结构上拿不到明文，不必靠"记得剔"。
+    """
+    clean: dict = {}
+    apis: dict = {}
+    for cid, entry in (configs or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        one = dict(entry)
+        api = str(one.pop("api", "") or "")
+        if api:
+            apis[str(cid)] = api
+        clean[cid] = one
+    return clean, apis
+
+
+def _write_store(ledger: dict, creds: dict) -> None:
+    """单文件落盘：账本 + 每条的 `api`。
+
+    条目里已有的 `api` 先剥掉再按 `creds` 补 —— 两处写同一个键
+    会让"改了 api 却没落盘"看起来成功。
+    """
+    doc = {"configs": {}, "default": ledger.get("default", ""),
+           "seeded_at": ledger.get("seeded_at", 0.0)}
+    for cid, entry in (ledger.get("configs") or {}).items():
+        one = dict(entry)
+        one.pop("api", None)
+        api = str((creds or {}).get(cid) or "")
+        if api:
+            one["api"] = api
+        doc["configs"][cid] = one
+    _write(LEDGER_PATH, doc)
 
 
 def _normalise(raw: dict) -> dict:
@@ -265,9 +306,19 @@ def _normalise(raw: dict) -> dict:
 
 
 def _ledger_now() -> dict:
-    """当前账本的一份可改副本（调用方在锁里改它）。"""
+    """当前账本的一份可改副本（调用方在锁里改它）。
+
+    `_cache is None`（没 `load()` 过）时顺手把 `_creds` 也读出来 ——
+    否则写入路径会拿一本"有 api 的账本 + 空的 `_creds`"去落盘，
+    把别的条目的密钥一起冲掉（单文件之前那条路靠两份文件天然分开）。
+    """
+    global _creds
     if _cache is None:
-        return _normalise(_read(LEDGER_PATH))
+        led = _normalise(_read(LEDGER_PATH))
+        led["configs"], creds = _split_api(led["configs"])
+        if _creds is None:
+            _creds = _migrate_legacy_creds(creds, led["configs"])
+        return led
     return {"configs": dict(_cache["configs"]), "default": _cache["default"],
             "seeded_at": _cache["seeded_at"]}
 
@@ -297,27 +348,68 @@ def load(*, seed: bool = False) -> dict:
         #:   `_read` 对"不存在"与"读不动"都回 `{}`（它俩在它那层长得一样），
         #:   所以这里必须另外用 `exists` 把两者分开。
         readable = (not exists) or isinstance(raw.get("configs"), dict)
-        if seed and readable and not _normalise(raw)["seeded_at"]:
+        cache = _normalise(raw)
+        #: 单文件里的 `api` 剥进 `_creds` —— 内存层仍分离（见 `_split_api`）。
+        cache["configs"], creds = _split_api(cache["configs"])
+        creds = _migrate_legacy_creds(creds, cache["configs"])
+        if seed and readable and not cache["seeded_at"]:
             seeded = _seed_from_config()
             if seeded is not None:
                 # 并进已有条目（用户可能已经先建过几条）—— 不是覆盖。
-                merged = _normalise(raw)
-                merged["configs"].update(seeded["configs"])
-                if not merged["default"]:
-                    merged["default"] = seeded["default"]
-                merged["seeded_at"] = seeded["seeded_at"]
+                cache["configs"].update(seeded["configs"])
+                if not cache["default"]:
+                    cache["default"] = seeded["default"]
+                cache["seeded_at"] = seeded["seeded_at"]
+                for cid, api in (seeded.get("_creds") or {}).items():
+                    creds.setdefault(cid, api)
                 try:
-                    _write(LEDGER_PATH, merged)
+                    _write_store(cache, creds)
                 except Exception as exc:                        # noqa: BLE001
-                    print(f"[model_configs] 播种写不进去（{type(exc).__name__}: {exc}）"
-                          f" —— 本次运行**仍然有**这些配置")
-                raw = merged
-        _cache = _normalise(raw)
-        _creds = _read(CREDS_PATH)
-        if not isinstance(_creds, dict):
-            _creds = {}
+                    print(f"[model_configs] seeding write failed ({type(exc).__name__}: {exc}) - configs still active for this run")
+        _cache, _creds = cache, creds
+        #: 迁移只在"老凭据文件还在"时写盘一次；写成功才删（见函数 docstring）。
+        _retire_legacy_creds()
     return {"configs": dict(_cache["configs"]), "default": _cache["default"],
             "seeded_at": _cache["seeded_at"]}
+
+
+def _migrate_legacy_creds(creds: dict, known: dict) -> dict:
+    """把老凭据文件并进 `creds`（单文件里已有的优先）。
+
+    老文件是单文件存储之前那份 `provider_credentials.json`。
+    合并方向：先铺老的，再盖新的 —— 否则"用户在单文件里改过 key"会被旧文件复活。
+    只收账本里还有条目的 id：孤儿 key 既不写盘也会在下次装载时消失，
+    留着它只会让这一轮 `api_for` 回一个"落不了盘的答案"。
+    """
+    try:
+        if not CREDS_PATH.exists():
+            return creds
+        legacy = _read(CREDS_PATH)
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"[model_configs] old credential file unreadable ({type(exc).__name__}: {exc}) - skipping migration")
+        return creds
+    if not isinstance(legacy, dict) or not legacy:
+        return creds
+    merged = {str(k): str(v) for k, v in legacy.items()
+              if isinstance(v, str) and v and str(k) in (known or {})}
+    merged.update({k: v for k, v in (creds or {}).items() if v})
+    return merged
+
+
+def _retire_legacy_creds() -> None:
+    """老凭据文件已并入单文件，写一次盘、删掉它（第二处明文不许留）。
+
+    只在"新凭据真的落到了单文件里"之后才删：删掉一份没备份的明文
+    是不可逆的，而"下次启动再试"是免费的。
+    """
+    if not CREDS_PATH.exists():
+        return
+    try:
+        _write_store(_cache or _empty(), _creds or {})
+        CREDS_PATH.unlink()
+        print("[model_configs] old credential file merged into model_configs.json, original removed")
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"[model_configs] old credential migration incomplete ({type(exc).__name__}: {exc}) - will retry on next load")
 
 
 def all_entries() -> dict:
@@ -400,6 +492,33 @@ def merge_ledger(entries: dict, default: str = "") -> dict:
             "bad": bad, "default": out_default}
 
 
+def import_apis(mapping: dict) -> int:
+    """把设置包加密段里的密钥写回账本（`settings_transfer` 专用）。
+
+    只认账本里已有的 id —— 不认识的丢掉：导入的 `model_configs` 段
+    结构上不含 api（见 `_split_api`），所以密钥必须靠这段单独搬；
+    但一个外来包不许往账本里加行。
+    """
+    global _creds
+    if not isinstance(mapping, dict):
+        return 0
+    n = 0
+    with _LOCK:
+        ledger = _ledger_now()
+        known = ledger["configs"]
+        creds = dict(_creds or {})
+        for cid, api in mapping.items():
+            cid = str(cid or "").strip()
+            api = str(api or "").strip()
+            if cid in known and api:
+                creds[cid] = api
+                n += 1
+        if n:
+            _creds = creds
+            _persist(ledger, creds)
+    return n
+
+
 def _snapshot() -> dict:
     if _cache is None:
         return load()
@@ -434,12 +553,40 @@ def default_id() -> str:
     return str(_snapshot().get("default") or "")
 
 
+def _env_name_of(cid: str) -> str:
+    """配置名 → 环境变量后缀（大写，非字母数字变 `_`）。认不出回空串。"""
+    entry = (_snapshot().get("configs") or {}).get(str(cid or "")) or {}
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(entry.get("name") or "")).strip("_").upper()
+
+
+def _env_override(cid: str, base: str) -> str:
+    """环境变量覆盖：`<BASE>_<配置名>` 优先，裸 `<BASE>` 兜底。
+
+    "一族"= api / 地址 / 模型名三格各一根；脚本与 CI 用。
+    带名字的更具体，必须先查 —— 否则默认档的裸名会盖掉具体档。
+    """
+    names = []
+    nm = _env_name_of(cid)
+    if nm:
+        names.append("%s_%s" % (base, nm))
+    names.append(base)
+    for n in names:
+        v = os.environ.get(n)
+        if v and v.strip():
+            return v.strip()
+    return ""
+
+
 def api_for(cid: str) -> str:
     """取一条的 api 明文。这是全模块唯一一个明文出口（判据 4）。
 
     谁能调它：建 provider 实例那条路（`provider_for`）。端点与界面一律不许——
       它们走 :func:`masked`。
+    环境变量优先 —— 覆盖的是"这一次跑用哪把钥匙"，不落盘。
     """
+    env = _env_override(cid, "CRANNIA_API_KEY")
+    if env:
+        return env
     if _creds is None:
         load()
     return str((_creds or {}).get(str(cid or "").strip()) or "")
@@ -542,8 +689,7 @@ def capability_modes(entry) -> dict:
         if mode in CAP_MODES:
             out[key] = mode
         else:
-            print(f"[model_configs] capabilities.{key}={value!r} 不认识"
-                  f"—— 按 auto 处理（只接受 auto / on / off）")
+            print(f"[model_configs] capabilities.{key}={value!r} not recognized - treating as auto (only auto / on / off accepted)")
     return out
 
 
@@ -586,18 +732,12 @@ def capabilities_of(raw, *, base=None) -> dict:
 # ----------------------------------------------------------------------
 
 def _persist(ledger: dict, creds: dict) -> None:
-    """两个文件各写一次。写不进去照样算成功（本次运行内是真的）——
+    """单文件写一次。写不进去照样算成功（本次运行内是真的）——
     同 `groups.create` 那条；但要说出来。"""
     try:
-        _write(LEDGER_PATH, ledger)
+        _write_store(ledger, creds)
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[model_configs] 账本写不进去（{type(exc).__name__}: {exc}）"
-              f" —— 本次运行**改动仍然生效**")
-    try:
-        _write(CREDS_PATH, creds)
-    except Exception as exc:                                    # noqa: BLE001
-        print(f"[model_configs] 凭据写不进去（{type(exc).__name__}: {exc}）"
-              f" —— 本次运行**改动仍然生效**")
+        print(f"[model_configs] storage write failed ({type(exc).__name__}: {exc}) - changes remain active for this run")
 
 
 def create(*, card, name, model, base_url="", api="", window=None,
@@ -797,8 +937,7 @@ def _seed_from_config() -> dict | None:
         from bus.core import load_config
         cfg = load_config("config.yaml")
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[model_configs] 播种：config.yaml 读不动"
-              f"（{type(exc).__name__}: {exc}）—— 这次不搬，下次装载再试")
+        print(f"[model_configs] seeding: config.yaml unreadable ({type(exc).__name__}: {exc}) - skipped, will retry on next load")
         return None
 
     if not isinstance(cfg, dict):
@@ -862,28 +1001,21 @@ def _seed_from_config() -> dict | None:
     # 环境没就绪就不搬：老配置里有 `${VAR}`，而一条都没解出来
     #这次跑的进程里 `os.environ` 是空的（没先 `load_dotenv`）。
     if placeholders and not creds:
-        print(f"[model_configs] 播种：老配置里 {placeholders} 条写的是 `${{VAR}}`，"
-              f"而这次一条都没解开 —— **像**是环境变量还没就绪（没先 load_dotenv）。"
-              f"这次不搬，下次装载再试")
+        print(f"[model_configs] seeding: {placeholders} old configs use `${{VAR}}` and none resolved this time - env vars likely not ready; skipped, will retry on next load")
         return None
 
     led["default"] = chosen or sorted(led["configs"])[0]
     led["seeded_at"] = now
     # 播种不改 `config.yaml`（它今天仍然是"退回时那条路"的真相源）。
-    try:
-        _write(CREDS_PATH, creds)
-    except Exception as exc:                                    # noqa: BLE001
-        print(f"[model_configs] 播种：凭据写不进去（{type(exc).__name__}: {exc}）")
+    #: 凭据不在这里写盘 —— 交给 `load()` 一次写单文件（`_write_store`）。
+    led["_creds"] = creds
     # 报数要连"其中几条带凭据"一起报 —— `M < N` 正是那条会静默发生的事故
     #   （跑了 / 有变化 / 缺了什么，三件事都要说）。
-    print(f"[model_configs] 播种：从 config.yaml 搬进 {len(led['configs'])} 条配置"
-          f"，其中 {len(creds)} 条带凭据")
+    print(f"[model_configs] seeded {len(led['configs'])} configs from config.yaml ({len(creds)} with credentials)")
     if extra_keys:
-        print(f"[model_configs] 播种：有 {extra_keys} 条老配置带**多把 key**（轮换池）——"
-              f"只搬了第一把，其余没搬（要轮换的话请在新页面上建多条）")
+        print(f"[model_configs] seeding: {extra_keys} old configs have multiple keys (rotation pool); only the first was copied")
     if cut_names:
-        print(f"[model_configs] 播种：{len(cut_names)} 条老配置的名字超 {MAX_NAME} 字，"
-              f"已截短：{cut_names[:3]}")
+        print(f"[model_configs] seeding: {len(cut_names)} old config names exceeded {MAX_NAME} chars, truncated: {cut_names[:3]}")
     return led
 
 
@@ -1037,7 +1169,7 @@ def cards_payload() -> dict:
         except Exception as exc:                                # noqa: BLE001
             # 能力读不出来不该让整页读不出来；但也不许装作"纯文本"
             # （读不到 ≠ 0），这一格不出现，界面就不显示 chips。
-            print("[model_configs] 能力计算失败（%s: %s）—— 这条不显示能力"
+            print("[model_configs] capability computation failed (%s: %s) - capability not shown for this entry"
                   % (type(exc).__name__, exc))
         by_card[card].append(row)
     cards = []
@@ -1089,10 +1221,12 @@ def _model_cfg_of(entry: dict, cid: str) -> dict:
     那家自带的地址（`build_provider` 是 `model_cfg.get("base_url", 兜底)`，
     键在就轮不到兜底）。老 `config.yaml` 的 anthropic 那条正是留空。
     """
-    model_cfg: dict = {"model_name": str(entry.get("model") or "").strip(),
-                       "api_key": api_for(cid)}
-    if entry.get("base_url"):
-        model_cfg["base_url"] = entry["base_url"]
+    model = (_env_override(cid, "CRANNIA_MODEL")
+             or str(entry.get("model") or "").strip())
+    base_url = _env_override(cid, "CRANNIA_BASE_URL") or str(entry.get("base_url") or "")
+    model_cfg: dict = {"model_name": model, "api_key": api_for(cid)}
+    if base_url:
+        model_cfg["base_url"] = base_url
     if entry.get("window"):
         model_cfg["context_window"] = entry["window"]
     #: 三态覆盖 → `build_provider` 认得的那两个键。
@@ -1153,7 +1287,7 @@ def instance_for(cid: str, *, fallback=None, say: bool = False):
     dirname, why = _dirname_model(cid)
     if not dirname:
         if say:
-            print(f"[model_configs] 配置条目 '{cid}' 用不了：{why}")
+            print(f"[model_configs] config entry '{cid}' unusable: {why}")
         return fallback
 
     stamp = float(entry.get("updated_at") or 0)
@@ -1166,17 +1300,14 @@ def instance_for(cid: str, *, fallback=None, say: bool = False):
         instance, derived = build_provider(PROVIDERS_DIR / dirname,
                                            {"model": _model_cfg_of(entry, cid)})
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[model_configs] 配置条目 '{cid}' 装不上"
-              f"（{type(exc).__name__}: {exc}）—— 这一段对话沿用原模型")
+        print(f"[model_configs] config entry '{cid}' failed to load ({type(exc).__name__}: {exc}) - this session keeps the original model")
         return fallback
 
     from bus.registry import register_provider
     register_provider(cid, instance)
     _INSTANCES[cid] = (stamp, instance)
     if say:
-        print(f"[model_configs] 这一段对话改用：『{entry.get('name')}』"
-              f"（{dirname} / {entry.get('model')} / 窗口 "
-              f"{derived.get('window_tokens')} 来源 {derived.get('window_source')}）")
+        print(f"[model_configs] this session now uses: {entry.get('name')} ({dirname} / {entry.get('model')} / window {derived.get('window_tokens')} source {derived.get('window_source')})")
     return instance
 
 
@@ -1287,7 +1418,7 @@ def provider_for(cid: str, *, fallback=None):
     dirname = CARD_PROVIDER.get(str(entry.get("card") or ""))
     model = str(entry.get("model") or "").strip()
     if not dirname or not model:
-        print(f"[model_configs] 配置条目 '{cid}' 缺卡片或模型名 —— 退回原模型")
+        print(f"[model_configs] config entry '{cid}' has no card or model name - falling back to original model")
         return fallback
 
     try:
@@ -1295,8 +1426,7 @@ def provider_for(cid: str, *, fallback=None):
         instance, derived = build_provider(PROVIDERS_DIR / dirname,
                                            {"model": _model_cfg_of(entry, cid)})
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[model_configs] 配置条目 '{cid}' 装不上"
-              f"（{type(exc).__name__}: {exc}）—— 退回 config.yaml 那个模型")
+        print(f"[model_configs] config entry '{cid}' failed to load ({type(exc).__name__}: {exc}) - falling back to config.yaml model")
         return fallback
 
     from bus.registry import register_provider, register_provider_metadata
@@ -1305,9 +1435,7 @@ def provider_for(cid: str, *, fallback=None):
     if default_id() == cid:
         register_provider(dirname, instance)
     _INSTANCES[cid] = (float(entry.get("updated_at") or 0), instance)
-    print(f"[model_configs] 生效：『{entry.get('name')}』"
-          f"（{dirname} / {model} / 窗口 {derived.get('window_tokens')}"
-          f" 来源 {derived.get('window_source')}）")
+    print(f"[model_configs] active: {entry.get('name')} ({dirname} / {model} / window {derived.get('window_tokens')} source {derived.get('window_source')})")
     return instance
 
 

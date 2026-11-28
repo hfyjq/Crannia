@@ -214,17 +214,24 @@ export function canAdd(card, maxPerCard) {
 }
 
 /** 联通测试的结果怎么显示成一句话（`data` 是端点回的载荷）。 */
+/** 一次连通测试的读数 → `{ok, text, detail}`。
+ *
+ *  `text` 是一行结论，`detail` 是能直接拿去排查的原始信息（请求了哪个地址、
+ *  上游回了什么）。只给一句话的时候，用户看着「HTTP 404」无从下手 ——
+ *  而这两样后端本来就发过来了（`tried` / `body`）。
+ */
 export function testVerdict(data) {
   const d = data || {};
-  //: 后端给的那句是唯一口径（`message`）；只有它缺席时才在这里拼一句兜底。
-  if (d.message) return { ok: !!d.ok, text: d.message };
-  if (d.ok) {
-    return { ok: true, text: t("已联通（HTTP {status}）", { status: d.status }) };
-  }
-  if (d.status === 0) {
-    return { ok: false, text: d.body || t("连接失败") };
-  }
-  return { ok: false,
-           text: t("上游回了 HTTP {status}", { status: d.status })
-                 + (d.body ? "：" + d.body : "") };
+  const tried = String(d.tried || "");
+  const head = d.ok
+    ? (d.message || t("已联通（HTTP {status}）", { status: d.status }))
+    : (d.status === 0
+      ? (d.message || d.body || t("连接失败"))
+      : (d.message || t("上游回了 HTTP {status}", { status: d.status })));
+  return {
+    ok: !!d.ok,
+    text: head,
+    //: 展开后给两样排查要看的东西：请求了哪个地址、上游原样回了什么。
+    detail: [tried, String(d.body || "")].filter(Boolean).join("\n\n"),
+  };
 }

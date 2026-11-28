@@ -9,7 +9,7 @@
 //      不许被吞（按文本 + 10 秒窗口判）。
 
 import assert from "node:assert/strict";
-import { activityAnchorIndex, classifyReply, replyAnchorIndex }
+import { activityAnchorIndex, classifyReply, replyAnchorIndex, trimHistory }
   from "../src/message-order.js";
 
 let pass = 0;
@@ -105,6 +105,34 @@ const ACT = (id) => ({ id, role: "activity" });
                              A("a2")]) === 3);
   check("空列表 -> 0", activityAnchorIndex([]) === 0);
   check("null 不炸", activityAnchorIndex(null) === 0);
+}
+
+// ── ③ 渲染列表的内存守卫（`trimHistory`）────────────────────────
+{
+  const U = (id) => ({ id, role: "user" });
+  const A = (id) => ({ id, role: "assistant" });
+
+  //:没超限时必须是**同一个数组**：它挂在每个 `task.end` 上，
+  //:  返回新数组会让每一轮重渲染整段对话。
+  const small = [U("u1"), A("a1")];
+  check("没超限 -> 原样返回同一个数组（不制造新数组）",
+        trimHistory(small, 10) === small);
+
+  const big = Array.from({ length: 12 }, (_, i) => (i % 2 ? A("a" + i) : U("u" + i)));
+  const kept = trimHistory(big, 10);
+  check("超限 -> 只留最后 limit 条",
+        kept.length === 11 && kept[0].role === "trimmed"
+        && kept.slice(1).every((m, i) => m === big[2 + i]));
+  check("标记报的是真收起的条数（不含标记自己）", kept[0].count === 2);
+
+  //:连着收两次：用户看到的必须是总数，不是这一次的数。
+  const kept2 = trimHistory(kept.concat([U("u12"), A("a12")]), 10);
+  check("连着收 -> count 累加", kept2[0].count === 4, String(kept2[0].count));
+  check("始终只有一个标记", kept2.filter((m) => m.role === "trimmed").length === 1);
+
+  //:limit 非法时落回默认值，不炸。
+  check("limit 非法 -> 落回默认", Array.isArray(trimHistory(big, 0)));
+  check("null 不炸", trimHistory(null, 10).length === 0);
 }
 
 console.log(`${pass} passed` + (failed.length ? `, ${failed.length} failed` : ""));

@@ -17,7 +17,7 @@ import { userTextForDisplay } from "./user-text.js";
 import { parseAttachments } from "./attachments.js";
 import { MessageAttachments } from "./Attachments.jsx";
 import { Confirm } from "./Confirm.jsx";
-import { activityAnchorIndex, classifyReply, replyAnchorIndex } from "./message-order.js";
+import { activityAnchorIndex, classifyReply, replyAnchorIndex, trimHistory } from "./message-order.js";
 //:名册画哪些条目的唯一判据（0 轮且不是当前，不画）。
 import { liveEventBelongs, visibleThreads, viewKeyOf } from "./thread-list.js";
 //: 「还贴着底吗」—— 自动跟随的唯一判据（用户）。
@@ -26,6 +26,7 @@ import { nextStick } from "./scroll.js";
 import { liveElapsedMs } from "./task-timing.js";
 import { ActivityBlock } from "./ActivityBlock.jsx";
 import { MemoryLibrary } from "./MemoryLibrary.jsx";
+import { NetCreds } from "./NetCreds.jsx";
 import { SettingsTransfer } from "./SettingsTransfer.jsx";
 import { AutoRulesPanel } from "./AutoRulesPanel.jsx";
 import { LogsView } from "./LogsView.jsx";
@@ -1594,6 +1595,13 @@ function AppInner({ client }) {
         refreshThreads();
         return;
       }
+      // 任务完成 —— 交给壳弹系统通知。
+      //   判据在壳那边：主窗在前台就不弹（在不在活跃对话无关）。
+      //   浏览器里没有壳就静默跳过（用户 2026-11-26 定：WebUI 不做这一条）。
+      //   文案是用户定的原话，不区分成败。
+      try {
+        window.crannia?.notifyTask?.("done", "Crannia", t("当前任务处理完成"));
+      } catch { /* 浏览器里没有壳 */ }
       const p = provRef.current;
       const reply = (d && d.response) || p || "";
       // 活动块不删：标成 `done`，它会缩成一条「已完成」小条留在原地；
@@ -1611,8 +1619,10 @@ function AppInner({ client }) {
         //:纯问答的一轮没有步骤，那条「✓ 已完成 0.0s」是纯噪声
         //:   （用户回答中间莫名其妙有个步骤流）。
         //:判据是"没有任何步骤行且没失败"——失败的一轮要留着（它是给用户看的结论）。
-        setMessages((x) => x.filter((m) => !(m.role === "activity" && m.done
-          && !m.live && !m.failed && !(m.lines || []).length)));
+        //:顺手收一下最老的消息（内存守卫）：`trimHistory` 没超限时原样返回，
+        //:   所以常态路径一个字节不变、也不多一次渲染。
+        setMessages((x) => trimHistory(x.filter((m) => !(m.role === "activity" && m.done
+          && !m.live && !m.failed && !(m.lines || []).length))));
         setProv("");
         //:大产物：不放进 `pushAssistant` —— 那个函数被
         //:   `tests/test_main_ui.py` 抠出来在 node 里真跑（它必须保持纯 JS）。
@@ -1717,7 +1727,14 @@ function AppInner({ client }) {
     //   通常小于 1200 ms，大概率漏掉 → 用户卡在「(无回复)」。
     //   所以判据：信号发了就得有人听（加一种事件 = 名单 + 订阅两处，
     //     漏任何一处都会静默失效）。测试两头对账：服务端发、前端听。
-    offs.push(client.subscribe("approval.request", () => { loadApproval(); }));
+    offs.push(client.subscribe("approval.request", () => {
+      // 有待回答 / 待审批 —— 同一个信号在壳里弹一条系统通知。
+      //   同样只在主窗不在前台时弹（判据在壳那边，这里只管"发生了"）。
+      try {
+        window.crannia?.notifyTask?.("ask", "Crannia", t("有新的待回答内容，请查看"));
+      } catch { /* 浏览器里没有壳 */ }
+      loadApproval();
+    }));
 
     //:顶栏那一行读数的数据源。
     //:`context.state` 已经在 `api.js` 的 `EVT_TYPES` 名单里，只加订阅、不动名单
@@ -3287,6 +3304,17 @@ function AppInner({ client }) {
                   if (m.kind === "history_summary") lastSummary = m.id;
                 });
                 return messages.map((m) => {
+                  // 收起的边界标记：屏幕上只留最近 N 条，更早的仍在库里，
+                  //   重新打开这条会话后 `∧ 更早` 翻得回来。说清查了多少条 ——
+                  //   「没看见」与「没发生」必须分得开。
+                  if (m.role === "trimmed") {
+                    return (
+                      <div key={m.id} className="compact-divider">
+                        {t("已收起更早的 {n} 条消息（重新打开这条会话可继续上翻）",
+                           { n: m.count })}
+                      </div>
+                    );
+                  }
                   // 摘要行按 `P1` 就是 `user` 角色（摘要一律 user，靠 kind 辨认）
                   //   所以按 role 判会把它画成用户气泡，等于伪造一句用户说过的话。
                   //   它是边界标记，走中间那条细线。
@@ -3942,6 +3970,8 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
   //: 记忆库是设置弹窗里的子页（用户点按钮后浮窗画面切成独立页）。
   //:   `true` 时整块内容换成 `MemoryLibrary`，左上角返回。
   const [memView, setMemView] = useState(false);
+  //: 网络请求凭据子页（web_request 的 credential 条目）。
+  const [netCredsView, setNetCredsView] = useState(false);
   //:往期公告那一页（与记忆库同一个形状：设置弹窗整块换掉）。
   const [noticesView, setNoticesView] = useState(false);
   //: 手动检查更新那一行：`null` = 没有。非空时在「手动检查更新」下浮出一行
@@ -4208,6 +4238,8 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
     }
     //: 记忆库子页 —— 纯客户端动作（数据自己拉，见 `MemoryLibrary`）。
     if (row.act === "open_memory") { setMemView(true); return; }
+    //: 网络请求凭据子页 —— 纯客户端动作（数据自己拉，见 `NetCreds`）。
+    if (row.act === "open_net_creds") { setNetCredsView(true); return; }
     //: 往期公告子页 —— 纯客户端动作（内容构建时已打进包里）。
     if (row.act === "open_notices") { setNoticesView(true); return; }
     //: 设置包导出 / 导入—— 独立浮窗；导入是两段式（先看差异再确认）。
@@ -4828,6 +4860,11 @@ function Settings({ settings, settingsError, onReload, close, connected, client,
           <MemoryLibrary client={client} notify={notify}
                          onBack={() => setMemView(false)}
                          settings={settings} onReload={onReload} />
+        </section>
+      ) : netCredsView ? (
+        <section className="settings mem-shell">
+          <NetCreds client={client} notify={notify}
+                    onBack={() => setNetCredsView(false)} />
         </section>
       ) : noticesView ? (
         <section className="settings mem-shell">

@@ -227,10 +227,10 @@ def _make_room(incoming: int) -> int:
             total -= size
             removed += 1
         if removed:
-            print("[file_history] 超过总空间上限 %d MiB，从最旧的开始清掉了 %d 份"
+            print("[file_history] over total space cap %d MiB, removed %d oldest"
                   % (cap_mb, removed))
     except Exception as exc:                      # noqa: BLE001
-        print("[file_history] 腾地方失败（不影响写入）：%s: %s"
+        print("[file_history] make room failed (write unaffected): %s: %s"
               % (type(exc).__name__, exc))
     return removed
 
@@ -371,7 +371,7 @@ def _save_index(session_id: str, data: dict) -> None:
             json.dumps(data, ensure_ascii=False).encode("utf-8"),
         )
     except OSError as exc:
-        print("[file_history] 轮次索引写失败（不影响写入）：%s" % exc)
+        print("[file_history] turn index write failed (write unaffected): %s" % exc)
 
 
 def _record_version(session_id: str, path, version: int, turn: int) -> None:
@@ -382,7 +382,7 @@ def _record_version(session_id: str, path, version: int, turn: int) -> None:
             {"v": int(version), "turn": int(turn), "after": None})
         _save_index(session_id, idx)
     except Exception as exc:  # noqa: BLE001
-        print("[file_history] 轮次记账失败（不影响写入）：%s" % exc)
+        print("[file_history] turn record failed (write unaffected): %s" % exc)
 
 
 def _sha256_file(p: Path) -> Optional[str]:
@@ -429,7 +429,7 @@ def snapshot_before(session_id: str, path, turn: int = 0) -> Optional[int]:
             # 不截断（截断出来的 diff 会撒谎：看起来像"只改了前半篇"）
             #留一个标记，让界面上如实说"拿不到 diff"（判据 ③）。
             base.with_suffix(".big").write_bytes(b"")
-            print("[file_history] %s 有 %d 字节 > 封顶 %d —— 只留标记，不存内容"
+            print("[file_history] %s has %d bytes > cap %d - marker only, content not stored"
                   % (src.name, size, MAX_BYTES))
             _record_version(sid, str(path), version, turn)
             return version
@@ -443,7 +443,7 @@ def snapshot_before(session_id: str, path, turn: int = 0) -> Optional[int]:
         _record_version(sid, str(path), version, turn)
         return version
     except Exception as exc:  # noqa: BLE001
-        print("[file_history] 留档失败（不影响写入）：%s: %s"
+        print("[file_history] archive failed (write unaffected): %s: %s"
               % (type(exc).__name__, exc))
         return None
 
@@ -580,7 +580,7 @@ def seal_turn(session_id: str, turn: int = 0) -> int:
             _save_index(sid, idx)
         return n
     except Exception as exc:  # noqa: BLE001
-        print("[file_history] 轮末封印失败（不影响本轮）：%s" % exc)
+        print("[file_history] end-of-turn seal failed (turn unaffected): %s" % exc)
         return 0
 
 
@@ -952,9 +952,9 @@ def prune(days: Optional[int] = None, now: Optional[datetime] = None) -> int:
         # 保留期读不到时不提它，只报空间那一半。
         why = ("超过 %d 天" % days) if days is not None else None
         if why:
-            print("[file_history] 清掉了 %d 份改前留档（%s / 或超过总空间上限）"
+            print("[file_history] removed %d version archives (%s / or over total space cap)"
                   % (removed, why))
         else:
-            print("[file_history] 清掉了 %d 份改前留档（保留期读不到，"
-                  "只按总空间上限削）" % removed)
+            print("[file_history] removed %d version archives (retention unreadable, "
+                  "total space cap only)" % removed)
     return removed

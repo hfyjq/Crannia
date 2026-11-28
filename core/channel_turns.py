@@ -411,7 +411,7 @@ async def intake(channel, event, *, on_reply=None) -> None:
     key = session_key_for(session)
     sch = getattr(channel, "_scheduler", None)
     if sch is None or not key:
-        print("[im] 没有 scheduler 或没有会话键，这条消息丢掉")
+        print("[im] no scheduler or no session key, dropping this message")
         return
     loop = asyncio.get_running_loop()
     text = str(getattr(getattr(event, "message", None), "content", "") or "").strip()
@@ -488,14 +488,14 @@ def _handle_stop(key: str) -> bool:
         if _ev is not None and getattr(_ev, "extras", None) is not None:
             _ev.extras["im_stop_ack"] = True
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 打 /stop 标记失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[im] failed to set /stop marker (%s: %s)" % (type(exc).__name__, exc))
     dropped = drop(key)
     try:
         from core import steer as _steer
         dropped += _steer.pending(key)
         _steer.clear(key)
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 清收件箱失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[im] failed to clear inbox (%s: %s)" % (type(exc).__name__, exc))
     return bool(dropped)
 
 
@@ -533,7 +533,7 @@ def _target_is_unambiguous(event, sch) -> bool:
         snap = sch.activity_snapshot() if hasattr(sch, "activity_snapshot") else {}
         return len(im_routing.hot_sessions(snap, time.monotonic())) <= 1
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 目标会话判不出来（%s: %s）—— 这条不 steer"
+        print("[im] target session could not be determined (%s: %s) - not steering"
               % (type(exc).__name__, exc))
         return False
 
@@ -544,7 +544,7 @@ def _push_steer(key: str, item_id: str, text: str) -> bool:
         _steer.push(key, {"id": item_id, "text": text})
         return True
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 补话没塞进收件箱（%s: %s）—— 这条按普通消息排队"
+        print("[im] interjection not queued into inbox (%s: %s) - queued as a normal message"
               % (type(exc).__name__, exc))
         return False
 
@@ -612,7 +612,7 @@ async def _run_turn(channel, event, on_reply, loop) -> None:
         try:
             resp = await sch.execute(ev)
         except Exception as exc:                      # noqa: BLE001
-            print("[im] 这一轮抛了（%s: %s）" % (type(exc).__name__, exc))
+            print("[im] this turn raised (%s: %s)" % (type(exc).__name__, exc))
             traceback.print_exc()
             err = tr(_COPY["error"])
             if on_reply is not None:
@@ -664,7 +664,7 @@ async def _hop(loop, coro) -> None:
             coro.close()
         except Exception:                             # noqa: BLE001
             pass
-        print("[im] 通道的循环已经关了，这条回话发不出去")
+        print("[im] channel loop is closed, this reply cannot be sent")
         return
     try:
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -673,7 +673,7 @@ async def _hop(loop, coro) -> None:
             coro.close()
         except Exception:                             # noqa: BLE001
             pass
-        print("[im] 回话投递失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[im] reply delivery failed (%s: %s)" % (type(exc).__name__, exc))
         return
     try:
         await asyncio.wait_for(asyncio.wrap_future(fut), timeout=_HOP_TIMEOUT_S)
@@ -681,9 +681,9 @@ async def _hop(loop, coro) -> None:
         #: 取消不一定能取消对面那个协程（它在另一个循环上），但至少
         #:   这一条 worker 不会永远卡住 —— 卡住比"少发一句话"贵得多。
         fut.cancel()
-        print("[im] 回话投递超时（%.0fs）—— 通道可能已经停了" % _HOP_TIMEOUT_S)
+        print("[im] reply delivery timed out (%.0fs) - channel may have stopped" % _HOP_TIMEOUT_S)
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 回话投递失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[im] reply delivery failed (%s: %s)" % (type(exc).__name__, exc))
 
 
 async def _send_note(channel, session, text: str, event=None) -> bool:
@@ -693,7 +693,7 @@ async def _send_note(channel, session, text: str, event=None) -> bool:
     try:
         return bool(await fn(session, text, event=event))
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 旁白没发出去（%s: %s）" % (type(exc).__name__, exc))
+        print("[im] narration not sent (%s: %s)" % (type(exc).__name__, exc))
         return False
 
 
@@ -705,7 +705,7 @@ async def _note(channel, session, text: str, event=None) -> None:
     ok = await _send_note(channel, session, text, event=event)
     if not ok:
         #: 不静默：旁白发不出去时用户以为"它没理我"，而这与"消息没进来"同形。
-        print("[im] 旁白未送达（%s）" % _short_key(str(getattr(session, "session_id", "") or "")))
+        print("[im] narration not delivered (%s)" % _short_key(str(getattr(session, "session_id", "") or "")))
 
 
 def _leftover_event(ev):
@@ -721,7 +721,7 @@ def _leftover_event(ev):
         from core import steer as _steer
         items += _steer.drain(key)
     except Exception as exc:                          # noqa: BLE001
-        print("[im] 取残留补话失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[im] failed to read leftover interjection (%s: %s)" % (type(exc).__name__, exc))
     text = "\n".join(str(i.get("text") or "").strip()
                      for i in items if str(i.get("text") or "").strip())
     if not text.strip():

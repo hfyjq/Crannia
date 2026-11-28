@@ -189,7 +189,7 @@ def parse_config(raw, *, workspace: Path, source: str,
         if event not in EVENTS:
             if event in ("SubagentStart", "SubagentStop"):
                 _warn_once("unsupported:" + event,
-                           "配置里的 %s 暂不支持，已跳过（支持的是 %s）"
+                           "unsupported event %s in config, skipped (supported: %s)"
                            % (event, " / ".join(EVENTS)))
             continue
         if not isinstance(groups, list):
@@ -205,7 +205,7 @@ def parse_config(raw, *, workspace: Path, source: str,
                     rx = re.compile(matcher_raw)
                 except re.error as exc:
                     _warn_once("badmatcher:%s:%s" % (source, matcher_raw),
-                               "%s 里的 matcher 不是合法正则（%s）：%r"
+                               "invalid matcher regex in %s (%s): %r"
                                % (source, exc, matcher_raw))
                     continue
             hooks = group.get("hooks")
@@ -216,7 +216,7 @@ def parse_config(raw, *, workspace: Path, source: str,
                     continue
                 if str(h.get("type") or "") != "command":
                     _warn_once("type:%s:%s" % (source, h.get("type")),
-                               "%s 里有非命令钩子（type=%r），已跳过"
+                               "non-command hook in %s (type=%r), skipped"
                                % (source, h.get("type")))
                     continue
                 cmd = h.get("command")
@@ -268,7 +268,7 @@ def _package_hook_files() -> list:
                     out.append((p, root, bool(pkg.from_workspace)))
                     break
     except Exception as exc:                                  # noqa: BLE001
-        _warn_once("packages", "读取插件包钩子失败（%s: %s）"
+        _warn_once("packages", "failed to read plugin package hooks (%s: %s)"
                    % (type(exc).__name__, exc))
     return out
 
@@ -292,14 +292,14 @@ def _load(workspace: Path) -> list:
         if project and not allowed:
             if path.exists():
                 _warn_once("trust:" + str(path),
-                           "工作区里的钩子配置没有执行：项目级钩子要先在"
-                           "「设置 → 安全设置 → 工作区钩子」里打开")
+                           "workspace hook config not executed: enable it in "
+                           "Settings > Security > Workspace hooks first")
             continue
         if from_ws and not plugin_allowed:
             if path.exists():
                 _warn_once("plugin-trust:" + str(path),
-                           "工作区插件包里的钩子没有执行：要先在"
-                           "「设置 → 安全设置 → 工作区插件」里打开")
+                           "workspace plugin hooks not executed: enable them in "
+                           "Settings > Security > Workspace plugins first")
             continue
         try:
             st = path.stat()
@@ -316,10 +316,10 @@ def _load(workspace: Path) -> list:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             _warn_once("read:" + str(path),
-                       "%s 读不出来（%s）—— 这一份跳过" % (path, exc))
+                       "cannot read %s (%s) - skipping this one" % (path, exc))
             continue
         if plugin_root is not None:
-            print("[hooks] 插件包钩子已加载：%s" % path)
+            print("[hooks] plugin-pack hooks loaded: %s" % path)
         hooks.extend(parse_config(raw, workspace=workspace, source=str(path),
                                   plugin_root=plugin_root))
     _cache_key, _cache_hooks = key, hooks
@@ -384,15 +384,15 @@ def _spawn_async(hook: _Hook, payload: dict, workspace: Path) -> None:
         try:
             out = _run_now(hook, payload, workspace)
         except Exception as exc:                           # noqa: BLE001
-            print("[hooks] 后台钩子异常（%s：%s）" % (type(exc).__name__, exc))
+            print("[hooks] background hook error (%s: %s)" % (type(exc).__name__, exc))
             return
         finally:
             _async_threads.discard(threading.current_thread())
         if out.get("blocked") or out.get("ask"):
-            print("[hooks] 后台钩子想拦下/询问这一步，但它标了 async ⇒ 弃权：%s"
+            print("[hooks] background hook tried to block/ask but is async => abstained: %s"
                   % hook.command)
         elif out.get("context") or out.get("args") is not None:
-            print("[hooks] 后台钩子回了上下文/参数，但它标了 async ⇒ 送不回去：%s"
+            print("[hooks] background hook returned context/args but is async => cannot deliver: %s"
                   % hook.command)
     t = threading.Thread(target=_worker, daemon=True)
     _async_threads.add(t)
@@ -416,10 +416,10 @@ def _run_now(hook: _Hook, payload: dict, workspace: Path) -> dict:
         )
     except subprocess.TimeoutExpired:
         _warn_once("timeout:" + hook.command,
-                   "钩子超时（%d ms）：%s" % (hook.timeout_ms, hook.command))
+                   "hook timed out (%d ms): %s" % (hook.timeout_ms, hook.command))
         return {}
     except OSError as exc:
-        _warn_once("spawn:" + hook.command, "钩子起不来（%s）：%s" % (exc, hook.command))
+        _warn_once("spawn:" + hook.command, "hook failed to start (%s): %s" % (exc, hook.command))
         return {}
 
     if proc.returncode == 2:

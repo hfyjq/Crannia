@@ -106,6 +106,34 @@ async function main() {
     return [why === null, String(why)];
   });
 
+  // ── 开发服务器的精确 origin 例外（2026-11-25）─────────────────
+  //    只在显式传入时存在；判据是整个 origin 相等（端口/主机都是判据）。
+  const DEV_ORIGIN = "http://127.0.0.1:5173";
+  await safe("accept_dev_origin_when_given", async () => {
+    const win = fakeWindow(DEV_ORIGIN + "/");
+    const ev = { sender: win.webContents, senderFrame: win.webContents.mainFrame };
+    const why = reject(ev, win, ["app"], SCHEME, DEV_ORIGIN);
+    return [why === null, String(why)];
+  });
+  await safe("reject_dev_origin_when_not_given", async () => {
+    const win = fakeWindow(DEV_ORIGIN + "/");
+    const ev = { sender: win.webContents, senderFrame: win.webContents.mainFrame };
+    const why = reject(ev, win, ["app"], SCHEME);
+    return [why !== null, String(why)];
+  });
+  await safe("reject_dev_origin_wrong_port", async () => {
+    const win = fakeWindow("http://127.0.0.1:5174/");
+    const ev = { sender: win.webContents, senderFrame: win.webContents.mainFrame };
+    const why = reject(ev, win, ["app"], SCHEME, DEV_ORIGIN);
+    return [why !== null, String(why)];
+  });
+  await safe("reject_dev_origin_lookalike_host", async () => {
+    const win = fakeWindow("http://127.0.0.1.evil.com:5173/");
+    const ev = { sender: win.webContents, senderFrame: win.webContents.mainFrame };
+    const why = reject(ev, win, ["app"], SCHEME, DEV_ORIGIN);
+    return [why !== null, String(why)];
+  });
+
   // ── ★★ 同名同值但**不同对象** ────────────────────────────────
   //    只比 URL 字符串的实现会**放行**。
   await safe("reject_other_webContents_same_url", async () => {
@@ -230,6 +258,8 @@ _MUST_BE_PRESENT = (
     "reject_foreign_frame_same_url", "reject_subframe", "reject_wrong_host",
     "reject_lookalike_host", "reject_wrong_protocol", "reject_about_blank",
     "reject_null_frame", "reject_destroyed_window", "reject_no_window",
+    "accept_dev_origin_when_given", "reject_dev_origin_when_not_given",
+    "reject_dev_origin_wrong_port", "reject_dev_origin_lookalike_host",
 )
 
 

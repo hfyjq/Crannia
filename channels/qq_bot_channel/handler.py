@@ -86,7 +86,7 @@ def _load_credentials() -> dict:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError) as exc:
-        print("[qq_bot] 读凭据文件失败（%s: %s）" % (type(exc).__name__, exc))
+        print("[qq_bot] failed to read credentials file (%s: %s)" % (type(exc).__name__, exc))
         return {}
 
 
@@ -348,7 +348,7 @@ class QQBotChannel(Channel):
         try:
             creds = _load_credentials()
         except Exception as exc:                                  # noqa: BLE001
-            print("[qq_bot] 读凭据失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] failed to read credentials (%s: %s)" % (type(exc).__name__, exc))
             creds = {}
         self._app_id = str(cfg.get("app_id") or creds.get("app_id")
                            or os.environ.get("QQ_BOT_APP_ID") or "")
@@ -393,7 +393,7 @@ class QQBotChannel(Channel):
         self._proxy = self._resolve_proxy()
         if self._proxy:
             from core.net_proxy import redact as _redact
-            print("[qq_bot] 使用代理：%s" % _redact(self._proxy))
+            print("[qq_bot] using proxy: %s" % _redact(self._proxy))
         backoff = 2.0
         try:
             proxy = self._proxy or None
@@ -412,7 +412,7 @@ class QQBotChannel(Channel):
                         if not self._running:
                             break
                         self._fail_start("%s: %s" % (type(exc).__name__, exc))
-                        print("[qq_bot] 网关断开，%d 秒后重连" % int(backoff))
+                        print("[qq_bot] gateway disconnected, reconnecting in %d s" % int(backoff))
                         await asyncio.sleep(backoff)
                         backoff = min(backoff * 2, 60.0)
         finally:
@@ -433,7 +433,7 @@ class QQBotChannel(Channel):
                       component_vars={"msg": message},
                       error_tpl="{msg}", error_vars={"msg": message})
         except Exception as exc:
-            print("[qq_bot] 记事故失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] failed to record incident (%s: %s)" % (type(exc).__name__, exc))
 
     async def _gateway_once(self, proxy: str | None) -> None:
         """连一次网关，直到它自己断开或要求重连。"""
@@ -474,7 +474,7 @@ class QQBotChannel(Channel):
                     if op == 11:
                         continue
                     if op == 7:
-                        print("[qq_bot] 平台要求重连")
+                        print("[qq_bot] platform requested reconnect")
                         return
                     if op == 9:
                         self._seq = None
@@ -548,13 +548,13 @@ class QQBotChannel(Channel):
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            print("[qq_bot] 心跳停了（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] heartbeat stopped (%s: %s)" % (type(exc).__name__, exc))
 
     async def _dispatch(self, event_type: str, data: dict) -> None:
         if event_type == "READY":
             user = data.get("user") or {}
             self._bot_openid = str(user.get("id") or "")
-            print("[qq_bot] 已连接（bot id=%s）" % (self._bot_openid or "?"))
+            print("[qq_bot] connected (bot id=%s)" % (self._bot_openid or "?"))
             try:
                 from core import incidents as _inc
                 _inc.resolve("qq_bot_channel", "channel")
@@ -566,7 +566,7 @@ class QQBotChannel(Channel):
         try:
             await self._handle_message(event_type, data)
         except Exception as exc:
-            print("[qq_bot] 处理消息出错（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] error handling message (%s: %s)" % (type(exc).__name__, exc))
 
     # 入站
 
@@ -594,7 +594,7 @@ class QQBotChannel(Channel):
         if not target_id:
             #: 只打键名，不打值 —— 那些值里是用户的 openid。
             #: 打出来是为了下一次现场能把它补进 `_c2c_openid` 那张表。
-            print("[qq_bot] 这条事件没有回话对象，跳过（t=%s，顶层键=%s）"
+            print("[qq_bot] event has no reply target, skipped (t=%s, top-level keys=%s)"
                   % (event_type, ",".join(sorted(str(k) for k in data))))
             return
 
@@ -614,8 +614,8 @@ class QQBotChannel(Channel):
         )
         self._budget.remember(str(session), scope, msg_id)
 
-        text = chain.content[:80] if chain.content else "[媒体]"
-        print("[qq_bot] %s 收到消息：%s" % (scope, text))
+        text = chain.content[:80] if chain.content else "[media]"
+        print("[qq_bot] %s message received: %s" % (scope, text))
 
         message = Message(
             sender_id=sender_id,
@@ -651,7 +651,7 @@ class QQBotChannel(Channel):
             try:
                 path = await self._download_one(item, url)
             except Exception as exc:
-                print("[qq_bot] 下载附件失败（%s: %s）"
+                print("[qq_bot] failed to download attachment (%s: %s)"
                       % (type(exc).__name__, exc))
                 path = ""
             if path:
@@ -663,7 +663,7 @@ class QQBotChannel(Channel):
     async def _download_one(self, item: dict, url: str) -> str:
         size = int((item or {}).get("size") or 0)
         if size > _MAX_DOWNLOAD_BYTES:
-            print("[qq_bot] 附件太大（%d 字节），不下载" % size)
+            print("[qq_bot] attachment too large (%d bytes), not downloading" % size)
             return ""
         name = str((item or {}).get("filename") or "")
         suffix = Path(name).suffix or ".bin"
@@ -697,7 +697,7 @@ class QQBotChannel(Channel):
             try:
                 await self._drain_delivered(session)
             except Exception as exc:
-                print("[qq_bot] 发待交付文件时出错（%s: %s）"
+                print("[qq_bot] error sending pending delivery files (%s: %s)"
                       % (type(exc).__name__, exc))
 
     async def _send_text(self, scope: str, target_id: str, text: str,
@@ -730,10 +730,10 @@ class QQBotChannel(Channel):
                 if resp.status in (200, 201, 202):
                     return True
                 status, body = resp.status, await resp.text()
-            print("[qq_bot] 发送被拒（%d）：%s" % (status, body[:200]))
+            print("[qq_bot] send rejected (%d): %s" % (status, body[:200]))
             return False
         except Exception as exc:
-            print("[qq_bot] 发送失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] send failed (%s: %s)" % (type(exc).__name__, exc))
             return False
 
     async def send(self, session: MessageSession, content: str | MessageChain) -> bool:
@@ -763,7 +763,7 @@ class QQBotChannel(Channel):
         """
         path = Path(file_path or "")
         if not path.is_file():
-            print("[qq_bot] 要发的文件不存在：%s" % file_path)
+            print("[qq_bot] file to send does not exist: %s" % file_path)
             return False
         scope = "group" if session.message_type is MessageType.GROUP else "c2c"
         target_id = str(session.session_id)
@@ -780,16 +780,16 @@ class QQBotChannel(Channel):
                                           proxy=self._proxy or None) as resp:
                 if resp.status not in (200, 201, 202):
                     status, body = resp.status, await resp.text()
-                    print("[qq_bot] 上传文件被拒（%d）：%s" % (status, body[:200]))
+                    print("[qq_bot] file upload rejected (%d): %s" % (status, body[:200]))
                     return False
                 info = await resp.json(content_type=None)
         except Exception as exc:
-            print("[qq_bot] 上传文件失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] file upload failed (%s: %s)" % (type(exc).__name__, exc))
             return False
 
         file_info = str((info or {}).get("file_info") or "")
         if not file_info:
-            print("[qq_bot] 上传成功但没拿到 file_info，没法发消息")
+            print("[qq_bot] upload succeeded but no file_info, cannot send message")
             return False
 
         msg_id, _ = self._budget.last_for(str(session))
@@ -806,10 +806,10 @@ class QQBotChannel(Channel):
                 if resp.status in (200, 201, 202):
                     return True
                 status, body = resp.status, await resp.text()
-            print("[qq_bot] 发送文件消息被拒（%d）：%s" % (status, body[:200]))
+            print("[qq_bot] file message rejected (%d): %s" % (status, body[:200]))
             return False
         except Exception as exc:
-            print("[qq_bot] 发送文件消息失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] file message failed (%s: %s)" % (type(exc).__name__, exc))
             return False
 
     async def _drain_delivered(self, session: MessageSession) -> int:
@@ -827,7 +827,7 @@ class QQBotChannel(Channel):
                 channel="qq_bot_channel",
                 user_id=str(getattr(session, "session_id", "") or ""))
         except Exception as exc:
-            print("[qq_bot] 取待发文件失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[qq_bot] failed to fetch pending files (%s: %s)" % (type(exc).__name__, exc))
             return 0
         sent = 0
         for rec in recs:

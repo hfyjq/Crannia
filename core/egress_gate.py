@@ -71,7 +71,50 @@ from urllib.parse import urlsplit
 from core.i18n import t as tr
 from core.i18n import tr_fmt as trf
 
-__all__ = ["host_of", "egress_gate", "is_granted"]
+__all__ = ["host_of", "egress_gate", "is_granted", "ssh_subject", "gate_for",
+           "subject_from_args", "same_site"]
+
+
+def same_site(a: str, b: str) -> bool:
+    """两个 URL 是不是同一个站（scheme + 端口 + host，忽略 www. 前缀）。
+
+    唯一一处实现：`web_fetch` 与 `web_request` 都从这儿取。
+    判据见 `web_fetch` 那边的原注释（跨站跳转交回模型、同站跟随）。
+    """
+    try:
+        pa, pb = urlsplit(str(a)), urlsplit(str(b))
+    except ValueError:
+        return False
+
+    def norm(p):
+        host = (p.hostname or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        port = p.port or (443 if p.scheme == "https" else 80)
+        return (p.scheme.lower(), host, port)
+
+    return norm(pa) == norm(pb)
+
+
+#: SSH 目标的 subject 前缀。
+#:
+#: 出网白名单是同一张表（egress kind 同时装 HTTP 主机与 SSH 目标）。
+#: 前缀让两者不撞：裸主机名是 HTTP 的，ssh:user@host 是 SSH 的 -
+#: 信任 example.com 不等于信任 ssh:root@example.com。
+SSH_PREFIX = "ssh:"
+
+
+def ssh_subject(user: str, host: str) -> str:
+    """SSH 的授权单位：ssh:user@host - 写入与匹配同形。
+
+    主机名小写；用户名保持原样（SSH 用户名区分大小写）。
+    主机为空则返回空串（调用方 fail-closed）。
+    """
+    h = str(host or "").strip().lower()
+    if not h:
+        return ""
+    u = str(user or "").strip() or "default"
+    return "%s%s@%s" % (SSH_PREFIX, u, h)
 
 
 def host_of(url: str) -> str:
@@ -99,14 +142,13 @@ def is_granted(host: str, path: str = "/") -> bool:
         from bus.registry import get_workspace_manager
         wm = get_workspace_manager()
     except Exception as exc:  # noqa: BLE001
-        print(f"[egress] 取 wm 失败（按未放行处理）：{type(exc).__name__}: {exc}")
+        print(f"[egress] wm lookup failed (treating as not allowed): {type(exc).__name__}: {exc}")
     # ① 会话级 ∪ 一次性 ∪ 逐字的持久白名单（调度器每轮投影进 wm）
     try:
         if wm is not None and wm.has_target_grant("egress", h):
             return True
     except Exception as exc:  # noqa: BLE001
-        print(f"[egress] 会话授权查询失败（按未放行处理）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[egress] session authorization lookup failed (treating as not allowed): {type(exc).__name__}: {exc}")
     # ② 通配模式（`*.example.com`）—— 见模块 docstring 里"为什么不能只靠 ①"。
     #    它原来直接 `return` —— 现在下面还有 ③④，改成命中才 return，
     #       读失败不吞掉后面两层（吞了 = 表里的站点反而被问，是"更严"那一侧，
@@ -116,17 +158,63 @@ def is_granted(host: str, path: str = "/") -> bool:
         if matches_any(list_for("egress"), h):
             return True
     except Exception as exc:  # noqa: BLE001
-        print(f"[egress] 白名单读取失败（按未放行处理）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[egress] allowlist read failed (treating as not allowed): {type(exc).__name__}: {exc}")
     # ③ 预批准域名表
     try:
         from core.egress_preapproved import is_preapproved
         if is_preapproved(h, path):
             return True
     except Exception as exc:  # noqa: BLE001
-        print(f"[egress] 预批准表读取失败（按未放行处理）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[egress] pre-approved table read failed (treating as not allowed): {type(exc).__name__}: {exc}")
     return False
+
+
+def subject_from_args(tool_name: str, args) -> str:
+    """出网工具的 subject - 审批、授权、自动/完全权限预授权共用这一个算法。
+
+    SSH 走 ssh:user@host（用户名取自参数，缺省取配置条目）；
+    其余按 URL 取主机名。两处若各算各的，"批过却不生效"会再次出现。
+    """
+    a = args if isinstance(args, dict) else {}
+    name = str(tool_name or "")
+    if name.startswith("ssh_"):
+        user = str(a.get("user") or "")
+        if not user:
+            try:
+                from core import ssh_config
+                user = str(ssh_config.resolve_entry(
+                    str(a.get("key_name") or "")).get("user") or "")
+            except Exception:                                   # noqa: BLE001
+                user = ""
+        return ssh_subject(user, str(a.get("host") or ""))
+    return host_of(str(a.get("url") or ""))
+
+
+def gate_for(subject: str, *, tool_name: str, body: str) -> Optional[dict]:
+    """按给定的 subject 过闸（SSH 目标用它；HTTP 走 egress_gate）。
+
+    放行返回 None；要问返回待审批载荷。subject 与 data/allowlist.json /
+    会话授权比的是同一个串 - 写入与匹配同形。
+    """
+    s = str(subject or "").strip()
+    if not s:
+        # 取不到 subject 是调用方的 bug（fail-closed 的方向在调用方：
+        # 它应该直接拒这次调用，而不是拿一个空目标去问用户）。
+        return None
+    if is_granted(s):
+        return None
+    from core.approval import pending_payload
+
+    return pending_payload(
+        "egress",
+        body=body,
+        ask_index=_ask_index(),
+        footer=True,
+        subject=s,
+        detail=s,
+        tool=tool_name,
+        status="pending_egress_approval",
+    )
 
 
 def _ask_index(kind: str = "egress") -> int:

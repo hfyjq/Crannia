@@ -329,7 +329,7 @@ class CronRunner:
                 self.tick()
             except Exception as exc:                 # noqa: BLE001
                 # 守护线程绝不因为一次 tick 崩掉而整个消失（静默 = 任务再也不跑了）
-                print("[cron] tick 出错（继续跑）：%s: %s" % (type(exc).__name__, exc))
+                print("[cron] tick error (continuing): %s: %s" % (type(exc).__name__, exc))
             self._wake.wait(self._interval)
             self._wake.clear()
 
@@ -363,7 +363,7 @@ class CronRunner:
             for i, job in enumerate(ready, 1):
                 job["_burst"] = (i, len(ready))
                 job["_batch"] = batch
-            print("[cron] 这一批有 %d 条（>%d）—— 改投到一个新对话里"
+            print("[cron] batch of %d (>%d) - routed to a new conversation"
                   % (len(ready), BURST_THRESHOLD))
         for job in ready:
             self._spawn(job, trigger="schedule")
@@ -415,7 +415,7 @@ class CronRunner:
                            reason=R_MISSED, error=detail,
                            next_run=next_run, enabled=enabled,
                            started_at=now.isoformat())
-        print("[cron] 跳过 '%s'：%s" % (job.get("title") or jid, detail))
+        print("[cron] skipped '%s': %s" % (job.get("title") or jid, detail))
 
     def _spawn(self, job: dict, trigger: str) -> None:
         with self._inflight_lock:
@@ -433,7 +433,7 @@ class CronRunner:
         except Exception as exc:                     # noqa: BLE001
             # 兜底：任何没被下面接住的异常都要落账，否则这条任务会一直是
             # `running=1`（要等僵尸回收线才放出来）。
-            print("[cron] %s 执行时抛了 %s: %s" % (job["id"], type(exc).__name__, exc))
+            print("[cron] %s raised %s: %s" % (job["id"], type(exc).__name__, exc))
             try:
                 self._store.finish(job["id"], status="error", trigger=trigger,
                                    reason=R_EXEC_FAILED, error=str(exc))

@@ -88,11 +88,11 @@ class StoreFacade:
         except FileNotFoundError:
             return self.version, {}
         except (OSError, ValueError) as exc:
-            print("[skill-store] %s 读取失败（%s: %s），按空处理"
+            print("[skill-store] %s read failed (%s: %s), treating as empty"
                   % (self.path, type(exc).__name__, exc))
             return self.version, {}
         if not isinstance(raw, dict):
-            print("[skill-store] %s 不是对象，按空处理" % self.path)
+            print("[skill-store] %s is not an object, treating as empty" % self.path)
             return self.version, {}
         ver = raw.get("_version")
         # bool 是 int 的子类，需要单独排除。

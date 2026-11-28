@@ -245,6 +245,32 @@ def test_old_keyword_filter_is_gone():
     print("  [ok] keyword-filter API fully removed")
 
 
+def test_discovered_sessions_are_capped():
+    """发现集按会话长 —— 超上限时只淘汰最久没新发现的那些。
+
+    判据：被淘汰的会话下一轮再 `search_tools` 就能拿回来（执行闸的拒绝
+    本来就带路线），而当前会话自己永远不动。
+    """
+    s = _setup()
+    try:
+        cap = R.MAX_DISCOVERED_SESSIONS
+        for i in range(cap):
+            R.note_discovered("cap:s%04d" % i, ["search_song"])
+        assert len(R._discovered) == cap, len(R._discovered)
+        R.note_discovered("cap:new", ["search_song"])
+        assert len(R._discovered) <= cap, len(R._discovered)
+        assert "cap:new" in R._discovered, "当前会话被淘汰了"
+        assert "cap:s0000" not in R._discovered, "最老的那条没有被淘汰"
+        assert R.get_discovered("cap:new") == {"search_song"}
+        # 被淘汰不是"工具消失"：常驻集仍在，再发现一次就回来。
+        assert "search_song" not in R.get_active_tool_names("cap:s0000")
+        R.note_discovered("cap:s0000", ["search_song"])
+        assert "search_song" in R.get_active_tool_names("cap:s0000")
+        print("  [ok] discovered sessions are capped, eviction is recoverable")
+    finally:
+        _restore(s)
+
+
 # ------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------
@@ -265,6 +291,7 @@ if __name__ == "__main__":
         ("CJK hint for external tools", test_cjk_query_hints_at_english_only_external_tools),
         ("no hint without external server", test_no_hint_when_no_external_server),
         ("forget_discovered", test_forget_discovered),
+        ("discovered sessions capped", test_discovered_sessions_are_capped),
         ("search_tools is core", test_search_tools_is_core),
         ("prompt not mirrored", test_prompt_does_not_mirror_catalog),
         ("keyword filter removed", test_old_keyword_filter_is_gone),

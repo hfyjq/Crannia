@@ -549,7 +549,7 @@ def extract_pptx_identity(file_path: str, max_sizes: int = 12,
                                 theme[key][sub] = el.get("typeface")
                 break
         except Exception as exc:                          # noqa: BLE001
-            print("[ppt] 读主题失败（不影响其余）：%s: %s"
+            print("[ppt] read theme failed (rest unaffected): %s: %s"
                   % (type(exc).__name__, exc))
 
         sizes: dict = {}

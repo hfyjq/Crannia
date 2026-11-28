@@ -118,9 +118,9 @@ def _warn_skipped(path: Path) -> None:
     if key in _warned:
         return
     _warned.add(key)
-    print("[code_intel] 工作区里的 %s **没有读**：项目级 LSP 配置要先在"
-          "「设置 → 安全设置 → 工作区 LSP 配置」里打开（它配的是任意命令，"
-          "而这份文件跟着仓库走）。全局的 `data/lsp.json` 不受影响。" % path)
+    print("[code_intel] workspace %s was not read: project-level LSP config must first be enabled in "
+          "Settings -> Security -> Workspace LSP Config (it configures arbitrary commands "
+          "and this file travels with the repo). Global `data/lsp.json` is unaffected." % path)
 
 _LANG_BY_EXT = {
     ".py": "python", ".pyi": "python",
@@ -227,11 +227,11 @@ def _spec_from(item: dict, ident: str, *, source: str = "") -> Optional[dict]:
     elif isinstance(cmd, list) and cmd and all(isinstance(x, str) for x in cmd):
         argv = list(cmd)
     else:
-        print("[code_intel] `%s` 的 command 形状不对，已跳过" % (name or ident))
+        print("[code_intel] `%s` has invalid command shape, skipped" % (name or ident))
         return None
     ext_map = _norm_ext_map(item)
     if not ext_map:
-        print("[code_intel] `%s` 没有扩展名映射，已跳过" % (name or ident))
+        print("[code_intel] `%s` has no extension mapping, skipped" % (name or ident))
         return None
     args = item.get("args")
     if not isinstance(args, list):
@@ -264,8 +264,8 @@ def _parse_specs(raw, *, source: str = "") -> list[dict]:
     elif isinstance(raw, list):
         if not _legacy_warned:
             _legacy_warned = True
-            print("[code_intel] 配置用的是旧的列表格式 —— 仍可用，"
-                  "建议改成 `servers` 对象（键就是服务器名）")
+            print("[code_intel] config uses the legacy list format - still works, "
+                  "recommend switching to a `servers` object (keys are server names)")
         items = []
         for i, it in enumerate(raw):
             ident = (str(it.get("name") or ("server-%d" % (i + 1)))
@@ -275,7 +275,7 @@ def _parse_specs(raw, *, source: str = "") -> list[dict]:
         return out
     for ident, item in items:
         if not isinstance(item, dict):
-            print("[code_intel] `%s` 不是对象，已跳过" % ident)
+            print("[code_intel] `%s` is not an object, skipped" % ident)
             continue
         spec = _spec_from(item, str(ident), source=source)
         if spec is not None:
@@ -289,11 +289,11 @@ def _read_config_file(path: Path) -> list[dict]:
             return []
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        print("[code_intel] %s 读不出来（%s: %s）—— 当作没有配置"
+        print("[code_intel] %s unreadable (%s: %s) - treating as unconfigured"
               % (path, type(exc).__name__, exc))
         return []
     if not isinstance(data, dict):
-        print("[code_intel] %s 顶层不是对象 —— 当作没有配置" % path)
+        print("[code_intel] %s top level is not an object - treating as unconfigured" % path)
         return []
     return _parse_specs(data.get("servers"), source=str(path))
 
@@ -318,7 +318,7 @@ def _plugin_specs() -> list[dict]:
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            print("[code_intel] %s 读不出来（%s）—— 跳过" % (p, exc))
+            print("[code_intel] %s unreadable (%s) - skipped" % (p, exc))
             continue
         section = data.get("servers") if isinstance(data, dict) else None
         out.extend(_parse_specs(section, source=str(p)))

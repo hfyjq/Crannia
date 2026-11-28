@@ -267,13 +267,17 @@ def test_the_ledger_round_trips():
 
     # 真落盘了
     raw = json.loads(MC.LEDGER_PATH.read_text(encoding="utf-8"))
-    check("★ 账本真的落盘了（两个文件之一）",
+    check("★ 单文件真的落盘了（账本 + api 同一份，D6）",
           set(raw.get("configs", {})) == {a["id"], b["id"]}, repr(raw.get("configs")))
-    check("★ 账本里**没有 api**（判据 4：凭据单独一个文件）",
-          "sk-abcdefghijkl" not in MC.LEDGER_PATH.read_text(encoding="utf-8"))
-    creds = json.loads(MC.CREDS_PATH.read_text(encoding="utf-8"))
-    check("★ 凭据文件里**只有** id -> api 两列",
-          creds.get(a["id"]) == "sk-abcdefghijkl", repr(creds))
+    check("★ 单文件里**有 api**（D6 放宽：用户能手改一份文件）",
+          (raw["configs"][a["id"]].get("api") == "sk-abcdefghijkl"),
+          repr(raw["configs"][a["id"]]))
+    check("★★ 但**内存层仍分离**：`all_entries()` 交出去的条目一个都不带 api"
+          "（导出与界面结构上拿不到明文）",
+          all("api" not in e for e in MC.all_entries()["configs"].values()),
+          repr(MC.all_entries()["configs"]))
+    check("★★ 老凭据文件**不再产生**（单文件存储之后没第二处明文）",
+          not MC.CREDS_PATH.exists(), str(MC.CREDS_PATH))
 
     # update：只改传上来的那几格
     MC.reset_for_tests()
@@ -310,8 +314,9 @@ def test_the_ledger_round_trips():
     # 删
     check("★ 删一条：真的删掉了", MC.delete(a["id"]) is True)
     check("★ 删不存在的：回 False（不是抛）", MC.delete("m_nope") is False)
-    check("★ 删掉之后凭据也一起没了（不留孤儿 key）",
-          a["id"] not in json.loads(MC.CREDS_PATH.read_text(encoding="utf-8")))
+    check("★ 删掉之后凭据也一起没了（单文件里不留孤儿 api）",
+          a["id"] not in json.loads(MC.LEDGER_PATH.read_text(encoding="utf-8"))
+          .get("configs", {}) and MC.api_for(a["id"]) == "")
     # 默认那条不许删 —— 两支路线各测一次（话术不同，但都得是一句实话）
     msg_only = _rejects(MC.delete, b["id"])
     check("★★ **默认那条不许删** —— 它是**仅剩的一条**时，拒话说的是"
@@ -553,11 +558,11 @@ def test_the_seed_from_the_legacy_config():
     check("★ 播到对的卡上：`kimi` -> Kimi 卡", by_name["kimi"]["card"] == "kimi")
     check("★ 播到对的卡上：`anthropic` -> Claude 卡", by_name["anthropic"]["card"] == "claude")
 
-    check("★★ `api` 里的 `${VAR}` 被**展开成真值**写进凭据文件",
+    check("★★ `api` 里的 `${VAR}` 被**展开成真值**存下来",
           MC.api_for(by_name["glm"]["id"]) == "sk-glm-REAL",
           repr(MC.api_for(by_name["glm"]["id"])))
-    check("★ 凭据文件里**没有** `${` 这种没展开的占位符",
-          "${" not in MC.CREDS_PATH.read_text(encoding="utf-8"))
+    check("★ 单文件里**没有** `${` 这种没展开的占位符",
+          "${" not in MC.LEDGER_PATH.read_text(encoding="utf-8"))
 
     check("★★ 默认 = **今天真正在跑的那条**（`model.provider` + `model.model_name`）",
           MC.default_id() == by_name["deepseek"]["id"], MC.default_id())
@@ -940,6 +945,82 @@ def test_probe_errors_are_classified():
         check("%s -> %s" % (str(err)[:40], want), got == want, got)
 
 
+def test_the_legacy_creds_file_is_migrated():
+    """单文件存储：老的 `provider_credentials.json` 并进来、然后删掉。
+
+    两条最容易写错的：① 两份都有时单文件优先（否则用户在单文件里改的
+    key 会被旧文件复活）；② 迁完老文件必须没了 —— 留着就是第二处明文。
+    """
+    MC = _fresh()
+    a = _mk(MC, card="gpt", name="A", model="gpt-4o")
+    # 造老文件：一个 id 与单文件相同（旧值），一个账本里没有的孤儿
+    MC.CREDS_PATH.write_text(json.dumps({
+        a["id"]: "sk-OLD-legacy", "morphan01": "sk-orphan"},
+        ensure_ascii=False), encoding="utf-8")
+    MC.reset_for_tests()
+    MC.load()
+    check("★★ 两份都有时**单文件优先**（旧文件不许复活旧 key）",
+          MC.api_for(a["id"]) == "sk-abcdefghijkl", MC.api_for(a["id"]))
+    check("★ 账本里没有的孤儿 id 不搬（内存里也不留一个落不了盘的答案）",
+          MC.api_for("morphan01") == "", MC.api_for("morphan01"))
+    check("★★ 迁移完老文件**删掉了**（第二处明文不许留）",
+          not MC.CREDS_PATH.exists(), str(MC.CREDS_PATH))
+    raw = json.loads(MC.LEDGER_PATH.read_text(encoding="utf-8"))
+    check("★ 单文件里看得到 api（用户能手改同一份文件）",
+          raw["configs"][a["id"]].get("api") == "sk-abcdefghijkl",
+          repr(raw["configs"][a["id"]]))
+    MC.reset_for_tests()
+    MC.load()
+    check("★ 重装载之后 api 照样在（迁移是幂等的）",
+          MC.api_for(a["id"]) == "sk-abcdefghijkl", MC.api_for(a["id"]))
+    _fresh()
+
+
+def test_env_overrides_the_three_fields():
+    """`CRANNIA_API_KEY` 一族（脚本与 CI 用），带配置名的更具体。
+
+    三格各一根：api / 地址 / 模型名。空值不算覆盖 —— 否则
+    `CRANNIA_API_KEY=""` 会把用户配好的 key 静默抹掉。
+    """
+    MC = _fresh()
+    a = _mk(MC, card="gpt", name="My Relay", model="gpt-4o")
+    b = _mk(MC, card="gpt", name="Other", model="gpt-4o-mini")
+    keys = ("CRANNIA_API_KEY", "CRANNIA_API_KEY_MY_RELAY",
+            "CRANNIA_MODEL", "CRANNIA_MODEL_MY_RELAY",
+            "CRANNIA_BASE_URL", "CRANNIA_BASE_URL_MY_RELAY")
+    old = {k: os.environ.get(k) for k in keys}
+    try:
+        os.environ["CRANNIA_API_KEY"] = "sk-env-bare"
+        check("★ 裸名覆盖（所有档的兜底）",
+              MC.api_for(a["id"]) == "sk-env-bare", MC.api_for(a["id"]))
+        os.environ["CRANNIA_API_KEY_MY_RELAY"] = "sk-env-named"
+        check("★★ 带配置名的**更具体**，优先于裸名",
+              MC.api_for(a["id"]) == "sk-env-named", MC.api_for(a["id"]))
+        check("★ 别的档仍走裸名", MC.api_for(b["id"]) == "sk-env-bare",
+              MC.api_for(b["id"]))
+        os.environ["CRANNIA_API_KEY"] = "   "
+        os.environ.pop("CRANNIA_API_KEY_MY_RELAY", None)
+        check("★ 空值 / 空白不算覆盖（不许把配好的 key 静默抹掉）",
+              MC.api_for(a["id"]) == "sk-abcdefghijkl", MC.api_for(a["id"]))
+        os.environ.pop("CRANNIA_API_KEY", None)
+        os.environ["CRANNIA_MODEL"] = "gpt-env-model"
+        os.environ["CRANNIA_BASE_URL"] = "https://env.example.com/v1"
+        cfg = MC._model_cfg_of(MC.get(a["id"]), a["id"])
+        check("★ 模型名与地址也能被环境变量覆盖（同一族）",
+              cfg.get("model_name") == "gpt-env-model"
+              and cfg.get("base_url") == "https://env.example.com/v1", repr(cfg))
+        check("★★ 覆盖**不落盘**（文件里还是用户填的那份）",
+              json.loads(MC.LEDGER_PATH.read_text(encoding="utf-8"))
+              ["configs"][a["id"]].get("model") == "gpt-4o")
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        _fresh()
+
+
 def main() -> int:
     print("=" * 62)
     print("Model config entries -- the ledger")
@@ -966,7 +1047,9 @@ def main() -> int:
                        test_the_local_card_needs_no_key,
                        test_probe_refuses_to_go_out_without_a_key,
                        test_the_link_can_go_red,
-                       test_probe_errors_are_classified):
+                       test_probe_errors_are_classified,
+                       test_the_legacy_creds_file_is_migrated,
+                       test_env_overrides_the_three_fields):
                 try:
                     fn()
                 except Exception as exc:                        # noqa: BLE001

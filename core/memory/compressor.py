@@ -376,9 +376,9 @@ class Compressor:
         threshold = int(context_window * eff)
         gap = threshold - total
         print(
-            f"[compress] 当前 {total:,} / 阈值 {threshold:,} / "
-            + (f"还差 {gap:,}  " if gap >= 0 else f"超出 {-gap:,}  ")
-            + f"({total / threshold * 100:.0f}%, {len(messages)} 条, "
+            f"[compress] current {total:,} / threshold {threshold:,} / "
+            + (f"gap {gap:,}  " if gap >= 0 else f"over {-gap:,}  ")
+            + f"({total / threshold * 100:.0f}%, {len(messages)} msgs, "
             f"mode={mode}; messages {breakdown['messages']:,} + "
             f"system {breakdown['system']:,} + "
             f"tools {breakdown['tools']:,} = {breakdown['raw']:,} "
@@ -560,7 +560,7 @@ class Compressor:
         time.sleep(_RETRY_DELAY_S)
         keep = max(1, int(len(old_messages) * _RETRY_KEEP_RATIO))
         retry_input = old_messages[-keep:] if len(old_messages) > keep else old_messages
-        print("[compressor] 摘要为空 —— 1s 后用缩短的输入（%d/%d 条）重试一次"
+        print("[compressor] summary empty - retrying in 1s with shortened input (%d/%d msgs)"
               % (len(retry_input), len(old_messages)))
         summary = self._summarize(retry_input, provider,
                                   prior_summary=prior_summary,
@@ -660,7 +660,7 @@ class Compressor:
         source = {"llm": "llm", "retry": "llm",
                   "note": "session_note", "cut": "fallback"}.get(level, "llm")
         if level not in ("llm", "retry"):
-            print("[compressor] 摘要降级（%s）：移出较早的 %d 轮（%d 条）"
+            print("[compressor] summary degraded (%s): dropped earlier %d turns (%d msgs)"
                   % (level, compress_turns, len(old_messages)))
 
         # Build the compressed message list: [summary] + preamble + kept turns.
@@ -688,7 +688,7 @@ class Compressor:
 
         print(
             f"[compressor] auto: compressed {compress_turns}/{turn_count} "
-            f"turns ({len(old_messages)} msg → summary {len(summary)} chars), "
+            f"turns ({len(old_messages)} msg -> summary {len(summary)} chars), "
             f"kept {turn_count - compress_turns} turns"
         )
 
@@ -819,7 +819,7 @@ class Compressor:
 
         print(
             f"[compressor] full: compressed {compressed_turns} turns "
-            f"({len(old_messages)} msg → summary {len(summary)} chars), "
+            f"({len(old_messages)} msg -> summary {len(summary)} chars), "
             f"kept last {kept_turns} turns"
         )
 
@@ -970,7 +970,7 @@ class Compressor:
             #: "为什么没压成"。只 print 的话，安装版的 stdout 没有读者。
             self.last_summary_error = "%s: %s" % (type(e).__name__, e)
             print(f"[compressor] summarise failed "
-                  f"({type(e).__name__}: {e}) — leaving messages uncompressed")
+                  f"({type(e).__name__}: {e}) - leaving messages uncompressed")
             return ""
 
     # ------------------------------------------------------------------

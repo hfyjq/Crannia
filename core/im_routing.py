@@ -91,7 +91,7 @@ def _load() -> None:
                     _bindings.update(
                         {str(k): str(v) for k, v in bindings.items() if v})
         except Exception as exc:  # noqa: BLE001
-            print("[routing] routing.json 读不出来，按空表算：%s: %s"
+            print("[routing] routing.json unreadable, using empty table: %s: %s"
                   % (type(exc).__name__, exc))
 
 
@@ -103,7 +103,7 @@ def _save_locked() -> None:
             json.dumps({"bindings": _bindings}, ensure_ascii=False, indent=2),
             encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
-        print("[routing] routing.json 写不进去：%s: %s" % (type(exc).__name__, exc))
+        print("[routing] routing.json write failed: %s: %s" % (type(exc).__name__, exc))
 
 
 # 决策

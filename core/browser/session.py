@@ -100,9 +100,9 @@ def _ensure_listener() -> None:
     _listener_done = True
     try:
         desk_session.subscribe(lambda _owner, reason: close(
-            "接管关闭（%s）" % (reason or "未知")))
+            "takeover closed (%s)" % (reason or "unknown")))
     except Exception as exc:                         # noqa: BLE001
-        print("[browser] 订阅接管关闭失败：%s: %s" % (type(exc).__name__, exc))
+        print("[browser] subscribe close failed: %s: %s" % (type(exc).__name__, exc))
 
 
 def connect(owner: str) -> State:
@@ -137,7 +137,7 @@ def connect(owner: str) -> State:
             _state = st
             _ensure_listener()
             _refresh_tabs(st)
-            print("[browser] 已连接 %s %s" % (cand.label, st.version))
+            print("[browser] connected %s %s" % (cand.label, st.version))
             return st
         raise BrowserError(
             "连不上浏览器调试端口（%s）。\n%s\n%s"
@@ -156,7 +156,7 @@ def close(reason: str = "") -> None:
     except Exception:                                # noqa: BLE001
         pass
     if reason:
-        print("[browser] 连接已关闭：%s" % reason)
+        print("[browser] connection closed: %s" % reason)
 
 
 def enabled_for(owner: str) -> bool:

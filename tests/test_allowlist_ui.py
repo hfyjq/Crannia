@@ -391,10 +391,12 @@ def test_approval_window_sees_the_new_kinds() -> None:
     #   （例如 `delete_bulk` 与 `delete`、`write_outside` 与 `command`）。
     #   `ask_user` 不是审批（没有"同意/不同意"），但它同样要一格：
     #   一格只许一个 kind 用。
-    check("★ 十二格与十二个 kind 现在是 **1:1**（危险档取消 + 计划重建 + 兜底闸 + ICE 放行 + 批量硬闸 + 区外写 + 提问 + 逐应用授权 + 钩子要求确认）",
+    check("十三格与十三个 kind 现在是 1:1（危险档取消 + 计划重建 + 兜底闸"
+          " + ICE 放行 + 批量硬闸 + 区外写 + 提问 + 逐应用授权 + 钩子要求确认"
+          " + SSH 主机密钥）",
           keys == {"cross_zone", "delete", "egress", "command", "destructive",
                    "plan", "ice_reveal", "delete_bulk", "write_outside",
-                   "ask_user", "computer_app", "hook_ask"},
+                   "ask_user", "computer_app", "hook_ask", "ssh_hostkey"},
           str(sorted(keys)))
 
     # `_web_session()` 的键必须与塞进去的那个一致 —— 拿真的那个来用

@@ -94,7 +94,7 @@ def note(session_id: str, path) -> bool:
             bucket.append(shown)
             return True
     except Exception as exc:  # noqa: BLE001
-        print("[touched] 记录失败（不影响写入）：%s: %s" % (type(exc).__name__, exc))
+        print("[touched] record failed (write unaffected): %s: %s" % (type(exc).__name__, exc))
         return False
 
 

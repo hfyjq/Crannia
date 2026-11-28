@@ -1,7 +1,7 @@
 [project]
 name = "crannia"
 # NOTE: Keep in sync with core/version.py __version__
-version = "1.1.2"
+version = "1.2.0"
 description = "Modular AI Agent Framework"
 readme = "README.md"
 license = "Apache-2.0"
@@ -31,6 +31,7 @@ dependencies = [
     # Windows 上的 ZoneInfo），漏了就会在运行时缺，而按元数据装的人尤其容易漏。
     # requirements.txt 里是同一份清单的另一处写法，改一处要改两处。
     "matplotlib>=3.9",
+    "graph-layout>=0.5",  # diagram skill：流程图/思维导图布局，MIT，不需要 Graphviz 二进制
     "curl-cffi>=0.13",
     "tzdata>=2024.1",
     # Search / NLP / Vector
@@ -56,6 +57,8 @@ dependencies = [
     "python-dotenv>=1.2",
     "cryptography>=49.0",
     "psutil>=7.2",
+    "dnspython>=2.9",     # netops skill：DNS 记录与 TTL（ISC）
+    "paramiko>=5.1",      # ssh skill：SSH 客户端（LGPL-2.1）
     "pystray>=0.19",
     "qrcode>=8.2",
     # Archive extraction

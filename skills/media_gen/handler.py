@@ -93,7 +93,7 @@ def _load_entries() -> tuple[dict, str]:
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception as exc:                              # noqa: BLE001
-        print("[media_gen] %s 读不出来：%s: %s" % (p, type(exc).__name__, exc))
+        print("[media_gen] %s unreadable: %s: %s" % (p, type(exc).__name__, exc))
         return {}, ""
     if not isinstance(data, dict):
         return {}, ""

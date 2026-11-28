@@ -215,7 +215,7 @@ def _pdf_read_plan(path):
     try:
         diag = _pdf_diagnose(str(path))
     except Exception as exc:                       # noqa: BLE001
-        print(f"[file_parser] PDF 文本层探测跳过（{type(exc).__name__}: {exc}）")
+        print(f"[file_parser] PDF text-layer probe skipped ({type(exc).__name__}: {exc})")
         return None
     if diag is None:
         return None
@@ -228,7 +228,7 @@ def _pdf_read_plan(path):
             "③ 若确认是「整字体平移」那类，本工具本该自动修 —— 这次没解出偏移，"
             "**别硬猜**，如实告诉用户这份文件读不出来。" % diag.verdict.reason
         )
-    print("[file_parser] PDF 文本层已自动修复：%s" % diag.repair.summary())
+    print("[file_parser] PDF text layer auto-repaired: %s" % diag.repair.summary())
     return diag.repair
 
 
@@ -2451,7 +2451,7 @@ def _queue_channel_delivery(ctx: dict, path: Path, name: str,
         from core.cron.runner import resolve_channel
         ch = resolve_channel(platform)
     except Exception as exc:                                   # noqa: BLE001
-        print("[deliver] 找通道失败（%s: %s），改走邮件" % (type(exc).__name__, exc))
+        print("[deliver] failed to resolve channel (%s: %s), falling back to email" % (type(exc).__name__, exc))
         return None
     if ch is None or not isinstance(ch, MediaSendCapable):
         return None
@@ -2463,7 +2463,7 @@ def _queue_channel_delivery(ctx: dict, path: Path, name: str,
                     channel=channel_name,
                     user_id=str(ctx.get("user_id", "") or ""))
     except Exception as exc:                                   # noqa: BLE001
-        print("[deliver] 登记待发文件失败（%s: %s），改走邮件"
+        print("[deliver] failed to register pending file (%s: %s), falling back to email"
               % (type(exc).__name__, exc))
         return None
 
@@ -2639,7 +2639,7 @@ def deliver_file(file_path: str, via: str = "auto") -> dict:
     print(f"[deliver] mail_cfg: email={'***' if email_addr else 'MISSING'}, "
           f"pass={'***' if email_pass else 'MISSING'}, preset={preset}")
     if not want_email:
-        print(f"[deliver] via={via} channel={channel!r} → 本地会话，走下载不走邮件")
+        print(f"[deliver] via={via} channel={channel!r} -> local session, using download not email")
     elif email_addr and email_pass:
         print(f"[deliver] entering email send block...")
         try:

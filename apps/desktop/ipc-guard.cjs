@@ -10,6 +10,9 @@
 //     ② 它那个 `mainFrame` 对象     —— `event.senderFrame === event.sender.mainFrame`
 //     ③ 自定义协议 URL              —— `crannia-app://<host>`，且 host 在允许名单里
 //
+//     唯一的例外：`npm run dev` 的 vite origin（由 main.cjs 显式传入，
+//       打包时为空串）。判据是整个 origin 相等，见 `senderRejection` 里那段。
+//
 // 三要素是「同时」，不是「任一」 —— 而且比的是对象，不是字符串：
 //    只比 `frame.url` 的实现会被一张同名同值但不同对象的页面放行
 //    （同形域名字典攻击就是它的变体：`...platform.deepseek.com.evil` 前缀一模一样）。
@@ -28,7 +31,7 @@
  * @param {string}  scheme  自定义协议名（`crannia-app`）。
  * @returns {string|null}
  */
-function senderRejection(event, win, hosts, scheme) {
+function senderRejection(event, win, hosts, scheme, devOrigin) {
   if (!win || win.isDestroyed()) return "窗口不在了";
   if (!event || event.sender !== win.webContents) return "不是我们那个 webContents";
   const frame = event.senderFrame;
@@ -44,6 +47,15 @@ function senderRejection(event, win, hosts, scheme) {
   } catch {
     return "帧的 URL 解析不了";                 // `about:blank` 一族走这里
   }
+  // 开发服务器的精确 origin 例外（2026-11-25）：
+  //    `npm run dev` 下页面来自 vite（`http://127.0.0.1:5173`），协议不是
+  //    `crannia-app:`，第三条判据永远不成立，而失败是静默的：主题切换
+  //    IPC 被拒（壳停在旧主题，深色界面配白标题栏）、复制按钮掉回渲染进程
+  //    那条可能被焦点影响的旧路。
+  //    例外只在 main.cjs 显式传 `devOrigin` 时存在（打包时是空串），判据是
+  //    整个 origin 相等，不是前缀：`http://127.0.0.1:5173.evil` 的 origin
+  //    不同，换端口也不同。
+  if (devOrigin && url.origin === devOrigin) return null;
   if (url.protocol !== `${scheme}:`) return `协议不对（${url.protocol}）`;
   if (!hosts.includes(url.hostname)) return `host 不对（${url.hostname}）`;
   return null;

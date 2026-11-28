@@ -143,11 +143,9 @@ export const ROWS = [
     emptyLabel: "跟随系统", label: "界面语言",
     note: "按钮、提示与命令回话用哪种语言；不影响模型的回答语言" },
   // 逐条轨迹（参数全文 / 思考 / 结果实质）。
-  //   默认关 —— 与上面「逐字输出」同一条判据（观感因人而异，不替用户决定）。
-  //   打开之后右侧竖栏多一格「轨迹」；它不落盘、不进模型上下文。
-  { id: "trace", section: "chat", kind: "toggle", key: "trace_full",
-    label: "记录完整轨迹",
-    note: "右侧「轨迹」面板能看到每次工具调用的参数全文、模型的思考和结果原文" },
+  //   2026-11-28：GUI 先不放出去（`core/trace.py::PAUSED`）—— 右侧竖栏那一格
+  //   与这个开关一起隐去，记录侧同时恒关。优化后再放回来。
+  //   （原来：默认关；打开后右侧竖栏多一格「轨迹」，不落盘、不进模型上下文。）
   // 生图与视频的配置卡不在这里（用户）——
   //   它的家在技能页（`media_gen` 那张卡的「配置」），与 `github` /
   //   `mail_parser` 同一个位置。两处入口 = 两份要维护的东西，而用户只会在
@@ -262,10 +260,15 @@ export const ROWS = [
   //    —— 而看得见、撤得掉是那条破例的代价（界面必须一直看得见授权被改过）。
   //    它走的是 `/api/allowlist`，不是 `/api/settings`（判据同上面两颗
   //    「全部放行」开关：真相是"名单里有没有那一行"，不是另存一个布尔）。
+  // 网络请求凭据（`web_request` 的 credential 条目）—— 独立子页。
+  //   值不回显；模型只给条目名。端点 `/api/web-request/credentials`。
+  { id: "web_request_creds", section: "safe", kind: "act",
+    act: "open_net_creds", label: "网络请求凭据",
+    note: "web_request 命名凭据" },
   { id: "net_list", section: "safe", kind: "allowlist", allowlist: "egress",
     label: "访问白名单",
-    note: "此处的站点不再询问",
-    ph: "例如 example.com",
+    note: "此处的站点与 SSH 目标不再询问",
+    ph: "例如 example.com 或 ssh:pi@192.168.1.20",
     empty: "（名单为空：每个新域名都会询问）" },
   // ── 出网代理──
   //   用户报「一直异常」，根因是客户端的默认值：

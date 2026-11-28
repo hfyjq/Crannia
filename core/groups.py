@@ -99,7 +99,7 @@ def _read() -> dict[str, dict]:
         # 账本坏了，当没有群。判据同 `bus/mcp_disabled._read`：
         #   宁可让用户重建一个群，不可凭一个读不动的文件把界面上那 8 个头像
         #   渲染成半截（那看起来像"群还在，只是坏了"）。
-        print(f"[groups] 账本读不动（{type(exc).__name__}: {exc}）—— 按空账本走")
+        print(f"[groups] ledger unreadable ({type(exc).__name__}: {exc}) - treating as empty")
         return {}
     return raw if isinstance(raw, dict) else {}
 
@@ -384,8 +384,7 @@ def create(*, name: str = "", members=None, brief="",
         except Exception as exc:                                # noqa: BLE001
             # 写不进去也照样算建成了（本次运行内是真的）—— 同
             #   `mcp_disabled.disable` 那条；但要说出来。
-            print(f"[groups] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**仍然有**这个群 '{gid}'")
+            print(f"[groups] ledger write failed ({type(exc).__name__}: {exc}) - group '{gid}' still present for this run")
     return dict(entry)
 
 
@@ -420,8 +419,7 @@ def update(gid: str, *, name=None, members=None, brief=None,
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[groups] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**改动仍然生效** '{gid}'")
+            print(f"[groups] ledger write failed ({type(exc).__name__}: {exc}) - changes remain active for this run '{gid}'")
     return dict(next_entry)
 
 
@@ -479,8 +477,7 @@ def update_member(gid: str, index: int, *, name: str = "",
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[groups] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**改动仍然生效** '{gid}'")
+            print(f"[groups] ledger write failed ({type(exc).__name__}: {exc}) - changes remain active for this run '{gid}'")
     return dict(next_entry)
 
 
@@ -501,8 +498,7 @@ def delete(gid: str) -> bool:
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[groups] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**仍然删掉了** '{gid}'")
+            print(f"[groups] ledger write failed ({type(exc).__name__}: {exc}) - still deleted for this run '{gid}'")
     return True
 
 

@@ -10,4 +10,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("cranniaOverlay", {
   stop: () => ipcRenderer.send("takeover:stop"),
+  //: true = 整窗穿透（透明区域不挡点击）；鼠标在浮窗上时传 false。
+  setIgnore: (ignore) => ipcRenderer.send("takeover:ignore", !!ignore),
 });

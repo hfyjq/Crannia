@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, ipcMain, protocol, dialog, screen, net, nativeTheme } = require("electron");
+const { app, BrowserWindow, Menu, Tray, shell, ipcMain, protocol, dialog, screen, net, nativeTheme, clipboard, Notification } = require("electron");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const crypto = require("node:crypto");
@@ -25,6 +25,12 @@ const updateApply = require("./update-apply.cjs");
 //:   两张图都在 asar 根（`electron-builder` 的 `SHELL_FILES` 同时白名单了它们）。
 const APP_ICON = path.join(__dirname, "../../" +
   (process.platform === "win32" ? "crannia.ico" : "crannia.png"));
+
+//: Windows 上 `new Notification` 的前置：没有 AppUserModelID 时通知要么不显示，
+//:   要么显示成 `electron.app.Electron`，点开还可能起第二个实例。
+//:   值必须与 `electron-builder.config.mjs` 的 `appId` 逐字相同 ——
+//:   读者 `tests/test_desktop_notify.py` 按字面量对账这两处。
+app.setAppUserModelId("com.crannia.desktop");
 
 let mainWindow; let tray; let quitting = false; let backend;
 let backendStopped = false;  // 子进程收过尾了（`will-quit` 只许走一次）
@@ -138,10 +144,40 @@ function handleProtocolRequest(request) {
 //: 后端子进程的有界诊断缓冲（64KB，留尾部）。
 const backendDiag = life.createDiagnostics();
 
-//: 小窗尺寸 —— 必须与 `splash.html` 里的 `--win-w/--win-h` 一致。
+//: 小窗尺寸 —— 必须与 `splash.html` 里那几个变量一致：
+//:   `SPLASH_W` = `--win-w`；`SPLASH_H` = `--win-h` − 2 × `--cut`。
 //: 两处写同一个数是有意的（那个页面在浏览器里也要能独立打开），
-//: 但谁改谁得改两处：症状是"窗口比画布大一圈、右下角一片白"。
-const SPLASH_W = 688, SPLASH_H = 386;
+//: 但谁改谁得改两处：症状是"窗口比画布大一圈、内容被切/多一条空白"。
+const SPLASH_W = 688, SPLASH_H = 330;   // 内容 386 - 上下各裁 28
+//: 上下各裁多少（与 CSS 的 `--cut` 同一个数）。
+const SPLASH_CUT = 28;
+//: 圆角半径（与 CSS 的 `border-radius` 同一个数）。
+//:   Windows 上还会按它把窗口本身裁成圆角（`setShape`）——
+//:   判据：透明合成在远控/部分显卡驱动下会渲染成白底，那时 CSS 圆角
+//:   叠在同色底上"看不见"（用户 2026-11-28 真机反馈）。
+const SPLASH_RADIUS = 28;
+
+/** 圆角矩形的窗口区域（`setShape` 只吃 rect 列表，所以按行铺）。
+ *
+ *  每个像素行一个 rect，四角按圆方程收边；中间一次铺满。
+ *  半径夹在短边一半以内 —— 超了会算出负数宽度（症状是窗口整块消失）。
+ */
+function roundedShapeRects(w, h, r) {
+  const rects = [];
+  const radius = Math.max(0, Math.min(Math.floor(r), Math.floor(Math.min(w, h) / 2)));
+  for (let y = 0; y < radius; y++) {
+    const dy = radius - y - 0.5;
+    const dx = Math.round(radius - Math.sqrt(Math.max(0, radius * radius - dy * dy)));
+    rects.push({ x: dx, y, width: w - 2 * dx, height: 1 });
+  }
+  rects.push({ x: 0, y: radius, width: w, height: h - 2 * radius });
+  for (let y = 0; y < radius; y++) {
+    const dy = radius - y - 0.5;
+    const dx = Math.round(radius - Math.sqrt(Math.max(0, radius * radius - dy * dy)));
+    rects.push({ x: dx, y: h - 1 - y, width: w - 2 * dx, height: 1 });
+  }
+  return rects;
+}
 
 //: 「准备就绪」至少停留这么久才切主窗（0.5 秒）。
 //:   ⏱ 它从"喊了就绪"那一刻算，而不是从"后端起来"算 ——
@@ -880,7 +916,7 @@ function tr(zh, en) {
 
 function openSplash() {
   splash = new BrowserWindow({
-    width: SPLASH_W, height: SPLASH_H, show: true, frame: false,
+    width: SPLASH_W, height: SPLASH_H, show: true, frame: false, center: true,
     transparent: true, resizable: false, movable: false, minimizable: false,
     maximizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true,
     backgroundColor: "#00000000",
@@ -899,6 +935,15 @@ function openSplash() {
   });
   // `?shell=1` 是判据：小窗页面靠它知道"底色要透明、别挂调试条、
   //    别自己跑假的 demo"（见 `splash.html` 顶上那段）。
+  // 窗口本身的圆角：Windows 上按区域裁一遍（CSS 那层圆角在"透明合成被
+  //   渲染成白底"的环境里看不见）。失败只退化成 CSS 圆角，不影响启动。
+  if (process.platform === "win32") {
+    try {
+      splash.setShape(roundedShapeRects(SPLASH_W, SPLASH_H, SPLASH_RADIUS));
+    } catch (err) {
+      console.warn(`[splash] 窗口形状裁剪失败（圆角只靠 CSS）：${err && err.message ? err.message : err}`);
+    }
+  }
   // 小窗也要接仪表 —— 它的故障只有渲染进程知道（见 `bridgeRenderer` 的）。
   bridgeRenderer(splash, "splash");
   // 走壳自己的协议（`crannia-app://shell/*`），不再是 `loadFile` 的
@@ -1128,8 +1173,15 @@ async function _recoverOrExplain(err) {
  *，判据与"为什么是三个 `===` 而不是一句 `startsWith`"全在
  *  `apps/desktop/ipc-guard.cjs`（那个文件不 import electron，真 node 跑得起来）。
  */
+//: `npm run dev` 时渲染进程挂在 vite 上（origin 不是 `crannia-app:`）——
+//:   算一次精确 origin，作为 IPC 闸的唯一例外；打包时是空串，不做任何放宽。
+const DEV_ORIGIN = (() => {
+  const raw = process.env.VITE_DEV_SERVER_URL || "";
+  try { return raw ? new URL(raw).origin : ""; } catch { return ""; }
+})();
+
 function senderRejection(event, win, hosts) {
-  return guard.senderRejection(event, win, hosts, SCHEME);
+  return guard.senderRejection(event, win, hosts, SCHEME, DEV_ORIGIN);
 }
 
 /** 拒了要出声，但只出声一次一人 —— 这条闸本该永远不响，响了就是有人在敲门。 */
@@ -1197,12 +1249,18 @@ function setTakeoverOverlay(on) {
   }
   if (takeoverOverlay && !takeoverOverlay.isDestroyed()) return;
   const { workArea } = screen.getPrimaryDisplay();
-  const W = 344, H = 46;
+  //: 贴顶长条：宽度跟屏幕工作区走，左右各多 1px —— 不同 DPI 下可能差一两像素，
+  //: 但光晕本来就在屏幕边缘被裁，多一点比露一条缝好。
+  //: 高度只比长条本身（38）多一截，留给向下投的光晕。
+  const W = workArea.width + 2, H = 74;
   takeoverOverlay = new BrowserWindow({
     width: W, height: H,
-    x: Math.round(workArea.x + (workArea.width - W) / 2),
-    y: workArea.y + 10,
-    frame: false, transparent: true, resizable: false, movable: false,
+    x: workArea.x - 1,
+    y: workArea.y,
+    //: `backgroundColor` 显式给全透明 —— 不写时某些 DWM/驱动组合会按默认
+    //: 白色合成，窗口变成一条白带（真机抓到过）。
+    frame: false, transparent: true, backgroundColor: "#00000000",
+    resizable: false, movable: false,
     minimizable: false, maximizable: false, fullscreenable: false,
     skipTaskbar: true, focusable: false, hasShadow: false, show: false,
     alwaysOnTop: true,
@@ -1213,7 +1271,14 @@ function setTakeoverOverlay(on) {
   });
   takeoverOverlay.setAlwaysOnTop(true, "screen-saver");
   takeoverOverlay.setContentProtection(true);      // WDA_EXCLUDEFROMCAPTURE
-  takeoverOverlay.loadURL(`${SCHEME}://overlay/overlay.html`);
+  //: 默认整窗鼠标穿透（透明区域不该挡住下面的点击）；鼠标移到浮窗上时由
+  //: 渲染进程发 `takeover:ignore=false` 取消穿透，离开再恢复。
+  takeoverOverlay.setIgnoreMouseEvents(true, { forward: true });
+  //: 文案语言走查询串（同启动小窗）：overlay 先于任何 IPC 就绪就要画，
+  //: 异步取语言会先按中文画一帧。`readInterfaceLanguage` 已经处理了
+  //: "没设过 = 跟随系统"。
+  takeoverOverlay.loadURL(
+    `${SCHEME}://overlay/overlay.html?lang=${encodeURIComponent(readInterfaceLanguage())}`);
   takeoverOverlay.once("ready-to-show", () => {
     if (takeoverOverlay && !takeoverOverlay.isDestroyed()) takeoverOverlay.showInactive();
   });
@@ -1280,6 +1345,14 @@ ipcMain.on("takeover:stop", (event) => {
   });
 });
 
+//: 浮窗的鼠标穿透开关：鼠标在浮窗上就取消穿透（按钮可点），离开则恢复。
+//: 全宽长条只是装饰，永远穿透 —— 它盖住整条屏幕顶部，不该挡任何点击。
+ipcMain.on("takeover:ignore", (event, ignore) => {
+  if (rejectForeign(event, takeoverOverlay, ["overlay"], "takeover:ignore")) return;
+  if (!takeoverOverlay || takeoverOverlay.isDestroyed()) return;
+  takeoverOverlay.setIgnoreMouseEvents(!!ignore, { forward: true });
+});
+
 //: 接管期间一轮结束，把主窗拉回前台。
 //: 用户在别的应用里等结果，回复落在我们窗口里而窗口在后台 —— 看不到。
 //: 只由渲染进程在 `task.end` 且接管开启时调用；它不是给模型用的能力。
@@ -1306,6 +1379,65 @@ ipcMain.handle("dialog:pick-skill-dir", async (event) => {
   }
 });
 
+// 任务完成 / 有待回答时的系统通知（用户 2026-11-26 定）。
+//   判据：主窗在前台就不弹 —— 只要在窗口上，在不在活跃对话都无关。
+//   文案由渲染进程按 i18n 给（主进程没有界面语言上下文，写死会中英混杂）；
+//   缺文案就不弹（宁可没有，也不要弹一条半截的）。
+//   同一种 kind 3 秒内只弹一次：同一批审批会连着来好几条 `approval.request`。
+const NOTIFY_DEDUPE_MS = 3000;
+const notifyRecent = new Map();
+const activeNotifications = new Set();
+
+function anyWindowFocused() {
+  return BrowserWindow.getAllWindows().some(
+    (w) => !w.isDestroyed() && w.isFocused());
+}
+
+ipcMain.on("notify:task", (event, payload) => {
+  if (rejectForeign(event, mainWindow, ["app"], "notify:task")) return;
+  if (!Notification.isSupported()) return;
+  if (anyWindowFocused()) return;            // 在窗口上就不弹
+  const kind = String((payload && payload.kind) || "");
+  const title = String((payload && payload.title) || "").trim();
+  const body = String((payload && payload.body) || "").trim();
+  if (!title || !body) return;
+  const now = Date.now();
+  for (const [k, ts] of notifyRecent) {
+    if (now - ts > NOTIFY_DEDUPE_MS) notifyRecent.delete(k);
+  }
+  const last = notifyRecent.get(kind);
+  if (last != null && now - last < NOTIFY_DEDUPE_MS) return;
+  notifyRecent.set(kind, now);
+  let note;
+  try {
+    note = new Notification({ title, body });
+  } catch (err) {
+    console.warn(`[notify] 建通知失败：${err && err.message ? err.message : err}`);
+    return;
+  }
+  //: 显式持有 —— 只放在局部变量里的话，JS 对象可能在用户点之前被回收，
+  //:   点击监听器随之丢失（系统通知还在，点了没反应）。
+  activeNotifications.add(note);
+  note.once("click", () => {
+    activeNotifications.delete(note);
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } catch (err) {
+      console.warn(`[notify] 拉回前台失败：${err && err.message ? err.message : err}`);
+    }
+  });
+  note.once("close", () => activeNotifications.delete(note));
+  try {
+    note.show();
+  } catch (err) {
+    activeNotifications.delete(note);
+    console.warn(`[notify] 弹通知失败：${err && err.message ? err.message : err}`);
+  }
+});
+
 ipcMain.on("window:focus", (event) => {
   if (rejectForeign(event, mainWindow, ["app"], "window:focus")) return;
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -1327,6 +1459,24 @@ ipcMain.on("window:focus", (event) => {
   }).catch((err) => {
     console.warn(`[window] 后端拉回前台失败：${err && err.message ? err.message : err}`);
   });
+});
+
+// 写剪贴板：渲染进程的 `navigator.clipboard.writeText` 在窗口失焦时可能
+//   静默 resolve 而不真写（Chromium 已知行为），`execCommand` 又已废弃。
+//   代码块复制走这条主进程路 —— 它不问渲染进程权限、不看焦点，
+//   Windows / Linux 都同一条实现。只收一个具名动作 + 一个字符串，
+//   且沿用 `rejectForeign`（只认主窗口自己的渲染进程），不给任意调用方开口子。
+ipcMain.handle("clipboard:write", (event, text) => {
+  if (rejectForeign(event, mainWindow, ["app"], "clipboard:write")) return false;
+  const s = typeof text === "string" ? text : "";
+  if (!s) return false;                 // 空的不写（不替用户清剪贴板）
+  try {
+    clipboard.writeText(s);
+    return true;
+  } catch (err) {
+    console.warn(`[clipboard] 主进程写剪贴板失败：${err && err.message ? err.message : err}`);
+    return false;
+  }
 });
 
 // 后端
@@ -1801,6 +1951,17 @@ function createWindow() {
  *  这里若无条件弹，就会在它上面再盖一层原生菜单（同一个右键两个菜单）。
  *，判据：`params.isEditable || params.selectionText`，两个都不是，直接返回。
  */
+//: 原生菜单（右键 / 托盘）的文案。它们由壳绘制，不经过页面的 `/api/i18n`，
+//: 所以语言判据要在这里再取一次 —— 与 `readInterfaceLanguage` 同一个来源。
+function menuText() {
+  const zh = String(readInterfaceLanguage()).startsWith("zh");
+  return zh
+    ? { cut: "剪切", copy: "复制", paste: "粘贴", selectAll: "全选",
+        open: "打开 Crannia", quit: "退出" }
+    : { cut: "Cut", copy: "Copy", paste: "Paste", selectAll: "Select All",
+        open: "Open Crannia", quit: "Quit" };
+}
+
 function attachContextMenu(win) {
   win.webContents.on("context-menu", (_e, params) => {
     const p = params || {};
@@ -1811,16 +1972,17 @@ function attachContextMenu(win) {
     //: 缺字段时按"能"处理（`!== false`）—— 宁可让用户点了没反应，
     //: 也不要因为壳的某个版本没给这一格而明明能粘却灰着。
     const f = p.editFlags || {};
+    const m = menuText();
     const tpl = p.isEditable
       ? [
-        { role: "cut", label: "剪切", enabled: f.canCut !== false },
-        { role: "copy", label: "复制", enabled: f.canCopy !== false },
-        { role: "paste", label: "粘贴", enabled: f.canPaste !== false },
+        { role: "cut", label: m.cut, enabled: f.canCut !== false },
+        { role: "copy", label: m.copy, enabled: f.canCopy !== false },
+        { role: "paste", label: m.paste, enabled: f.canPaste !== false },
         { type: "separator" },
-        { role: "selectAll", label: "全选" },
+        { role: "selectAll", label: m.selectAll },
       ]
       // 非编辑区：只有"复制"这一条（对应"选择某段文字右键支持复制"）。
-      : [{ role: "copy", label: "复制" }];
+      : [{ role: "copy", label: m.copy }];
     Menu.buildFromTemplate(tpl).popup({ window: win });
   });
 }
@@ -1829,8 +1991,9 @@ function createTray() {
   //: 托盘不是启动的必要条件：Linux 桌面（尤其 WSLg / 精简会话）可能没有
   //: StatusNotifier 宿主，`new Tray` 会抛。抛了就说一句，主窗照常起。
   try {
+    const mt = menuText();
     tray = new Tray(APP_ICON); tray.setToolTip("Crannia");
-    tray.setContextMenu(Menu.buildFromTemplate([{ label: "打开 Crannia", click: () => mainWindow?.show() }, { type: "separator" }, { label: "退出", click: () => { quitting = true; app.quit(); } }]));
+    tray.setContextMenu(Menu.buildFromTemplate([{ label: mt.open, click: () => mainWindow?.show() }, { type: "separator" }, { label: mt.quit, click: () => { quitting = true; app.quit(); } }]));
     tray.on("click", () => mainWindow?.show());
   } catch (err) {
     console.warn("[tray] 托盘不可用（本桌面没有托盘宿主）：" + (err && err.message ? err.message : err));

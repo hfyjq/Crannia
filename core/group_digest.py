@@ -50,7 +50,7 @@ def _read() -> dict[str, dict]:
     except FileNotFoundError:
         return {}
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[group_digest] 账本读不动（{type(exc).__name__}: {exc}）—— 按空账本走")
+        print(f"[group_digest] ledger unreadable ({type(exc).__name__}: {exc}) - treating as empty")
         return {}
     return raw if isinstance(raw, dict) else {}
 
@@ -112,8 +112,7 @@ def set(storage_id: str, *, group_id: str, items: list[dict]) -> None:  # noqa: 
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[group_digest] 账本写不进去（{type(exc).__name__}: {exc}）"
-                  f" —— 本次运行**仍然生效** '{sid}'")
+            print(f"[group_digest] ledger write failed ({type(exc).__name__}: {exc}) - still active for this run '{sid}'")
 
 
 def clear(storage_id: str) -> bool:
@@ -129,7 +128,7 @@ def clear(storage_id: str) -> bool:
         try:
             _write(data)
         except Exception as exc:                                # noqa: BLE001
-            print(f"[group_digest] 账本写不进去（{type(exc).__name__}: {exc}）")
+            print(f"[group_digest] ledger write failed ({type(exc).__name__}: {exc})")
     return True
 
 

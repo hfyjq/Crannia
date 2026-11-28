@@ -446,7 +446,7 @@ def run_extraction(*, session_id: str, messages: List[dict], provider,
             get_event_bus().emit(EVT_MEMORY_SAVED, session_key=session_id,
                                  count=len(saved), names=names)
         except Exception as exc:  # noqa: BLE001 —— 事件发不出去不许影响抽取本身
-            print(f"[memory] memory.saved 事件发送失败：{type(exc).__name__}: {exc}")
+            print(f"[memory] memory.saved event send failed: {type(exc).__name__}: {exc}")
         _status(status, f"[memory] 后台抽取完成 —— 写入 {len(saved)} 条记忆："
                         f"{'、'.join(names)}")
     else:

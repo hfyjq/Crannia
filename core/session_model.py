@@ -110,8 +110,7 @@ def frozen(storage_key: str) -> str:
         # 读不到，当没冻（fail-open，同 `_stream_enabled` 那条）。
         #   方向是掐出来的：读不到就走默认 —— 而"读不到"最可能的时刻正是
         #   库刚建、或换了一台机器；那时"跟随默认"就是对的答案。
-        print(f"[session_model] 读冻结失败（按未冻结处理）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[session_model] frozen model read failed (treating as unfrozen): {type(exc).__name__}: {exc}")
         return ""
 
 
@@ -155,8 +154,7 @@ def freeze(storage_key: str, config_id: str) -> bool:
         st.set_session_model(key, config_id)
         return True
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[session_model] 冻结失败（这一段会跟随默认）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[session_model] freeze failed (this session will follow default): {type(exc).__name__}: {exc}")
         return False
 
 
@@ -194,7 +192,7 @@ def follow_default(storage_key: str) -> bool:
         st.clear_session_model(key)
         return existed
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[session_model] 切回跟随默认失败（{type(exc).__name__}: {exc}）")
+        print(f"[session_model] revert to default failed ({type(exc).__name__}: {exc})")
         return False
 
 

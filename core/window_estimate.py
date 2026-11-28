@@ -110,7 +110,7 @@ def load_table(path=None) -> dict:
         rows = data.get("providers") or {}
         table = rows if isinstance(rows, dict) else {}
     except Exception as exc:  # noqa: BLE001 —— 表坏了只是少一层，不是故障
-        print("[window] 窗口表读不出来（%s: %s）—— 本层跳过"
+        print("[window] window table unreadable (%s: %s) - layer skipped"
               % (type(exc).__name__, exc))
         table = {}
     if path is None:

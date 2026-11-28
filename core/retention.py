@@ -110,7 +110,7 @@ def prune_archived_notes(sessions_dir, days: Optional[int] = None,
         if _unlink_if_old(p, cutoff):
             removed += 1
     if removed:
-        print("[retention] 清掉了 %d 份超过 %d 天的归档会话笔记" % (removed, days))
+        print("[retention] removed %d archived session notes older than %d days" % (removed, days))
     return removed
 
 
@@ -191,7 +191,7 @@ def prune_runtime_dirs(now: Optional[datetime] = None) -> dict:
                     removed += 1
         out[directory] = removed
         if removed:
-            print("[retention] %s：清掉 %d 个超过 %d 天的文件"
+            print("[retention] %s: removed %d files older than %d days"
                   % (directory, removed, use_days))
     return out
 

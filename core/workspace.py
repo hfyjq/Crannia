@@ -836,8 +836,8 @@ class WorkspaceManager:
             #:   "改个别的设置顺手重启监听器"，而 `snapshot_mode="boot"` 的语义
             #:   是"每次框架启动" —— 在这里重快照就是把它变成"随机时刻"。
             #: 只如实告声，把"怎么让它生效"说给用户（别让他以为按了没用）。
-            print("[workspace] 「级联动态」从关到开 —— 监听器会在**下次启动框架**时"
-                  "按「自启动监听」拉起（也可以现在点设置页的「重启框架」）。")
+            print("[workspace] cascade-dynamic turned on - watchers will start on the next framework launch "
+                  "if auto-start is enabled (or click Restart Framework in settings now).")
 
         # Default workspace path — set via onboarding or security settings.
         # When present, this becomes the fallback for primary_path.
@@ -853,7 +853,7 @@ class WorkspaceManager:
                 self._default_workspace_path = ""
                 if not self._warned_missing_ws:
                     self._warned_missing_ws = True
-                    print("[workspace] !! 默认工作区不存在：%s —— 请到设置页重新选一个"
+                    print("[workspace] !! default workspace does not exist: %s - please pick one in settings"
                           % resolved)
         # Sync to security guard
         self._security.cross_zone_enabled = self._cross_zone_enabled
@@ -891,9 +891,9 @@ class WorkspaceManager:
         #   静默忽略一个用户改过的键比不许改更坏。
         #   出声一次就够（值不在就什么都不说）。
         if "work_groups_enabled" in settings:
-            print("[workspace] settings.json 的 work_groups_enabled **不再生效** —— "
-                  "工作区列表现在**恒生效**。"
-                  "要去掉某个工作区，请在设置页里删掉它。")
+            print("[workspace] settings.json work_groups_enabled no longer has any effect - "
+                  "the workspace list now always applies. "
+                  "To remove a workspace, delete it in the settings page.")
         # 判据是 `"work_groups" in settings`，不是"列表非空" ——
         #   用户把最后一个工作区删掉时给的是一个空列表，而按"列表非空"判断
         #   会把已经删掉的那些原样留在内存里
@@ -2240,7 +2240,7 @@ class WorkspaceManager:
         if not self._cascade_enabled:
             #: 总闸关着，任何起法都不许起（`/api/watchers/<id>/toggle`
             #:   也走这里）—— 否则"设置页关掉了、另一边还能点开"就是两套口径。
-            print(f"[workspace] 「级联动态」总开关关着 —— 不启动监听器 '{watcher_id}'")
+            print(f"[workspace] cascade-dynamic master switch is off - not starting watcher '{watcher_id}'")
             return False
         wc = self._watchers.get(watcher_id)
         if not wc or not wc.enabled:
@@ -2327,7 +2327,7 @@ class WorkspaceManager:
         英文界面下它不会被翻译。
         """
         self._watcher_errors[watcher_id] = reason
-        print(f"[workspace] {reason} —— 不启动监听器 '{watcher_id}'")
+        print(f"[workspace] {reason} - not starting watcher '{watcher_id}'")
         try:
             from core import incidents as _inc
             wc = self._watchers.get(watcher_id)
@@ -2416,8 +2416,8 @@ class WorkspaceManager:
             for wc in self._watchers.values():
                 skipped.append(wc.id)
             if skipped:
-                print("[workspace] 监听器自启动被总开关关掉了（「级联动态」/"
-                      "「自启动监听」）—— 跳过 %d 个" % len(skipped))
+                print("[workspace] watcher auto-start disabled by master switch"
+                      " (cascade-dynamic / auto-start) - skipped %d" % len(skipped))
             return {"started": [], "failed": [], "skipped": skipped}
         for wc in list(self._watchers.values()):
             if not (wc.enabled and wc.auto_start):
@@ -2426,14 +2426,13 @@ class WorkspaceManager:
             try:
                 ok = self.start_watcher(wc.id)
             except Exception as exc:              # noqa: BLE001
-                print(f"[workspace] 自动启动监听器 '{wc.id}' 失败: "
-                      f"{type(exc).__name__}: {exc}")
+                print(f"[workspace] auto-start watcher '{wc.id}' failed: {type(exc).__name__}: {exc}")
                 ok = False
             (started if ok else failed).append(wc.id)
         if started or failed:
-            print(f"[workspace] 自动启动监听器：起了 {len(started)} 个"
-                  + (f"，失败 {len(failed)} 个" if failed else "")
-                  + (f"，跳过 {len(skipped)} 个（未启用 / 未开自启）"
+            print(f"[workspace] auto-start watchers: {len(started)} started"
+                  + (f", failed {len(failed)}" if failed else "")
+                  + (f", skipped {len(skipped)} (not enabled / auto-start off)"
                      if skipped else ""))
         return {"started": started, "failed": failed, "skipped": skipped}
 
@@ -2610,13 +2609,18 @@ class _BaseWatcher:
                     try:
                         st = os.stat(fpath)
                         mtime = st.st_mtime
-                        current[fpath] = mtime
                         old_mtime = self._snapshot.get(fpath)
                         if old_mtime is None or mtime > old_mtime:
-                            # Skip files still being written
+                            # Skip files still being written — 下一轮再看。
+                            # 这一支不许记账：记进快照就等于宣布"它没变过"，
+                            # 而文件写完 mtime 不会再变，下一轮
+                            # `old_mtime == mtime`，它永远不再是"新文件"。
+                            # 轮询 5 秒 / 阈值 2 秒，恰好落在扫描前 2 秒内
+                            # 落盘的文件会被静默丢掉（真机实测约四成）。
                             if now - mtime < self._FILE_STABLE_SECONDS:
                                 continue
                             new_files.append(fpath)
+                        current[fpath] = mtime
                     except OSError:
                         pass
         except (OSError, PermissionError):
@@ -2799,6 +2803,9 @@ class USNWatcher(_BaseWatcher):
         self._last_usn: int = 0
         self._last_event_time: float = 0.0
         self._scan_scheduled: bool = False
+        #: 非 NTFS 上真正在跑的是它（见 `_run_polling_fallback`）。
+        #: `stop()` 必须连它一起掐 —— 否则那是个有自己 `_running` 的循环。
+        self._fallback = None
 
     @staticmethod
     def _get_volume(path: str) -> str:
@@ -2924,6 +2931,14 @@ class USNWatcher(_BaseWatcher):
         finally:
             kernel32.CloseHandle(h)
 
+    def stop(self) -> None:
+        # 轮询回落那个循环有自己的 `_running`（见 `_run_polling_fallback`）。
+        # 只掐自己这一格时，`stop()` 之后那个线程照旧每 5 秒扫一遍并同步
+        # —— 设置页关掉的监听器还在干活，而界面上写着"已停止"。
+        if self._fallback is not None:
+            self._fallback._running = False
+        super().stop()
+
     def _run_polling_fallback(self) -> None:
         """Run a PollingWatcher internally when USN is not available."""
         fallback = PollingWatcher(
@@ -2943,6 +2958,7 @@ class USNWatcher(_BaseWatcher):
         # Share the snapshot so the fallback doesn't re-sync everything
         fallback._snapshot = dict(self._snapshot)
         fallback._running = True
+        self._fallback = fallback
         fallback._run_loop()
 
 
@@ -3101,8 +3117,7 @@ def write_outside_granted(resolved) -> bool:
         subj = write_outside_subject(resolved)
         return bool(subj) and bool(wm.has_target_grant("write_outside", subj))
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[workspace] 区外写放行判定失败（按**未批过**处理）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[workspace] outside-write approval check failed (treating as not approved): {type(exc).__name__}: {exc}")
         return False
 
 
@@ -3131,8 +3146,7 @@ def default_output_dir() -> Path:
             if p:
                 return Path(p)
     except Exception as exc:  # noqa: BLE001 —— 拿不到就回退，**不许弄挂一次工具调用**
-        print(f"[workspace] default_output_dir 取不到管理器（回退默认）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[workspace] default_output_dir could not get manager (falling back to default): {type(exc).__name__}: {exc}")
     from core import paths as _paths
     return _paths.default_workspace_dir()
 
@@ -3155,8 +3169,7 @@ def primary_output_dir() -> Path:
         if d:
             return Path(d)
     except Exception as exc:  # noqa: BLE001 —— 同下：取不到就回默认
-        print(f"[workspace] primary_output_dir 取不到会话工作目录（回退默认）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[workspace] primary_output_dir could not get session workspace (falling back to default): {type(exc).__name__}: {exc}")
     return default_output_dir()
 
 
@@ -3179,8 +3192,7 @@ def lookup_roots() -> list[Path]:
                 if p:
                     roots.append(Path(p))
     except Exception as exc:  # noqa: BLE001 —— 同上：查不到就是"只有一个根"
-        print(f"[workspace] lookup_roots 取不到工作组（只用默认根）："
-              f"{type(exc).__name__}: {exc}")
+        print(f"[workspace] lookup_roots could not get work groups (using default root only): {type(exc).__name__}: {exc}")
     seen: set = set()
     out: list[Path] = []
     for r in roots:

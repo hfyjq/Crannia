@@ -277,6 +277,10 @@ class Option:
     grant: str = GRANT_NONE
     stage: str = ""
     escalate_at: int = 0
+    #: GRANT_SESSION 的那一项：True 放行整类（"*"），False 只放行这个目标。
+    #: 结算按语义分派、不按键位（各表的键位含义不同），按数字推断会把
+    #: "不"记成"是"。
+    session_all: bool = False
 
     @property
     def is_escalation(self) -> bool:
@@ -341,29 +345,30 @@ DELETE_BULK_OPTIONS: tuple[Option, ...] = (
 # 理由同 `CROSS_ZONE_OPTIONS` 的第 5 项：升级项要等人有判断力了再给；
 # 第一次就给「don't ask again for {hostname}」是疲劳加速器。
 EGRESS_OPTIONS: tuple[Option, ...] = (
-    #: 标签写「同意本次」：`"同意"` 两个字歧义太大 —— 用户会以为它是
-    #: "以后都同意"，而它只管这一轮（下一轮同一个域名照样问）。
-    #:把"一次"写在脸上可以避免这种误读。
-    #: 键位一个字没动 —— 它只是显示文本，回传语义仍是 `"1"`。
+    # 四选项，第一次就是四个。与命令表的两处刻意不同：
+    #   没有"我有别的话说"（用户那句话直接在对话里说，非数字回答即打断）；
+    #   没有"全部目标自动放行"升级项（持久面已由第 3 项覆盖）。
+    # 键位含义与命令表不同（本表 3 = 永久信任、4 = 不同意），所以结算
+    # 按选项的 grant 语义分派，不按数字。
     Option("1", "同意本次", GRANT_ONCE),
     Option("2", "同意，本次对话内不再询问此目标", GRANT_SESSION),
-    Option("3", "不同意"),
-    Option("4", "我有别的话说...", stage="await_other"),
-    Option("5", "同意，且本次对话内所有目标自动放行", GRANT_SESSION, escalate_at=2),
-    # 唯一一处从弹窗写进 `data/allowlist.json` 的档。
-    #
-    # 键位取 `"6"` 而不是插在中间 —— 键位是回传的语义，
-    #   把 `"3"`（不同意）往后挤会让老习惯点错：用户记得"3 = 不同意"，
-    #   而重编号之后那一下会变成永久信任这个站点。那是危险的那一侧。
-    #新选项一律追加在末尾，宁可让列表出现跳号。
-    #
-    # `escalate_at` 不设 = 第一次就给 —— 这里与选项 5 的规矩相反，
-    #   是有意的例外，理由：命令的"总是允许"是空头支票（前缀匹配做不到），
-    #   而站点是个稳定身份，持久信任在出网这一格有内容。
-    #推翻一条既有决定要留账（含推翻条件）。
-    #: 开头那个"同意"是有意的：它让这一档在视觉上与 `1`/`2` 同族
-    #:   （都是"同意 + 附加范围"），而不是一个新物种。
-    Option("6", "同意，且信任此站点，不再询问", GRANT_PERSIST),
+    # 全仓唯一一处由弹窗写进 data/allowlist.json 的档（逐目标）。
+    # 写入与匹配同形是硬要求：这里写的 subject 与 egress_gate.is_granted
+    # 比的是同一个串（http = host；ssh = ssh:user@host）。
+    # 代价 = 误点永久信任；补偿 = 设置页看得见、删得掉。
+    Option("3", "同意，且信任此目标（永久，可在设置页撤销）", GRANT_PERSIST),
+    Option("4", "不同意"),
+)
+
+# SSH 主机密钥信任（TOFU 的第一步）
+#
+# 被审批物 = ssh:user@host；载荷带 host_key_line（known_hosts 格式）与指纹。
+# 同意则把那一行写进框架自己的 data/runtime/ssh/known_hosts（不碰
+# ~/.ssh/known_hosts），然后重放那次工具调用。
+# 只有两项：这是"信不信这个指纹"，不是"给多大范围"。
+SSH_HOSTKEY_OPTIONS: tuple[Option, ...] = (
+    Option("1", "信任此主机并继续", GRANT_ONCE),
+    Option("2", "不信任"),
 )
 
 # 执行命令
@@ -379,7 +384,7 @@ COMMAND_OPTIONS: tuple[Option, ...] = (
     # 「全部」= 该 kind 的 `"*"`，写了它之后同 kind 的任何目标都放行
     # （这正是它比选项 2 强的地方：2 只记一条）。
     Option("5", "同意，且本次对话内所有指令自动放行",
-           GRANT_SESSION, escalate_at=2),
+           GRANT_SESSION, escalate_at=2, session_all=True),
 )
 
 # 工作区之外写文件
@@ -410,7 +415,8 @@ WRITE_OUTSIDE_OPTIONS: tuple[Option, ...] = (
     Option("2", "同意，本次对话内不再询问此目录", GRANT_SESSION),
     Option("3", "不同意"),
     Option("4", "我有别的话说...", stage="await_other"),
-    Option("5", "同意，且本次对话内所有目录自动放行", GRANT_SESSION, escalate_at=2),
+    Option("5", "同意，且本次对话内所有目录自动放行", GRANT_SESSION,
+           escalate_at=2, session_all=True),
 )
 
 # 计划批准
@@ -475,7 +481,7 @@ DESTRUCTIVE_OPTIONS: tuple[Option, ...] = (
     # 升级项 `escalate_at=2` —— 与出网/执行同一档（不是第一次就给）。
     # 第 5 项放行的是这一类（该 kind 的 `"*"`），比第 2 项（只记这一个工具）宽得多。
     Option("5", "同意，且本次对话内所有这类操作自动放行",
-           GRANT_SESSION, escalate_at=2),
+           GRANT_SESSION, escalate_at=2, session_all=True),
 )
 
 # 命令审批只有一个 kind（`command`）
@@ -544,6 +550,8 @@ _TABLES: dict[str, tuple[Option, ...]] = {
     "delete_bulk": DELETE_BULK_OPTIONS,
     "egress": EGRESS_OPTIONS,
     "command": COMMAND_OPTIONS,
+    # SSH 主机密钥信任 - 自己一格（一格只许一个 kind 用）。
+    "ssh_hostkey": SSH_HOSTKEY_OPTIONS,
     "destructive": DESTRUCTIVE_OPTIONS,
     # 计划批准：被审批物是计划本身，不是目标。
     "plan": PLAN_OPTIONS,
@@ -572,6 +580,8 @@ _DEFAULT_BODY: dict[str, str] = {
     "delete_bulk": "Crannia 想**批量**删除以下文件（数量超过了您设的阈值）：",
     "egress": "Crannia 想访问以下目标 ——",
     "command": "Crannia 想执行以下命令：",
+    # 生产那条路自带 body（带主机名与指纹）；这一格防的是浮窗正文为空。
+    "ssh_hostkey": "Crannia 第一次连这台主机，需要确认它的指纹：",
     "destructive": "Crannia 想执行一个**不可逆**的操作：",
     # `plan` 这一格永远不会被用到 —— `exit_plan_mode` 每次都自带 `body`
     # （计划正文），而 `body` 非空时 `render_prompt` / `build_payload` 都不看默认值。

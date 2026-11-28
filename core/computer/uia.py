@@ -245,6 +245,10 @@ class UIElement:
     offscreen: bool
     focusable: bool
     value: str = ""
+    #: 这个元素所属的顶层窗口句柄（UIA `CurrentNativeWindowHandle`）。
+    #: 0 = 读不到。弹窗的元素会挂在主窗的树下，但这个值指向真正的那个窗口 ——
+    #: 元素编号只在它自己窗口的观察里有效，跨窗口点必须重新观察那个窗口。
+    native_hwnd: int = 0
 
     @property
     def depth(self) -> int:
@@ -355,6 +359,7 @@ def snapshot(hwnd: int, *, max_elements: int = 250, max_depth: int = 12,
                 a11y_id = _bstr(elem, 29)            # get_CurrentAutomationId
                 cls = _bstr(elem, 30)                # get_CurrentClassName
                 focusable = bool(_int_prop(elem, 27))  # get_CurrentIsKeyboardFocusable
+                native = _ptr_prop(elem, 36)         # get_CurrentNativeWindowHandle
                 value = ""
                 if ctype in ("Edit", "Document"):
                     pat = _pattern(elem, VALUE_PATTERN)
@@ -367,7 +372,7 @@ def snapshot(hwnd: int, *, max_elements: int = 250, max_depth: int = 12,
                     index=len(out.elements), path=path, name=name,
                     control_type=ctype, automation_id=a11y_id, class_name=cls,
                     rect=rect, enabled=enabled, offscreen=offscreen,
-                    focusable=focusable, value=value))
+                    focusable=focusable, value=value, native_hwnd=native))
             if depth >= max_depth:
                 out.truncated = True
                 return
@@ -417,6 +422,65 @@ def resolve(hwnd: int, path: tuple[int, ...]):
         raise
     finally:
         _release(walker)
+
+
+def align_with_menu(elements: list[UIElement], items: list[tuple]) -> tuple[int, dict[int, int]]:
+    """把 Win32 菜单表的真实矩形写回元素；返回 `(改了几个, {元素下标: 命令 id})`。
+
+    ## 为什么需要它
+
+    `#32768` 是自绘菜单，UIA 的 `BoundingRectangle` 是估算值（项高按窗口高度
+    均分，与真实行高不一致），按它算出来的中心会落到相邻项上。
+    `win32.menu_items()` 读的是菜单自己的表 —— 那才是真相。
+
+    ## 配对顺序
+
+    1. 按命令 id 配：元素的 `automation_id` 通常是菜单命令 id 的十进制
+       —— 这条对索引/顺序怎么变都成立；
+    2. 余下的只在两边条数相同时按序号配；条数不同就不猜。
+
+     配不到一半就整体放弃（一个都不改）：半对半错比全错更难发现，
+      而模型会把错的那一半当成"UIA 说这里就是这一项"。
+    """
+    if not elements or not items:
+        return 0, {}
+    by_id: dict[int, tuple[int, tuple]] = {}
+    for mid, _text, rect in items:
+        if mid and mid > 0:
+            by_id.setdefault(int(mid), (int(mid), rect))
+    picked: dict[int, tuple[int, tuple]] = {}          # 元素下标 → (命令 id, 矩形)
+    used: set[int] = set()
+    for el in elements:
+        try:
+            aid = int((el.automation_id or "").strip() or 0)
+        except (TypeError, ValueError):
+            aid = 0
+        hit = by_id.get(aid) if aid else None
+        if hit is not None and hit[0] not in used:
+            picked[el.index] = hit
+            used.add(hit[0])
+    if len(picked) < max(1, len(elements) // 2):
+        picked = {}
+        #: 序号配对只在两边都是菜单项时成立：`elements` 里还有 Menu 容器与
+        #: 根节点，而菜单表里还有分隔符（`id=0`）。各按各的口径筛干净，
+        #: 条数才对得上。
+        menu_els = [el for el in elements if el.control_type == "MenuItem"]
+        rows = [it for it in items if int(it[0]) != 0]
+        if menu_els and len(menu_els) == len(rows):
+            for el, (mid, _text, rect) in zip(menu_els, rows):
+                picked[el.index] = (int(mid), rect)
+        elif len(items) == len(elements):
+            for el, (mid, _text, rect) in zip(elements, items):
+                picked[el.index] = (int(mid), rect)
+    if not picked:
+        return 0, {}
+    ids: dict[int, int] = {}
+    for el in elements:
+        hit = picked.get(el.index)
+        if hit is not None:
+            el.rect = hit[1]
+            ids[el.index] = hit[0]
+    return len(picked), ids
 
 
 @win32.dpi_wrapped
@@ -469,6 +533,41 @@ def invoke(hwnd: int, path: tuple[int, ...]) -> None:
     finally:
         if pat:
             _release(pat)
+        _release(el)
+
+
+@win32.dpi_wrapped
+def activate(hwnd: int, path: tuple[int, ...]) -> str | None:
+    """按控件自己声明的模式触发它，不注入坐标。返回用上的模式名，都不支持返回 `None`。
+
+    顺序 `Invoke` → `Select` → `Toggle`，对应「按一下 / 选中 / 切换」三种语义，
+    从最接近一次点击的那个开始。
+
+    判据是「控件能做什么」，不是「它画在哪」：矩形是估算的、可能被遮挡、
+    随 DPI 换算，而模式调用只走 UIA 的语义通道，这些都不影响它。
+
+    `None` 不是错误 —— 调用方退回坐标点击即可。支持但拒绝执行（控件禁用、
+    状态不允许）才是错误：那时抛出去，不假装成功。
+    """
+    el = resolve(hwnd, path)
+    try:
+        for pattern_id, name in ((INVOKE_PATTERN, "Invoke"),
+                                 (SELECTION_ITEM_PATTERN, "Select"),
+                                 (TOGGLE_PATTERN, "Toggle")):
+            pat = _pattern(el, pattern_id)
+            if not pat:
+                continue
+            try:
+                # 三个模式的执行方法都在各自 vtable[3]，都无参
+                hr = _fn(pat, 3, [ctypes.c_void_p])(pat)
+            finally:
+                _release(pat)
+            if hr < 0:
+                raise UIAError("这个控件支持 %s，但此刻拒绝执行（可能已禁用）—— "
+                               "重新观察，或改用坐标点击" % name)
+            return name
+        return None
+    finally:
         _release(el)
 
 

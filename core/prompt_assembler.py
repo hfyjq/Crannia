@@ -477,7 +477,7 @@ def _leaf_text() -> str:
         return _load_leaf_md()[0]
     except Exception as exc:                                   # noqa: BLE001
         # 读不到不许弄挂一轮 —— 那会把"某份文件编码坏了"升级成"整轮失败"。
-        print("[leaf] 指令文件装载失败（本轮按没有处理）：%s: %s"
+        print("[leaf] instruction file load failed (treated as absent): %s: %s"
               % (type(exc).__name__, exc))
         return ""
 

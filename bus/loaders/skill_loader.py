@@ -254,8 +254,7 @@ class _LazyStub:
         而它下一轮还会再试一次（`_load` 每次都会重新 import，每次都失败）。
         """
         detail = "%s: %s" % (type(exc).__name__, exc)
-        print(f"[quarantine] '{self._skill_name}.{self._tool_name}' 首次调用失败"
-              f"（{detail}）—— 当场屏蔽该插件")
+        print(f"[quarantine] '{self._skill_name}.{self._tool_name}' first call failed ({detail}) - quarantining this plugin")
         try:
             from bus.quarantine import owner_for_skill, quarantine, blocked_message
             entry = quarantine(
@@ -329,16 +328,16 @@ def _note_output_kind(tool_name: str, tool_def: dict, skill_name: str) -> None:
     declare(tool_name, kind)
     if kind is None and is_read_family(tool_name):
         print(
-            f"[bus] WARNING: skill '{skill_name}' 的工具 '{tool_name}' 是读家族，"
-            f"却没声明 output_kind —— 按 fail-closed 当 prose 处置"
-            f"（多付约 20 tokens/次）。请在 manifest 里补 "
-            f"`output_kind: prose|structured`（见 SKILL_SPEC.md）"
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' is in the read family, "
+            f"but declares no output_kind - fail-closed as prose "
+            f"(+~20 tokens/call). Add "
+            f"`output_kind: prose|structured` to the manifest (see SKILL_SPEC.md)"
         )
     elif kind is not None and declared_kind(tool_name) is None:
         print(
-            f"[bus] WARNING: skill '{skill_name}' 的工具 '{tool_name}' 的 "
-            f"output_kind={kind!r} 不是合法值（只认 prose / structured）"
-            f"—— 按 fail-closed 当 prose 处置"
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' has "
+            f"output_kind={kind!r} which is invalid (only prose / structured) "
+            f"- fail-closed as prose"
         )
 
 
@@ -374,9 +373,9 @@ def _note_review_input(tool_name: str, tool_def: dict, skill_name: str,
         return              # 没声明：不出声（读者会点名，见测试那条）
     if not declare(tool_name, value):
         print(
-            f"[bus] WARNING: skill '{skill_name}' 的工具 '{tool_name}' 的 "
-            f"review_input={value!r} 不是合法值（只认 `none` 或一段非空描述）"
-            f"—— 按「未声明」处置（fail-closed，过分类器）"
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' has "
+            f"review_input={value!r} which is invalid (only `none` or a non-empty description) "
+            f"- treated as undeclared (fail-closed, goes through classifier)"
         )
 
 
@@ -406,9 +405,9 @@ def _note_permission(tool_name: str, tool_def: dict, skill_name: str) -> None:
     perm = tool_def.get("permission")
     if not declare(tool_name, perm) and perm is not None:
         print(
-            f"[bus] WARNING: skill '{skill_name}' 的工具 '{tool_name}' 的 "
-            f"permission={perm!r} 不是合法值（只认 {' / '.join(VALID_PERMS)}）"
-            f"—— 按「未声明」处置（前缀猜 + 出声）"
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' has "
+            f"permission={perm!r} which is invalid (only {' / '.join(VALID_PERMS)}) "
+            f"- treated as undeclared (prefix guess + warning)"
         )
 
 
@@ -439,9 +438,30 @@ def _note_destructive(tool_name: str, tool_def: dict, skill_name: str) -> None:
     value = tool_def.get("destructive")
     if not declare_destructive(tool_name, value) and value is not None:
         print(
-            f"[bus] WARNING: skill '{skill_name}' 的工具 '{tool_name}' 的 "
-            f"destructive={value!r} 不是布尔值 —— 按「未声明」处置。"
-            f" ⚠️ 这一根**没有 fail-closed 兜底**：它会静默变回「可逆」"
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' has "
+            f"destructive={value!r} which is not a boolean - treated as undeclared. "
+            f"WARNING: this field has no fail-closed default: it silently reverts to reversible"
+        )
+
+
+def _note_egress(tool_name: str, tool_def: dict, skill_name: str) -> None:
+    """把 manifest 里的 egress 段登记进出网能力表（core/egress_channels）。
+
+    两条注册路（eager / lazy）各要调一次 - 同 _note_permission 那条理由。
+    没声明不出声（绝大多数工具不出网）；网络工具缺声明由读者点名。
+    声明不完整 / 类型不对则出声且不登记 - 默认值会把"没声明"变成
+    "声明成 auto=True"，而那是放行的一侧。
+    """
+    spec = tool_def.get("egress")
+    if spec is None:
+        return
+    from core import egress_channels
+
+    ok, why = egress_channels.declare(tool_name, spec, source=skill_name)
+    if not ok:
+        print(
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' has "
+            f"invalid egress declaration ({why}) - treated as undeclared"
         )
 
 
@@ -470,9 +490,9 @@ def _note_concurrency_safe(tool_name: str, tool_def: dict, skill_name: str) -> N
     value = tool_def.get("concurrency_safe")
     if not declare_concurrency(tool_name, value) and value is not None:
         print(
-            f"[bus] WARNING: skill '{skill_name}' 的工具 '{tool_name}' 的 "
-            f"concurrency_safe={value!r} 不是布尔值 —— 按「未声明」处置"
-            f"（落回由权限档派生的默认值）"
+            f"[bus] WARNING: skill '{skill_name}' tool '{tool_name}' has "
+            f"concurrency_safe={value!r} which is not a boolean - treated as undeclared "
+            f"(falls back to the permission-tier default)"
         )
 
 
@@ -536,6 +556,7 @@ def load_skill(skill_dir: Path, security_guard=None) -> None:
         _note_permission(tool_name, tool_def, skill_dir.name)
         _note_destructive(tool_name, tool_def, skill_dir.name)
         _note_concurrency_safe(tool_name, tool_def, skill_dir.name)
+        _note_egress(tool_name, tool_def, skill_dir.name)
         # 归属 = 目录名（技能的身份就是它 ——
         # `importlib.import_module(f"skills.{skill_dir.name}.handler")` 用的也是它）。
         # 返回值要判：`False` = 名字被别人占着，这个工具没登记。
@@ -629,6 +650,7 @@ def load_skill_lazy(skill_dir: Path, security_guard=None, *,
         _note_permission(tool_name, tool_def, skill_name)
         _note_destructive(tool_name, tool_def, skill_name)
         _note_concurrency_safe(tool_name, tool_def, skill_name)
+        _note_egress(tool_name, tool_def, skill_name)
         # 归属 = 目录名；返回值要判（见 eager 那条的注释）。
         if register_tool(tool_name, stub, combined_schema,
                          owner=f"skill:{skill_name}"):
@@ -727,8 +749,7 @@ def reload_skills(skills_dir=("skills"), security_guard=None) -> dict:
             _why = _cap_gate(manifest)
         except Exception as e:                                  # noqa: BLE001
             _why = ""
-            print(f"[bus] WARNING: 能力闸出问题（{type(e).__name__}: {e}）"
-                  f" —— '{entry.name}' 照常装载")
+            print(f"[bus] WARNING: capability gate error ({type(e).__name__}: {e}) - '{entry.name}' loads as usual")
         if _why:
             print(f"[bus]   (skip) {entry.name} —— {_why}")
             out.setdefault("skipped_capability", []).append(entry.name)
@@ -740,8 +761,7 @@ def reload_skills(skills_dir=("skills"), security_guard=None) -> dict:
         except Exception:                                       # noqa: BLE001
             _reduced = []
         if _reduced:
-            print(f"[bus]   (degraded) {entry.name} —— 能力缺失："
-                  f"{'、'.join(_reduced)}（当前为兼容状态运行）")
+            print(f"[bus]   (degraded) {entry.name} - missing capabilities: {', '.join(_reduced)} (running in compatibility mode)")
             out.setdefault("degraded_capability", []).append(entry.name)
         # 热加载这条路上也有一道同样的闸。
         #  只做启动那一处是不够的 —— `/skill approve` 之后正是走这条路，
@@ -752,8 +772,7 @@ def reload_skills(skills_dir=("skills"), security_guard=None) -> dict:
                 out.setdefault("quarantined", []).append(entry.name)
                 continue
         except Exception as e:                                  # noqa: BLE001
-            print(f"[bus] WARNING: 屏蔽闸出问题（{type(e).__name__}: {e}）"
-                  f" —— '{entry.name}' 照常装载")
+            print(f"[bus] WARNING: quarantine gate error ({type(e).__name__}: {e}) - '{entry.name}' loads as usual")
         try:
             if manifest.get("load_strategy", "eager") == "on_demand":
                 n = load_skill_lazy(entry, security_guard, skip_existing=True)

@@ -112,10 +112,13 @@ const keys = Object.keys(bridge.api || {});
 //      它只发一个具名频道 + 那三个字符串之一。
 //    · pickSkillDir：装技能时选目录，用户点按钮才调，主进程弹系统选择器，
 //      只回一个路径字符串。它只 invoke 一个具名频道、只收一个字符串。
-check("★★ 白名单**恰好六个**：`pathForFile` + `takeoverOverlay` + `focusWindow` + `token` + `setThemeMode` + `pickSkillDir`（多一个键 = 多开一扇门）",
-      keys.length === 6 && keys.includes("pathForFile") && keys.includes("takeoverOverlay")
+//    · notifyTask：任务完成 / 有待回答时弹系统通知。它只发一个具名频道
+//      + 三个字符串；要不要弹由主进程判（窗口聚焦与否只有那边知道）。
+check("★★ 白名单**恰好八个**：`pathForFile` + `takeoverOverlay` + `focusWindow` + `token` + `setThemeMode` + `pickSkillDir` + `copyToClipboard` + `notifyTask`（多一个键 = 多开一扇门）",
+      keys.length === 8 && keys.includes("pathForFile") && keys.includes("takeoverOverlay")
       && keys.includes("focusWindow") && keys.includes("token")
-      && keys.includes("setThemeMode") && keys.includes("pickSkillDir"),
+      && keys.includes("setThemeMode") && keys.includes("pickSkillDir")
+      && keys.includes("copyToClipboard") && keys.includes("notifyTask"),
       JSON.stringify(keys));
 check("★★ 不给裸句柄：`ipcRenderer` / `fs` / `require` 三样一个都不在",
       !keys.includes("ipcRenderer") && !keys.includes("fs") && !keys.includes("require"),
@@ -151,6 +154,19 @@ if (typeof (bridge.api || {}).takeoverOverlay === "function") {
           inv.length === 1 && inv[0].length === 1, JSON.stringify(inv[0] || []));
   } else {
     check("★ `pickSkillDir` 是个函数", false, "缺失");
+  }
+  // 任务通知：一个具名频道 + 三个字符串（要不要弹由主进程判）。
+  if (typeof bridge.api.notifyTask === "function") {
+    bridge.api.notifyTask("done", "Crannia", "当前任务处理完成");
+    const sent2 = current.sent || [];
+    check("★★ `notifyTask()` 只发 `notify:task` 这一个频道、三个字符串原样带过去",
+          sent2.length === 4 && sent2[3][0] === "notify:task"
+          && sent2[3][1] && sent2[3][1].kind === "done"
+          && sent2[3][1].title === "Crannia"
+          && sent2[3][1].body === "当前任务处理完成",
+          JSON.stringify(sent2[3] || []));
+  } else {
+    check("★ `notifyTask` 是个函数", false, "缺失");
   }
   } else {
     check("★ `setThemeMode` 是个函数", false, "缺失");

@@ -146,7 +146,7 @@ def _note_observed(path: Path) -> None:
         note_observed(path)
     except Exception as exc:                                  # noqa: BLE001
         # 记账失败不许影响读取（同 `core/security._note_touched` 的规矩）
-        print("[office] 读态记账失败（不影响读取）：%s: %s"
+        print("[office] read-state record failed (read unaffected): %s: %s"
               % (type(exc).__name__, exc))
 
 
@@ -172,7 +172,7 @@ def _overwrite_blocked(path: Path) -> Optional[dict]:
         from core.file_tools import overwrite_guard
         return overwrite_guard(path, reader="get_document_text")
     except Exception as exc:                                  # noqa: BLE001
-        print("[office] 覆盖闸出错（已放行）：%s: %s" % (type(exc).__name__, exc))
+        print("[office] overwrite guard error (allowed): %s: %s" % (type(exc).__name__, exc))
         return None
 
 
@@ -2279,7 +2279,7 @@ def _enable_update_fields(doc) -> None:
         if st.find(qn("w:updateFields")) is None:
             st.append(_w_el("w:updateFields", **{"w:val": "true"}))
     except Exception as exc:                              # noqa: BLE001
-        print("[word] 打开 updateFields 失败（域仍然写得进去）：%s: %s"
+        print("[word] enabling updateFields failed (fields still writable): %s: %s"
               % (type(exc).__name__, exc))
 
 

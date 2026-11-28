@@ -262,7 +262,7 @@ class MessageDeduplicator:
         except Exception as exc:                                  # noqa: BLE001
             # 读不到就当空的（不阻断对话），但要出声 —— 否则"跨重启去重
             #   不生效"这件事在用户侧看起来就是"它又答了一遍"。
-            print("[dedup] 已处理消息账本读不出来（%s: %s）—— 跨重启去重这一轮不生效"
+            print("[dedup] processed-message ledger unreadable (%s: %s) - cross-restart dedup inactive"
                   % (type(exc).__name__, exc))
             return
         if isinstance(data, dict):
@@ -283,7 +283,7 @@ class MessageDeduplicator:
         except Exception as exc:                                  # noqa: BLE001
             if not self._save_warned:      # 只吵一次（这条路径可能每轮都走）
                 self._save_warned = True
-                print("[dedup] 已处理消息账本写不进去（%s: %s）—— 重启后可能重复答复"
+                print("[dedup] processed-message ledger write failed (%s: %s) - may answer again after restart"
                       % (type(exc).__name__, exc))
 
 

@@ -376,7 +376,7 @@ export function Onboarding({
                               + (modelForm.card === c.id ? " onboard-provider-chip-selected" : "")}
                             onClick={() => chooseCard(c.id)}>
                       {ic ? <img src={ic} alt="" /> : null}
-                      <span>{c.label}</span>
+                      <span>{t(c.label)}</span>
                     </button>
                   );
                 })}
@@ -385,7 +385,7 @@ export function Onboarding({
               <div className="onboard-config-form">
                 <label className="field"><span>{t("配置名称（可留空）")}</span>
                   <input value={modelForm.name} maxLength={limits.maxName}
-                         placeholder={(cards.find((c) => c.id === modelForm.card) || {}).label || ""}
+                         placeholder={t((cards.find((c) => c.id === modelForm.card) || {}).label || "")}
                          onChange={(e) => setModelForm((f) => ({ ...f, name: e.target.value }))} /></label>
                 <label className="field"><span>{t("模型名")}</span>
                   <input value={modelForm.model} maxLength={limits.maxModel}

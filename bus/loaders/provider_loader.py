@@ -41,9 +41,7 @@ def _capability(model_cfg: dict, key: str, modality: str, default: bool,
     if raw is not None:
         if isinstance(raw, bool):
             return raw, label
-        print(f"[bus] {label} 的 {key}={raw!r} 不是布尔"
-              f"（{type(raw).__name__}）—— 按**不支持**处理"
-              f"（设置写错了，先改对；`true`/`false` 不要加引号）")
+        print(f"[bus] {label} {key}={raw!r} is not a boolean ({type(raw).__name__}) - treated as unsupported (fix the setting; do not quote `true`/`false`)")
         return False, label + "（坏类型）"
     if provider_dir and model_name:
         try:
@@ -69,8 +67,7 @@ def _capability(model_cfg: dict, key: str, modality: str, default: bool,
                 #结论：表可以开，不可以关（除非用户自己关）。
                 return default, "默认（表说没有，但默认仍开）"
         except Exception as exc:                                # noqa: BLE001
-            print(f"[bus] 能力表查询失败（{type(exc).__name__}: {exc}）"
-                  f" —— 落回默认")
+            print(f"[bus] capability table lookup failed ({type(exc).__name__}: {exc}) - falling back to default")
     return default, "默认"
 
 
@@ -184,8 +181,8 @@ def build_provider(provider_dir: Path, config: dict):
     #读到它就打一行出声。默认那份 `_DEFAULT_CONFIG` 不带这个键，
     #      所以正常情况下这行不会出现。
     if "max_tokens" in model_cfg:
-        print("[bus] config.yaml 的 max_tokens=%r **已退役、不再生效** —— "
-              "输出上限现在按模型能力定：min(表里 limit.output, %d)，查不到兜底 %d"
+        print("[bus] config.yaml max_tokens=%r is retired and has no effect - "
+              "output limit now comes from model capability: min(table limit.output, %d), fallback %d"
               % (model_cfg["max_tokens"], window_estimate.MAX_OUTPUT_CEILING,
                  window_estimate.MAX_OUTPUT_FALLBACK))
 

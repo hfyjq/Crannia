@@ -181,6 +181,52 @@ def test_the_bundle_hides_secrets_by_default():
                                       if k != "enc"}), "别的段漏了明文")
 
 
+def test_model_apis_ride_in_the_encrypted_section_only():
+    """单文件存储之后：模型 api 与账本同一份文件，但导出包里
+
+    默认段结构上拿不到它（`all_entries()` 不带 api）；勾了凭据才进加密段，
+    以 `model_config_api`（按 id）走 —— 不整份搬那个文件
+    （整份搬会把非密字段也加密，导入时还会覆盖账本）。
+    """
+    from core import model_configs as MC
+    from core import settings_transfer as ST
+    _reset_model_configs()
+    try:
+        e = MC.create(card="gpt", name="我的中转", model="gpt-4o",
+                      base_url="https://api.example.com/v1", api=SENTINEL)
+        plain = ST.build_bundle({})
+        #: 判据是键里没有 `api`，不是子串 —— `base_url` 里就带 "api"。
+        _entries = (plain.get("model_configs") or {}).get("configs") or {}
+        check("★★ 默认包的 `model_configs` 段**不含 api**"
+              "（结构上拿不到，不是靠记得剔）",
+              bool(_entries) and all("api" not in e for e in _entries.values()),
+              repr(_entries))
+        check("★ 默认包全域搜不到哨兵串", SENTINEL not in json.dumps(plain))
+        enc = ST.build_bundle({}, include_credentials=True, password="pw")
+        names = enc.get("credential_names") or []
+        check("★★ 勾了凭据 -> 名字清单里有 `model_config_api`",
+              "model_config_api" in names, repr(names))
+        check("★ 而且**没有** `provider_credentials`（那个文件不再产生）",
+              "provider_credentials" not in names, repr(names))
+        check("★★ 密文之外仍搜不到哨兵串",
+              SENTINEL not in json.dumps({k: v for k, v in enc.items()
+                                          if k != "enc"}),
+              "别的段漏了明文")
+
+        # 写回那一半：只认账本里已有的 id（外来包不许往账本里加行）
+        _reset_model_configs()
+        MC.merge_ledger({e["id"]: {"card": "gpt", "name": "另一台",
+                                   "model": "gpt-4o"}})
+        check("★ enc 段里的密钥按 id 并回账本",
+              MC.import_apis({e["id"]: SENTINEL}) == 1
+              and MC.api_for(e["id"]) == SENTINEL, MC.api_for(e["id"]))
+        check("★★ 不存在的 id 不许凭空造条目",
+              MC.import_apis({"m99999999": "sk-x"}) == 0
+              and "m99999999" not in MC.all_entries()["configs"])
+    finally:
+        _reset_model_configs()
+
+
 # 5. 形状 / 版本
 
 def test_import_rejects_foreign_or_newer_bundles():
@@ -395,6 +441,7 @@ def main() -> int:
                    test_credentials_are_encrypted_and_round_trip,
                    test_wrong_password_is_refused,
                    test_the_bundle_hides_secrets_by_default,
+                   test_model_apis_ride_in_the_encrypted_section_only,
                    test_import_rejects_foreign_or_newer_bundles,
                    test_the_plan_lists_only_real_changes,
                    test_machine_keys_need_an_explicit_tick,

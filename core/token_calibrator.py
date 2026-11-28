@@ -141,10 +141,7 @@ class TokenCalibrator:
         scheme = entry.get("scheme")
         if scheme != self.ESTIMATOR_SCHEME:
             print(
-                f"[calibrator] 丢弃 {self._provider} 的旧样本 "
-                f"({entry.get('samples')} 个, ema={entry.get('ema')}, "
-                f"scheme={scheme!r} != {self.ESTIMATOR_SCHEME}): "
-                f"估算器口径变了，旧样本是另一个量的样本"
+                f"[calibrator] discarding old samples for {self._provider} ({entry.get('samples')}, ema={entry.get('ema')}, scheme={scheme!r} != {self.ESTIMATOR_SCHEME}): estimator scheme changed, old samples measured a different quantity"
             )
             return False
         self._ema = float(entry.get("ema", 1.0))

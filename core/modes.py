@@ -208,15 +208,14 @@ def configured_mode() -> str:
         #   判据与设置页那条 400 同源（`is_default_allowed`）——
         #   两处各写一份"哪些能当默认"，迟早分叉。
         if not is_default_allowed(key):
-            print("[mode] 设置里的 %s=%r 不能当默认档 —— 这一轮按 %s 跑"
-                  "（完全权限只能 /mode 按会话开）" % (SETTING_KEY, value,
-                                                      DEFAULT_MODE))
+            print("[mode] configured %s=%r not allowed as default - running %s this round"
+                  % (SETTING_KEY, value, DEFAULT_MODE))
             return DEFAULT_MODE
         return key
     except ModeUnsupported:
         # 值不认识 —— 这是"读到了但做不到"的设置层版本。不抛：
         # 一条坏设置不该让整轮对话失败（与档位那条不同，见上面 docstring）。
-        print("[mode] 设置里的 %s=%r 不认识 —— 这一轮按 %s 跑"
+        print("[mode] configured %s=%r unknown - running %s this round"
               % (SETTING_KEY, value, DEFAULT_MODE))
         return DEFAULT_MODE
 
@@ -255,7 +254,7 @@ def current_mode(session_id: str = "") -> str:
         if mode is None:
             mode = configured_mode()
             _frozen[key] = mode
-            print("[mode] 交互模式 = %s（%s）—— 本会话冻结"
+            print("[mode] interaction mode = %s (%s) - frozen for this session"
                   % (mode, MODE_NAMES.get(mode, mode)))
         return mode
 
@@ -289,7 +288,7 @@ def set_mode(session_id: str, key: str) -> str:
     if not is_implemented(key):
         raise ModeUnsupported(
             tr("「%s」这一档暂不可用，其他档位不受影响。")
-            % MODE_NAMES.get(key, key))
+            % tr(MODE_NAMES.get(key, key)))
     sid = session_id or ""
     # 群聊只有自动这一档。
     #   `auto` 本身是幂等的 —— 返回一句实话，不报错（免得"设成它已经在的那个"也崩）。
@@ -297,7 +296,7 @@ def set_mode(session_id: str, key: str) -> str:
         if key != "auto":
             raise ModeUnsupported(
                 tr("群聊固定为「自动」模式，不能切到「%s」。")
-                % MODE_NAMES.get(key, key))
+                % tr(MODE_NAMES.get(key, key)))
         return tr("群聊固定为「自动」模式，无需切换。")
     with _freeze_lock:
         before = _frozen.get(sid)
@@ -310,9 +309,9 @@ def set_mode(session_id: str, key: str) -> str:
         try:
             from core.computer import session as _computer_session
             if _computer_session.disable_for_session(sid, "mode=%s" % key):
-                print("[computer] 模式切到 %s ⇒ 接管已停止" % key)
+                print("[computer] mode switched to %s => takeover stopped" % key)
         except Exception as exc:                     # noqa: BLE001
-            print("[computer] 停止接管失败（模式切换照常）：%s: %s"
+            print("[computer] stop takeover failed (mode switch continues): %s: %s"
                   % (type(exc).__name__, exc))
     # 进入 `plan` 时记下从哪来（记下进入之前的那一档）。
     #
@@ -330,11 +329,13 @@ def set_mode(session_id: str, key: str) -> str:
             from core.plan import remember_previous_mode
             remember_previous_mode(sid, before or configured_mode())
         except Exception as exc:  # noqa: BLE001
-            print("[mode] 记 previous_mode 失败（退出时会落回默认档）：%s" % exc)
+            print("[mode] remember previous_mode failed (falls back to default on exit): %s" % exc)
     if key == "full_access":
         return (tr("已切到「完全权限」。本次对话内审批不再询问；出网命令和受保护路径仍会拦截，批量删除仍会确认一次。"))
+    #: 括号里的模式名也要过一遍 `tr` —— 整句翻译了、参数还是中文，
+    #: 英文界面里就成了「Switched to '手动'」。
     return (tr("已切到「%s」，只对当前对话生效，下一条消息起算。")
-            % MODE_NAMES.get(key, key))
+            % tr(MODE_NAMES.get(key, key)))
 
 
 def reset_mode_cache(session_id: Optional[str] = None) -> None:

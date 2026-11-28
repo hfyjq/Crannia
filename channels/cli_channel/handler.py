@@ -47,9 +47,9 @@ def _drain_console() -> None:
 
     if count > 10:
         print(
-            f"\n[提示] 检测到粘贴残留（{count} 字符已丢弃）。\n"
-            f"[提示] 分析代码 / 长文本请先保存为文件，再用 "
-            f"\"解析 文件名\" 加载。"
+            f"\n[note] paste residue detected ({count} chars discarded).\n"
+            f"[note] for code / long text, save to a file and reference it "
+            f"instead."
         )
 
 

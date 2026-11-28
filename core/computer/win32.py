@@ -8,7 +8,7 @@
 1. 坐标一律物理像素 —— 进这个模块的每个跨进程调用都套 `dpi_aware()`。
    不声明 DPI 感知时 Windows 返回虚拟化坐标，125% 缩放下点击系统性偏移，
    而且不报错。
-2. **句柄一律 `wintypes.HWND` / `c_void_p` 作 `restype`** —— ctypes 默认返回
+2. 句柄一律 `wintypes.HWND` / `c_void_p` 作 `restype` —— ctypes 默认返回
    `c_int`，在 x64 上会把 64 位 HWND 截断，症状是"窗口时有时无"。
 3. 只读枚举不抛异常 —— 单个窗口取不到标题/进程名时给空串并留着它，
    坏一个窗口不该让整张列表消失。
@@ -57,6 +57,11 @@ RDW_ERASE = 0x0004
 RDW_ALLCHILDREN = 0x0080
 RDW_UPDATENOW = 0x0100
 GA_ROOT = 2
+
+#: `#32768` 弹出菜单用这条消息交出它自己的 `HMENU`（WinUser.h：`WM_USER + 0x1E1`）
+MN_GETHMENU = 0x0400 + 0x1E1
+SMTO_ABORTIFHUNG = 0x0002
+MF_BYPOSITION = 0x00000400
 
 
 class GUITHREADINFO(ctypes.Structure):
@@ -201,6 +206,20 @@ if IS_WINDOWS:                                       # pragma: no cover - 平台
     user32.GetWindowDpiAwarenessContext.restype = ctypes.c_void_p
     user32.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]
     user32.GetAwarenessFromDpiAwarenessContext.restype = ctypes.c_int
+    # 键盘布局 / 物理键状态（读数与旁路都靠它）
+    #   `GetKeyboardLayout(0)` 问的是调用线程的布局 —— 后台工作线程
+    #   可能一直停在进程启动时。要问"目标窗口会不会吃键"，必须按目标
+    #   窗口的线程取（见 `input.keyboard_layout`）。
+    user32.GetKeyboardLayout.argtypes = [wintypes.DWORD]
+    user32.GetKeyboardLayout.restype = wintypes.HANDLE
+    user32.GetKeyboardLayoutList.argtypes = [ctypes.c_int,
+                                             ctypes.POINTER(wintypes.HANDLE)]
+    user32.GetKeyboardLayoutList.restype = ctypes.c_int
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                    wintypes.WPARAM, wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    user32.GetAsyncKeyState.restype = ctypes.c_short
 
     kernel32.GetCurrentProcessId.argtypes = []
     kernel32.GetCurrentProcessId.restype = wintypes.DWORD
@@ -214,6 +233,11 @@ if IS_WINDOWS:                                       # pragma: no cover - 平台
         wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
         ctypes.POINTER(wintypes.DWORD)]
     kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+    kernel32.GetProcessTimes.argtypes = [
+        wintypes.HANDLE, ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME)]
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
 
     advapi32.OpenProcessToken.argtypes = [
         wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
@@ -232,6 +256,23 @@ if IS_WINDOWS:                                       # pragma: no cover - 平台
         wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR,
         wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_int]
     shell32.ShellExecuteW.restype = ctypes.c_void_p
+
+    # 菜单：MN_GETHMENU 交出 HMENU，之后一切按菜单自己的表读（见 menu_items）
+    user32.SendMessageTimeoutW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+        wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t)]
+    user32.SendMessageTimeoutW.restype = wintypes.LPARAM
+    user32.GetMenuItemCount.argtypes = [ctypes.c_void_p]
+    user32.GetMenuItemCount.restype = ctypes.c_int
+    user32.GetMenuItemRect.argtypes = [
+        wintypes.HWND, ctypes.c_void_p, wintypes.UINT, ctypes.POINTER(RECT)]
+    user32.GetMenuItemRect.restype = wintypes.BOOL
+    user32.GetMenuItemID.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    user32.GetMenuItemID.restype = wintypes.UINT
+    user32.GetMenuStringW.argtypes = [
+        ctypes.c_void_p, wintypes.UINT, wintypes.LPWSTR, ctypes.c_int,
+        wintypes.UINT]
+    user32.GetMenuStringW.restype = ctypes.c_int
 
 
 # DPI
@@ -434,6 +475,9 @@ class WindowInfo:
     visible: bool
     minimized: bool
     cloaked: bool
+    #: 进程启动时间（FILETIME，0 = 读不到）。窗口句柄与 pid 都会被系统
+    #: 回收给新进程，只比 pid 会认错对象；这个值跟着进程走。
+    started: int = 0
 
     @property
     def width(self) -> int:
@@ -469,16 +513,32 @@ def _class_name(hwnd) -> str:
         return ""
 
 
-def _process_path(pid: int) -> str:
+def _process_meta(pid: int) -> tuple[str, int]:
+    """进程的可执行路径与启动时间（FILETIME，0 = 读不到）。
+
+    启动时间用来分辨"同一个 pid 换了进程"：进程退出后系统会把 pid 发给
+    新进程，而窗口句柄也会被回收给新窗口 —— 只认 pid 会认错对象。
+    一次 `OpenProcess` 同时取两样，枚举时不多花系统调用。
+    """
     h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not h:
-        return ""
+        return "", 0
     try:
+        path = ""
         size = wintypes.DWORD(32768)
         buf = ctypes.create_unicode_buffer(size.value)
         if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-            return buf.value or ""
-        return ""
+            path = buf.value or ""
+        started = 0
+        created = wintypes.FILETIME()
+        exited = wintypes.FILETIME()
+        kt = wintypes.FILETIME()
+        ut = wintypes.FILETIME()
+        if kernel32.GetProcessTimes(h, ctypes.byref(created), ctypes.byref(exited),
+                                    ctypes.byref(kt), ctypes.byref(ut)):
+            started = ((int(created.dwHighDateTime) & 0xFFFFFFFF) << 32) | \
+                      (int(created.dwLowDateTime) & 0xFFFFFFFF)
+        return path, started
     finally:
         kernel32.CloseHandle(h)
 
@@ -521,7 +581,7 @@ def window_info(hwnd) -> WindowInfo | None:
     with dpi_aware():
         pid = wintypes.DWORD(0)
         user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
-        path = _process_path(pid.value) if pid.value else ""
+        path, started = _process_meta(pid.value) if pid.value else ("", 0)
         return WindowInfo(
             hwnd=h,
             pid=int(pid.value),
@@ -533,6 +593,7 @@ def window_info(hwnd) -> WindowInfo | None:
             visible=bool(user32.IsWindowVisible(h)),
             minimized=bool(user32.IsIconic(h)),
             cloaked=_is_cloaked(h),
+            started=started,
         )
 
 
@@ -579,7 +640,7 @@ def _window_info_no_dpi(hwnd) -> WindowInfo | None:
         return None
     pid = wintypes.DWORD(0)
     user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
-    path = _process_path(pid.value) if pid.value else ""
+    path, started = _process_meta(pid.value) if pid.value else ("", 0)
     return WindowInfo(
         hwnd=h,
         pid=int(pid.value),
@@ -591,6 +652,7 @@ def _window_info_no_dpi(hwnd) -> WindowInfo | None:
         visible=bool(user32.IsWindowVisible(h)),
         minimized=bool(user32.IsIconic(h)),
         cloaked=_is_cloaked(h),
+        started=started,
     )
 
 
@@ -602,6 +664,133 @@ def foreground_hwnd() -> int:
 
 def is_foreground(hwnd) -> bool:
     return foreground_hwnd() == int(hwnd or 0)
+
+
+# 键盘布局 / 物理键状态
+def thread_id_of(hwnd) -> int:
+    """目标窗口的线程 id；读不到返回 0。"""
+    if not IS_WINDOWS:
+        return 0
+    try:
+        return int(user32.GetWindowThreadProcessId(int(hwnd), None) or 0)
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
+def installed_layouts() -> list[tuple[int, int]]:
+    """已安装的键盘布局 `[(HKL, langid)]`；读不到返回空列表。"""
+    if not IS_WINDOWS:
+        return []
+    try:
+        n = int(user32.GetKeyboardLayoutList(0, None))
+        if n <= 0:
+            return []
+        arr = (wintypes.HANDLE * n)()
+        got = int(user32.GetKeyboardLayoutList(n, arr))
+        out = []
+        for h in arr[:max(0, got)]:
+            h = int(h or 0)
+            if h:
+                out.append((h, h & 0xFFFF))
+        return out
+    except Exception:                                # noqa: BLE001
+        return []
+
+
+def post_input_language_change(hwnd, hkl) -> bool:
+    """请求目标窗口切换输入语言（`WM_INPUTLANGCHANGEREQUEST`）。
+
+    这是系统给"窗口级输入语言切换"的官方消息：作用在目标线程上，
+    不用注入 Win+Space（Win 键被护栏禁止），也不会打开系统界面。
+    真机实测：中文 0x0804 <-> 英语 0x0409 都能切、都能读回。
+    """
+    if not IS_WINDOWS:
+        return False
+    try:
+        return bool(user32.PostMessageW(int(hwnd), 0x0050, 0,
+                                        int(hkl)))
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def keyboard_layout_of(hwnd) -> int | None:
+    """目标窗口线程的 HKL；读不到返回 None（不猜）。
+
+    为什么不是 `GetKeyboardLayout(0)`：那个问的是调用线程。框架跑在
+    后台工作线程里，它的布局可能一直停在进程启动时，与用户此刻在目标
+    应用里用的输入法无关。判"目标会不会吃键"只能问目标线程。
+    """
+    if not IS_WINDOWS:
+        return None
+    try:
+        tid = thread_id_of(hwnd)
+        hkl = int(user32.GetKeyboardLayout(tid) or 0)
+        return hkl or None
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def key_is_down(vk: int) -> bool | None:
+    """这个虚拟键此刻是不是按着的（全局状态）；读不到返回 None。"""
+    if not IS_WINDOWS:
+        return None
+    try:
+        return bool(int(user32.GetAsyncKeyState(int(vk))) & 0x8000)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def thread_focus(tid: int) -> tuple[int, int]:
+    """目标线程的 `(hwndActive, hwndFocus)`；读不到返回 `(0, 0)`。
+
+    与"前台窗口"是两件事：前台仍是主窗时，线程的活动窗口完全可能是
+    另一个顶层窗口（Photoshop 的浮动操作栏 `OS_ViewContainer`）。
+    键盘事件跟着焦点走，不跟着前台走。
+    """
+    if not IS_WINDOWS or not tid:
+        return 0, 0
+    try:
+        gi = GUITHREADINFO()
+        gi.cbSize = ctypes.sizeof(GUITHREADINFO)
+        if not user32.GetGUIThreadInfo(int(tid), ctypes.byref(gi)):
+            return 0, 0
+        return int(gi.hwndActive or 0), int(gi.hwndFocus or 0)
+    except Exception:                                # noqa: BLE001
+        return 0, 0
+
+
+def root_of(hwnd) -> int:
+    """窗口的根窗口（GA_ROOT）；读不到返回 0。"""
+    if not IS_WINDOWS or not hwnd:
+        return 0
+    try:
+        return int(user32.GetAncestor(int(hwnd), 2) or 0)   # GA_ROOT = 2
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
+def window_brief(hwnd) -> str:
+    """给读数用的一行：`类名「标题」`（没有标题就只给类名）。"""
+    if not IS_WINDOWS or not hwnd:
+        return ""
+    try:
+        cls = _class_name(int(hwnd)) or "?"
+        buf = ctypes.create_unicode_buffer(256)
+        user32.GetWindowTextW(int(hwnd), buf, 256)
+        t = (buf.value or "").strip()
+        return "%s「%s」" % (cls, t[:40]) if t else cls
+    except Exception:                                # noqa: BLE001
+        return ""
+
+
+def class_name_of(hwnd) -> str:
+    """窗口类名；读不到返回空串。"""
+    if not IS_WINDOWS or not hwnd:
+        return ""
+    try:
+        return _class_name(int(hwnd)) or ""
+    except Exception:                                # noqa: BLE001
+        return ""
 
 
 def pick_main_window(windows, pids):
@@ -627,6 +816,88 @@ def pick_main_window(windows, pids):
                 and (w.exe or "").lower() == "electron.exe"
                 and "crannia" in (w.title or "").lower()]
     return max(mine, key=area) if mine else None
+
+
+def menu_items(hwnd: int) -> list[tuple[int, str, tuple[int, int, int, int]]]:
+    """`#32768` 弹出菜单的真实项表：`[(命令 id, 文字, 屏幕矩形), …]`。
+
+    ## 为什么不用 UIA 的 `BoundingRectangle`
+
+    `#32768` 是应用自绘的菜单。UIA 给它的 `BoundingRectangle` 是估算值：
+    项高按窗口高度均分，与真实行高不一致，越往下偏得越多 —— 按它算出来的
+    中心会落到相邻项上。菜单自己的表才是准的。
+
+    ## 数据源
+
+    标准 Win32 弹出菜单响应 `MN_GETHMENU`，交出它自己的 `HMENU`；之后
+    `GetMenuItemCount` / `GetMenuItemID` / `GetMenuItemRect` 读的全是菜单元数据。
+    `GetMenuItemRect` 的 `hwnd` 传 `NULL` → 返回屏幕坐标（文档明说），与 UIA
+    在同一个坐标系里（两者都在 `dpi_aware()` 下取）。
+
+    ## 读不到就返回空表
+
+    不是 Win32 菜单（Electron / 自绘浮层）· 菜单已经收起 · 跨权限读不到 ——
+    一律 `[]`。调用方拿空表就退回原路，不编坐标：
+    「点错了却以为点对了」比「明说这个菜单没有表」贵得多。
+    """
+    if not IS_WINDOWS:
+        return []
+    h = int(hwnd or 0)
+    if not h:
+        return []
+    try:
+        with dpi_aware():
+            if _class_name(h) not in ("#32768", "#32769"):
+                return []
+            out = ctypes.c_size_t(0)
+            user32.SendMessageTimeoutW(wintypes.HWND(h), MN_GETHMENU, 0, 0,
+                                       SMTO_ABORTIFHUNG, 1000,
+                                       ctypes.byref(out))
+            hmenu = int(out.value or 0)
+            if not hmenu:
+                return []
+            count = int(user32.GetMenuItemCount(ctypes.c_void_p(hmenu)))
+            if count <= 0 or count > 2000:
+                return []
+            items: list[tuple[int, str, tuple[int, int, int, int]]] = []
+            buf = ctypes.create_unicode_buffer(256)
+            for pos in range(count):
+                r = RECT()
+                if not user32.GetMenuItemRect(None, ctypes.c_void_p(hmenu), pos,
+                                              ctypes.byref(r)):
+                    continue
+                if r.right <= r.left or r.bottom <= r.top:
+                    continue
+                mid = int(user32.GetMenuItemID(ctypes.c_void_p(hmenu), pos))
+                text = ""
+                try:
+                    if user32.GetMenuStringW(ctypes.c_void_p(hmenu), pos, buf,
+                                             256, MF_BYPOSITION) > 0:
+                        text = buf.value.replace("&", "")
+                except Exception:                    # noqa: BLE001 - 文字读不到不要紧
+                    text = ""
+                items.append((mid, text, (r.left, r.top, r.right, r.bottom)))
+            return items
+    except Exception:                                # noqa: BLE001 - 读不到就是没有
+        return []
+
+
+def point_hit(hwnd: int, x: int, y: int) -> bool | None:
+    """点 `(x,y)` 命中的根窗口是不是 `hwnd`；读不到返回 None（不猜）。
+
+    与 `window_health` 里的 `point_hit` 同一判据，但那个只看窗口中心 ——
+    模型真正要点的可能是别处。`None` 的调用方不该拒绝（读不到 ≠ 被挡）。
+    """
+    if not IS_WINDOWS:
+        return None
+    try:
+        with dpi_aware():
+            hp = user32.WindowFromPoint(wintypes.POINT(int(x), int(y)))
+            if not hp:
+                return None
+            return bool(user32.GetAncestor(hp, GA_ROOT) == int(hwnd))
+    except Exception:                                # noqa: BLE001
+        return None
 
 
 def window_health(hwnd) -> dict:

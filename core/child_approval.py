@@ -80,13 +80,12 @@ def ask(session_key: str, pend: dict, *, requester: str = "") -> str:
     }
     with _LOCK:
         _QUEUES.setdefault(str(session_key or ""), []).append(entry)
-    print(f"[subagent] 等待审批：{entry['kind']}（{requester or '-'}）"
-          f" request={entry['request_id']}")
+    print(f"[subagent] waiting for approval: {entry['kind']} ({requester or '-'}) request={entry['request_id']}")
     try:
         wait_s = _timeout_of(session_key)
         got = entry["event"].wait(wait_s if wait_s > 0 else None)
         if not got:
-            print(f"[subagent] 审批超时（{wait_s}s，无回答）：{entry['kind']}")
+            print(f"[subagent] approval timed out ({wait_s}s, no answer): {entry['kind']}")
             return UNAVAILABLE
         return entry["decision"] or UNAVAILABLE
     finally:

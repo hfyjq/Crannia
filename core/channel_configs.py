@@ -139,7 +139,7 @@ def load(*, seed: bool = True) -> dict:
         try:
             seed_from_legacy(data)
         except Exception as exc:                              # noqa: BLE001
-            print("[channels] 播种失败（%s: %s）" % (type(exc).__name__, exc))
+            print("[channels] seeding failed (%s: %s)" % (type(exc).__name__, exc))
     return data
 
 
@@ -396,7 +396,7 @@ def seed_from_legacy(data: dict) -> None:
                             #   播种出来的是一条空凭据，而 `seeded_at` 一旦
                             #   落下去就再也不会重来 —— 用户的配置就这么静默没了。
                             #   所以整趟放弃、不落 `seeded_at`，下次再试。
-                            print("[channels] 环境变量 %s 还没装载，暂不播种" % name)
+                            print("[channels] env var %s not loaded yet, seeding skipped" % name)
                             return
                     text = _resolve_env(raw).strip()
                     if text and not _ENV_ONLY_RE.match(text):
@@ -404,7 +404,7 @@ def seed_from_legacy(data: dict) -> None:
                 if values:
                     legacy[platform] = values
     except Exception as exc:                                  # noqa: BLE001
-        print("[channels] 读 config.yaml 播种失败（%s: %s）"
+        print("[channels] seeding from config.yaml failed (%s: %s)"
               % (type(exc).__name__, exc))
 
     qq_path = Path("data/qq_bot_credentials.json")

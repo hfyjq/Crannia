@@ -80,7 +80,7 @@ def _prune(logs_dir: Path, now: datetime) -> int:
             except OSError:
                 pass
     if removed:
-        print(f"[daily_log] 剪掉了 {removed} 个超过 {RETENTION_DAYS} 天的日报文件")
+        print(f"[daily_log] removed {removed} daily log files older than {RETENTION_DAYS} days")
     return removed
 
 
@@ -105,5 +105,5 @@ def log_turn(logs_dir, session_id: str, user_text, assistant_text,
                 fh.write(_entry(session_id, user_text, assistant_text, now))
         return target
     except OSError as exc:
-        print(f"[daily_log] 写不进去（{type(exc).__name__}: {exc}）—— 本轮日报缺一段")
+        print(f"[daily_log] write failed ({type(exc).__name__}: {exc}) - this turn's daily log is missing a section")
         return None

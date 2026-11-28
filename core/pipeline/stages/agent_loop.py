@@ -84,7 +84,7 @@ class AgentLoopStage(Stage):
             from core import session_workspace
             session_workspace.pin(ctx.storage_id)
         except Exception as _ws_exc:  # noqa: BLE001
-            print(f"[workspace] 本轮工作目录钉不上（回默认）："
+            print(f"[workspace] cannot pin this turn's workspace dir (using default): "
                   f"{type(_ws_exc).__name__}: {_ws_exc}")
 
         # 权限解禁：完全权限 + 设置里那个开关，本轮把剩下的阻力也拿掉
@@ -95,7 +95,7 @@ class AgentLoopStage(Stage):
             from core import unlock
             unlock.pin(ctx.session_id)
         except Exception as _ul_exc:  # noqa: BLE001
-            print(f"[unlock] 解禁状态钉不上（本轮按**不**解禁处理）："
+            print(f"[unlock] cannot pin unlock state (this turn treated as NOT unlocked): "
                   f"{type(_ul_exc).__name__}: {_ul_exc}")
 
         # ── 这一轮的所有代价旋钮都来自投入档
@@ -115,8 +115,8 @@ class AgentLoopStage(Stage):
         # 免得有人改了却看不到变化（静默忽略一个用户改过的键，比拒绝更坏）。
         _cfg_cap = ctx.config.get("tool_result_max_chars")
         if _cfg_cap is not None and int(_cfg_cap) != tool_result_max_chars:
-            print(f"[tier] config.yaml 的 tool_result_max_chars={_cfg_cap} **不再生效** —— "
-                  f"现在由档位给（档 {spec.level} 是 {tool_result_max_chars}）")
+            print(f"[tier] config.yaml tool_result_max_chars={_cfg_cap} no longer takes effect - "
+                  f"tier {spec.level} gives {tool_result_max_chars}")
 
         max_turns = spec.max_turns
         # 流式开关
@@ -146,7 +146,7 @@ class AgentLoopStage(Stage):
             ctx.messages = ctx.session_pool.maybe_trim_cold_window(
                 session_key_of_ctx(ctx), ctx.messages)
         except Exception as _win_exc:  # noqa: BLE001
-            print(f"[memory] 冷闸滑窗检查失败（本轮不剪）："
+            print(f"[memory] cold-window trim check failed (not trimming this turn): "
                   f"{type(_win_exc).__name__}: {_win_exc}")
 
         # 日期变化时往消息流补一条
@@ -165,9 +165,9 @@ class AgentLoopStage(Stage):
             if _date_note:
                 ctx.messages.append({"role": "user", "content": _date_note,
                                      "kind": "date_change"})
-                print(f"[date] 跨零点 —— 已往消息流补一条（{ctx.session_id}）")
+                print(f"[date] crossed midnight - appended one message ({ctx.session_id})")
         except Exception as _date_exc:  # noqa: BLE001
-            print(f"[date] 日期检查失败（本轮不补）："
+            print(f"[date] date check failed (no append this turn): "
                   f"{type(_date_exc).__name__}: {_date_exc}")
 
         # 审批回答 = 把那次挂起调用的结果补上
@@ -223,7 +223,7 @@ class AgentLoopStage(Stage):
                         _emit=make_emitter(ctx.events, session_key_of_ctx(ctx)),
                     )
             except Exception as _rp_exc:  # noqa: BLE001
-                print(f"[approval] 重放失败（退回旧回执）："
+                print(f"[approval] replay failed (falling back to old receipt): "
                       f"{type(_rp_exc).__name__}: {_rp_exc}")
                 _replay_ok = False
             # 结算结论照发：卡片要说的是"用户做了什么决定"，
@@ -256,7 +256,7 @@ class AgentLoopStage(Stage):
             try:
                 compacted, done = pool.compact(session_key_of_ctx(ctx), _msgs)
             except Exception as _cexc:                       # noqa: BLE001
-                print(f"[compact] 超长自救失败（压缩抛错）："
+                print(f"[compact] over-length rescue failed (compression raised): "
                       f"{type(_cexc).__name__}: {_cexc}")
                 return False
             if not done:
@@ -279,7 +279,7 @@ class AgentLoopStage(Stage):
             # 一行日志，说明这一轮走的是哪条路。
             # 没有它，两条路在日志里长得一模一样，"流式开着却看不到逐字输出"
             # 只能靠间接证据推断。一行能说清的事，不许留着不出声。
-            print("[stream] 本轮走流式（settings.stream_output=true）")
+            print("[stream] this turn uses streaming (settings.stream_output=true)")
             # 走流式路径 —— 累积所有产出的状态，以最后一个作为结果
             final_state = None
             async for state in agent_loop_stream(
@@ -440,7 +440,7 @@ def _persist_replay(ctx) -> None:
     try:
         mm.repersist_messages(ctx.storage_id, ctx.messages)
     except Exception as exc:  # noqa: BLE001
-        print(f"[approval] 重放结果落库失败（下一轮会读回旧载荷）："
+        print(f"[approval] failed to persist replay result (next turn will read the old payload): "
               f"{type(exc).__name__}: {exc}")
 
 
@@ -485,8 +485,8 @@ def apply_llm_error_mark(ctx) -> bool:
         ctx.metadata["llm_error"] = True
         return True
     except Exception as exc:                                    # noqa: BLE001
-        print(f"[llm] 错误标记处理失败（{type(exc).__name__}: {exc}）"
-              f" —— 这一轮按普通回复继续")
+        print(f"[llm] error-marker handling failed ({type(exc).__name__}: {exc})"
+              f" - continuing as a normal reply this turn")
         return False
 
 
@@ -503,7 +503,8 @@ def _note_pending_call(pend: dict, msgs: list, tool_msg_index: int) -> None:
 #: `scheduler._PENDING_STORES` 是同一个集合（后两张表分别用于结算与持久化）。
 _PENDING_STORE_ATTRS = (
     "pending_cross_zone", "pending_delete", "pending_delete_bulk",
-    "pending_egress", "pending_command", "pending_destructive", "pending_plan",
+    "pending_egress", "pending_ssh_hostkey", "pending_command",
+    "pending_destructive", "pending_plan",
     # 提问面板（也由"没人会回答"的收尾逻辑覆盖）。
     "pending_ask",
     # 工作区之外写文件。
@@ -636,7 +637,7 @@ def _emit_neutralized(ctx, msgs: list, idxs: list) -> None:
             bus.emit(EVT_TOOL_NEUTRALIZED, session_key=key,
                      tool=str(_name or ""))
     except Exception as exc:  # noqa: BLE001 — 观测不许弄挂这一轮
-        print(f"[approval] 中和事件发不出去（{type(exc).__name__}: {exc}）")
+        print(f"[approval] cannot emit neutralization event ({type(exc).__name__}: {exc})")
 
 
 def _check_cross_zone_pending(ctx: StageContext,
@@ -790,6 +791,26 @@ def _check_cross_zone_pending(ctx: StageContext,
                 if kind in ASK_COUNTED_KINDS:
                     ctx.approval_ask_counts[kind] = int(
                         ctx.approval_ask_counts.get(kind, 0)) + 1
+                _armed_idx = _i
+                break
+            # SSH 主机密钥信任（TOFU）- 自己一格（一格只许一个 kind 用）。
+            # 载荷带 host_key_line（known_hosts 格式）：结算器要原样存下来，
+            # 重放那次调用时连接才能过严格主机密钥校验。
+            if data.get("status") == "pending_ssh_hostkey_approval":
+                pend = ctx.pending_ssh_hostkey
+                pend["active"] = True
+                pend["stage"] = "ask"
+                pend["kind"] = "ssh_hostkey"
+                pend["subject"] = data.get("subject", "")
+                pend["host_key_line"] = data.get("host_key_line", "")
+                pend["fingerprint"] = data.get("fingerprint", "")
+                pend["detail"] = data.get("detail", "")
+                pend["body"] = data.get("body", "")
+                pend["request_id"] = new_request_id("ssh_hostkey")
+                _note_pending_call(pend, msgs, _i)
+                prompt = data.get("prompt", "")
+                if prompt and not _is_web(ctx):
+                    ctx.response = prompt
                 _armed_idx = _i
                 break
             # Delete approval

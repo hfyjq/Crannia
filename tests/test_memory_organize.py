@@ -559,7 +559,7 @@ def test_run_failure_releases_and_does_not_mark():
         assert not MO.lock_path(_ROOT).exists(), "失败没还互斥（下次要等一小时）"
         assert MO.last_round_at(_ROOT) == 0.0, \
             "失败却盖了上次巩固时刻 —— 下一次要再等 24 小时"
-        assert any("失败" in ln for ln in lines), "失败没有出声"
+        assert any("failed" in ln for ln in lines), "失败没有出声"
         assert MO._state["in_progress"] is False, "失败也必须清在飞标志"
 
 

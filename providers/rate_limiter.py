@@ -75,8 +75,8 @@ class RateLimiter:
         #
         # 正确行为是放行 + 告警：这是配置或估算的问题，不是请求的问题。
         if needed_tpm > self._tpm:
-            print(f"[ratelimit] 单次预估 {needed_tpm:,} tokens 超过 TPM 上限 "
-                  f"{self._tpm:,} —— 等待无法满足，直接放行（本次不计 TPM）")
+            print(f"[ratelimit] single estimate {needed_tpm:,} tokens exceeds TPM limit "
+                  f"{self._tpm:,} -- wait cannot satisfy, passing through (not counted)")
             needed_tpm = 0          # 不参与 TPM 判定，也不扣桶
 
         while True:

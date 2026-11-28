@@ -131,3 +131,32 @@ export function classifyReply(msgs, text, ts, truncMark = "") {
   }
   return { index: -1, kind: "none" };
 }
+
+// ── 渲染列表的内存守卫 ─────────────────────────────────────────
+//
+//: 屏幕上最多留多少条消息。
+//:
+//: 判据：会话开着一轮一轮追加，React 状态与 DOM 只增不减（重载才释放）。
+//:   400 条约等于 200 轮，正常会话碰不到；碰到时只丢最早的，更早的仍在库里，
+//:   重新打开这条会话后 `∧ 更早` 翻得回来 —— 它只省内存，不是产品上限。
+export const MAX_RENDERED_MESSAGES = 400;
+
+//: 收起最老的消息，并在头上放一条「收起了多少条」的边界标记。
+//:
+//: 没有超限时原样返回同一个数组 —— 这个函数在每次 `task.end` 都会被调，
+//: 返回新数组会让每一轮都重渲染一遍整段对话。
+//: 标记是一条 `role: "trimmed"` 的项（不是独立状态）：它随列表一起换会话、
+//: 一起被清空，所以不需要另有一个"重置"的落点。
+//: `count` 是累计收起的条数 —— 连着收两次时，用户看到的必须是总数。
+export function trimHistory(msgs, limit = MAX_RENDERED_MESSAGES) {
+  const list = Array.isArray(msgs) ? msgs : [];
+  const cap = Math.max(1, Number(limit) || MAX_RENDERED_MESSAGES);
+  if (list.length <= cap) return list;
+  const cut = list.length - cap;
+  const head = list.slice(0, cut);
+  const marker = head.find((m) => m && m.role === "trimmed");
+  const dropped = (marker ? Number(marker.count) || 0 : 0)
+    + head.filter((m) => !(m && m.role === "trimmed")).length;
+  return [{ id: "trimmed", role: "trimmed", count: dropped },
+          ...list.slice(cut)];
+}

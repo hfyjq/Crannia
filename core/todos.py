@@ -180,7 +180,7 @@ def todo_write(todos=None) -> dict:
 
     _todos[session_id] = items
     in_progress = sum(1 for it in items if it["status"] == "in_progress")
-    print("[todo] %d 项（%d 进行中）session=%s"
+    print("[todo] %d items (%d in progress) session=%s"
           % (len(items), in_progress, session_id or "-"))
     return {
         "success": True,

@@ -58,7 +58,7 @@ def _guarded(resolved: Path, op: str) -> Path:
             from core.file_tools import note_observed
             note_observed(guarded)
         except Exception as exc:                              # noqa: BLE001
-            print("[office] 读态记账失败（不影响读取）：%s: %s"
+            print("[office] read-state record failed (read unaffected): %s: %s"
                   % (type(exc).__name__, exc))
     return guarded
 
@@ -258,7 +258,7 @@ def overwrite_blocked(path: Path, *, reader: str = "read_excel_data"):
         from core.file_tools import overwrite_guard
         return overwrite_guard(path, reader=reader)
     except Exception as exc:                                  # noqa: BLE001
-        print("[office] 覆盖闸出错（已放行）：%s: %s" % (type(exc).__name__, exc))
+        print("[office] overwrite guard error (allowed): %s: %s" % (type(exc).__name__, exc))
         return None
 
 
@@ -268,7 +268,7 @@ def _note_observed(path) -> None:
         from core.file_tools import note_observed
         note_observed(path)
     except Exception as exc:                                  # noqa: BLE001
-        print("[office] 读态记账失败（不影响写入）：%s: %s"
+        print("[office] read-state record failed (write unaffected): %s: %s"
               % (type(exc).__name__, exc))
 
 

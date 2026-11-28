@@ -532,6 +532,12 @@ SESSION_SCOPED_BY_OTHER: Tuple[SessionState, ...] = (
         "pending_egress", "core/pipeline/scheduler.py::PipelineScheduler._pending_egress",
         "同上", note="同 pending_cross_zone（出网审批）"),
     SessionState(
+        "pending_ssh_hostkey",
+        "core/pipeline/scheduler.py::PipelineScheduler._pending_ssh_hostkey",
+        "同上（同一套派发/结算代码）",
+        note="SSH 主机密钥信任 - 自己一格（被审批物是指纹，不是目标授权）。"
+             "不清：下一句话会被当成对上一个指纹的回答"),
+    SessionState(
         "pending_write_outside",
         "core/pipeline/scheduler.py::PipelineScheduler._pending_write_outside",
         "同上（同一套派发/结算代码）",
@@ -885,10 +891,10 @@ PROCESS_SHARED: Tuple[ProcessState, ...] = (
     ProcessState(
         "_creds", "core/model_configs.py::_creds",
         "`core/model_configs._LOCK` 护着（与 `_cache` **同一把锁、同一次原子写**）",
-        "★ 凭据账本的内存镜像（`data/runtime/provider_credentials.json`）——"
-        "**单独一个文件**（配置可以随便看/导出，凭据不行）。"
-        "⚠️ 它也是**不是**真相源。★ 与 `_cache` **必须同进同出**：两个文件各写一次，"
-        "而哪一次失败都只出声、不回滚（本次运行内是真的）。"
+        "★ 模型 api 的内存镜像（D6 单文件后与 `_cache` **同一份** "
+        "`data/runtime/model_configs.json` 的 `api` 字段）。"
+        "⚠️ 内存层仍分离：条目出模块时不带 `api`（导出结构上拿不到明文）。"
+        "⚠️ 它也不是真相源。★ 与 `_cache` 一次原子写，写失败只出声、不回滚。"
         "⚠️ 那个文件同时在 `core/security.py::DEFAULT_FORBIDDEN_PATHS` 里 ——"
         "**改动它的落点时两处都要改**"),
     ProcessState(
@@ -905,6 +911,12 @@ PROCESS_SHARED: Tuple[ProcessState, ...] = (
         "★ 失效判据挂在 `updated_at` 上（不是「记得清」）：用户改了那条配置 ⇒ 下一轮重建。"
         "⚠️ `/clear` **不清它** —— 它是**进程级的缓存**，与哪一段对话无关"
         "（清了只是多几次 import）"),
+    ProcessState(
+        "_SCAN_CACHE", "core/computer/input.py::_SCAN_CACHE",
+        "无锁：只在 _scan_of 里写，而两边写进去的是同一个值"
+        "（MapVirtualKey 对同一个虚拟键恒定），没有可以分叉的事实",
+        "虚拟键码到 scan code 的缓存。"
+        "/clear 不清它，它是进程级的系统常量，与哪一段对话无关。"),
     ProcessState(
         "_ST", "core/session_model.py::_ST",
         "★ **无锁**：只在 `_short_term()` 里写一次（首次拿到单例后就一直命中），"
@@ -937,6 +949,17 @@ PROCESS_SHARED: Tuple[ProcessState, ...] = (
     ProcessState(
         "_declared", "core/tool_output_kind.py::_declared",
         "装载期写入（_note_output_kind），运行期只读", "同 registered_stages"),
+    ProcessState(
+        "_DECLARED", "core/egress_channels.py::_DECLARED",
+        "装载期写入（manifest 的 egress 段 -> declare()），运行期只读",
+        "出网能力表的技能那一半（框架那一半是静态的 FRAMEWORK_CHANNELS）。"
+        "与 tool_output_kind._declared 同形同命：进程级声明，"
+        "/clear 不该碰它，也不进 purge_session"),
+    ProcessState(
+        "_ROUTE_BY_FAMILY", "core/egress_channels.py::_ROUTE_BY_FAMILY",
+        "模块导入期从 DENY_ROUTES 派生，运行期只读",
+        "派生表（不是状态）- 登记它是因为 census 按「模块级 dict」扫；"
+        "它有读者（route_of_family / deny_message）"),
     ProcessState(
         "_stats", "core/auto_review.py::_stats",
         "无锁；只在 `_auto_review_gate` 那条派发路上加一笔（六个通道各在自己的线程里跑）",

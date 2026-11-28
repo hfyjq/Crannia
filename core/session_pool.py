@@ -308,8 +308,7 @@ class SessionPool:
         except Exception as exc:  # noqa: BLE001
             # 判不出来，不算数（fail-closed）：这一格的后果是
             #    "把消息追加到另一段对话上"，方向与"少切一次"不对称。
-            print(f"[memory] 线程归属查不动（按不属于处理）："
-                  f"{type(exc).__name__}: {exc}")
+            print(f"[memory] thread ownership lookup failed (treating as not owned): {type(exc).__name__}: {exc}")
             return False
 
     def fork_thread(self, channel_key: str,

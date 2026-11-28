@@ -348,7 +348,7 @@ class WeChatChannel(Channel):
                                    context_token)
             return True
         except Exception as exc:                                  # noqa: BLE001
-            print("[wechat] 媒体发送失败（%s）：%s" % (type(exc).__name__, exc))
+            print("[wechat] media send failed (%s): %s" % (type(exc).__name__, exc))
             return False
 
     # ---- 出站媒体 ---------------------------------------------------------
@@ -405,7 +405,7 @@ class WeChatChannel(Channel):
             kind, wx_media.media_ref(enc_param, key.hex()),
             cipher_size=len(cipher), plain_size=len(raw),
             file_name=(filename or p.name))
-        print("[wechat] 上传完成：%s（%d 字节，%s）"
+        print("[wechat] upload complete: %s (%d bytes, %s)"
               % (filename or p.name, len(raw), kind))
         await self._send_items(to_user, [item], context_token)
 
@@ -445,7 +445,7 @@ class WeChatChannel(Channel):
             recs = _outbox.take_for(session_key=session_key_for(session),
                                     channel="wechat_channel", user_id=to_user)
         except Exception as exc:                                  # noqa: BLE001
-            print("[wechat] 取待发文件失败（%s）：%s" % (type(exc).__name__, exc))
+            print("[wechat] failed to fetch pending files (%s): %s" % (type(exc).__name__, exc))
             return
         for rec in recs:
             ok = await self.send_media_file(
@@ -665,7 +665,7 @@ class WeChatChannel(Channel):
             await self._send_text(to_user, str(text or ""), "")
             return True
         except Exception as exc:                                  # noqa: BLE001
-            print(f"[wechat] 旁白没发出去（{type(exc).__name__}: {exc}）")
+            print(f"[wechat] note not sent ({type(exc).__name__}: {exc})")
             return False
 
     async def _download_files(self, chain: MessageChain) -> None:
@@ -683,9 +683,9 @@ class WeChatChannel(Channel):
                 # 否则"没下载地址"与"压根没有这个组件"在盘上留下的痕迹完全一样
                 # （判据：没有输出 ≠ 什么都没发生）。
                 # 上游（转换器）也会为同一件事打一行；两行一起看就知道卡在哪一段。
-                print(f"[wechat] 这个 {type(c).__name__} 组件**没有下载地址**"
-                      f"（url 为空）—— 跳过了，不会去取字节"
-                      f"（aes={'有' if aes_key else '无'}）")
+                print(f"[wechat] {type(c).__name__} component has no download URL"
+                      f" (url empty) -- skipped, not fetching bytes"
+                      f" (aes={'yes' if aes_key else 'no'})")
                 continue
 
             # 文件名必须是"短名 + 摘要"。
@@ -856,7 +856,7 @@ class WeChatChannel(Channel):
             local = getattr(c, "local_path", None)
             if not local:
                 # 没有本地字节 = 发不出去。出声，别让它看起来像发过了。
-                print("[wechat] 要发的 %s 没有本地文件（只给了地址），跳过了"
+                print("[wechat] %s to send has no local file (only URL given), skipped"
                       % type(c).__name__)
                 continue
             await self._send_media(to_user, str(local),

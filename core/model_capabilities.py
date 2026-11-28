@@ -46,10 +46,10 @@ def _read(path: Path | None = None) -> dict:
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        print("[model_capabilities] 能力表不存在（%s）—— 全部落回兜底" % p)
+        print("[model_capabilities] capability table missing (%s) - all fall back" % p)
         return {}
     except Exception as exc:                                    # noqa: BLE001
-        print("[model_capabilities] 能力表读不动（%s: %s）—— 全部落回兜底"
+        print("[model_capabilities] capability table unreadable (%s: %s) - all fall back"
               % (type(exc).__name__, exc))
         return {}
     return raw if isinstance(raw, dict) else {}
