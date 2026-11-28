@@ -2,7 +2,7 @@
   "latest": {
     "version": "1.2.0",
     "channel": "stable",
-    "published_at": "2026-11-28T16:19:28Z",
+    "published_at": "2026-11-28T17:01:38Z",
     "release_notes_url": "https://github.com/hfyjq/Crannia/releases/tag/v1.2.0",
     "minimum_client_version": null,
     "mandatory": false,
@@ -11,12 +11,33 @@
       "windows-exe": {
         "url": "https://github.com/hfyjq/Crannia/releases/download/v1.2.0/crannia-1.2.0-win-x64.exe",
         "sha256": "ead2d4e1e33dce2bd75ad159c3cb4f5a8f7fb59bf4cbc6b7a0a794cd4a2cc9ec",
-        "size_bytes": 268220335
+        "size_bytes": 268220335,
+        "urls": [
+          "https://github.com/hfyjq/Crannia/releases/download/v1.2.0/crannia-1.2.0-win-x64.exe",
+          "https://gitcode.com/KanocRain/crannia-release/releases/download/v1.2.0/crannia-1.2.0-win-x64.exe"
+        ]
+      },
+      "codepack": {
+        "url": "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.2.0.tgz",
+        "app_version": "1.2.0",
+        "runtime": "bcce5f46b9fe05ab0d72c75dae96e8dc30fed50163629cfa8ec88160245d528a",
+        "shell_sha256": "1d7c703d2a4be4f2e67b0c0ff9e72d703ea9731b9828943b5f81237018337266",
+        "shell_sig": "a718700e0a3607882d239c1d30911ac35c2c5e71119fe69784f6f6f10ebe0092",
+        "urls": [
+          "https://registry.npmmirror.com/@hfyjq/crannia/-/crannia-1.2.0.tgz",
+          "https://registry.npmjs.org/@hfyjq/crannia/-/crannia-1.2.0.tgz"
+        ],
+        "integrity": "sha512-KmgFBXs+ycc5ceokKeXcPcBjCnsbKhEBxgAZ/VFJiBxe+GfEj+uBCapUI//bcAQeKhb84pZ7PB7eEk/e01oLJg==",
+        "size_bytes": 7435391
       },
       "tui": {
         "url": "https://github.com/hfyjq/Crannia/releases/download/v1.2.0/crannia-tui-1.2.0-code.zip",
         "sha256": "22db9d849398013a09f819981d90aa9b3921aba9976404ab7be089b8db3cb6e3",
-        "size_bytes": 7539293
+        "size_bytes": 7539293,
+        "urls": [
+          "https://github.com/hfyjq/Crannia/releases/download/v1.2.0/crannia-tui-1.2.0-code.zip",
+          "https://gitcode.com/KanocRain/crannia-release/releases/download/v1.2.0/crannia-tui-1.2.0-code.zip"
+        ]
       }
     }
   }
