@@ -7,9 +7,9 @@
     <a href="README.md">English</a>
   </p>
   <p>
-    <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
+    <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-22c55e">
     <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
-    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-6bbf40">
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-f97316">
   </p>
 </div>
 
