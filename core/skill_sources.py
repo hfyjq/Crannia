@@ -65,9 +65,9 @@ _REPO_SKILLS_ABS = Path(__file__).resolve().parent.parent / "skills"
 #: · `~/.agents/skills`  跨 agent 的共享约定，几个 agent 工具都往这里放
 #: · 项目级 `.agents/skills/`  同族，跟着项目走
 #: · `~/.claude/skills/`  别人的目录；我们只读，不写
-#: · `~/.codex/skills/.system`  该工具的内置技能（点开头是根的一部分，
+#: · `~/.codex/skills/.system`  该工具的内置技能目录（点开头是根的一部分，
 #:   所以不经过"跳过点开头条目"那条规则）
-#: · `~/.workbuddy/plugins/cache`  该工具的已安装插件
+#: · `~/.workbuddy/plugins/cache`  该工具的已安装插件目录
 #:   （深度 5：`<市场>/<插件>/<版本>/SKILL.md` 与
 #:   `<市场>/<插件>/<版本>/skills/<技能>/SKILL.md` 两种布局都在里面）
 #:

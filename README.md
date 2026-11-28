@@ -69,6 +69,17 @@ chmod +x crannia-*-linux-x64.AppImage
 The AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04 and newer). Without it,
 run the same file with `--appimage-extract-and-run`.
 
+> The Linux build covers the desktop GUI, the terminal UI and the agent core.
+> Desktop takeover (computer use) is currently Windows-only.
+>
+> **Support scope**: note that the Linux build has only been verified on
+> **Ubuntu 24.04 (x64, whose system Python is 3.12)** and may not work on other
+> systems. The AppImage and the standalone TUI package **bundle their own Python
+> runtime** and do not rely on the system Python; only a from-source run needs
+> Python 3.11+. Other distributions and versions, ARM machines, and systems
+> without FUSE 2 depend on the specifics — they may not run or may behave
+> differently.
+
 Or run from source (Linux x64, Python **3.11+**; Node.js only for the desktop GUI):
 
 ```bash
@@ -166,15 +177,17 @@ under the **per-user data root**:
 
 | Build | Data root | Default workspace |
 |---|---|---|
-| Installed | `%APPDATA%\Crannia` | `Documents\Crannia\workspace` |
+| Installed (Windows) | `%APPDATA%\Crannia` | `Documents\Crannia\workspace` |
+| Installed (Linux) | `${XDG_DATA_HOME:-~/.local/share}/crannia` | `~/Documents/Crannia/workspace` |
 | From source | the project directory | `workspace` inside the project |
 
 Note that upgrading and uninstalling do not change this directory. The uninstaller
-only removes the program directory and shortcuts; to clear the data, delete
-`%APPDATA%\Crannia` yourself.
+only removes the program directory and shortcuts; to clear the data, delete the
+data root yourself.
 
 **Uninstall via**: Windows *Settings → Apps → Installed apps → Crannia*, or
-`Uninstall Crannia.exe` in the install directory.
+`Uninstall Crannia.exe` in the install directory. On Linux the AppImage has no
+installer — delete the `.AppImage` file; the data root stays until you remove it.
 
 **The following will be deleted**: the install directory, shortcuts, registry
 entries.
@@ -204,7 +217,7 @@ Desktop shell:
 npm install
 npm run dev        # Vite + Electron; Electron starts the backend
 npm run build      # build the frontend only
-npm run package    # build and produce the Windows installer
+npm run package    # build and produce the installer for the current OS (Windows NSIS / Linux AppImage)
 ```
 
 The bundled runtime is pinned by `apps/desktop/primary-runtime-lock.json`; rebuild it

@@ -31,9 +31,14 @@ function psQuote(value) {
   return "'" + String(value == null ? "" : value).replace(/'/g, "''") + "'";
 }
 
-/** 装完之后要拉起的那个可执行文件。 */
+/** 装完之后要拉起的那个可执行文件。
+ *
+ *  用 `path.win32`：这个名字服务的永远是 Windows 安装目录（脚本跑在
+ *  PowerShell 里）。Linux 上跑测试时 `path.join` 会给出 `/` 分隔的混合路径，
+ *  而那既不是产品行为、也不该让测试跟着平台变绿变红。
+ */
 function relaunchExePath(dir) {
-  return path.join(dir, "Crannia.exe");
+  return path.win32.join(dir, "Crannia.exe");
 }
 
 /**

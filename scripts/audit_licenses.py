@@ -8,6 +8,19 @@
     .venv/Scripts/python.exe scripts/audit_licenses.py <dir> --json
     .venv/Scripts/python.exe scripts/audit_licenses.py --all           # 生成两份 SBOM（扫随包 runtime）
     .venv/Scripts/python.exe scripts/audit_licenses.py --check         # 与仓里那两份逐字对账
+    .venv/Scripts/python.exe scripts/audit_licenses.py --all --target linux-x64
+
+## 一份清单一份运行时（2026-11-28）
+
+两个平台的锁各自钉自己的版本（平台专用的依赖本来就不同：`pywin32` / `colorama`
+对 `python-xlib`），所以 SBOM 也分平台落盘：
+
+    win-x64    -> sbom.json                + THIRD-PARTY-PYTHON.md
+    linux-x64  -> sbom-linux-x64.json      + THIRD-PARTY-PYTHON-linux.md
+
+每份 SBOM 的 `metadata.properties` 里有 `crannia:platform`，自己说自己是谁。
+`--all` 扫的是当前组装在 `apps/desktop/runtime/` 里的那一份；`runtime.json`
+写着它是给哪个 target 的 —— 所以换平台前先 `prepare_runtime.py --target ...`。
 
 判据只认 wheel 自带的元数据（`*.dist-info/METADATA`），不凭记忆：
 依次读 `License-Expression`（PEP 639）→ `Classifier: License ::` → `License`。
@@ -89,10 +102,41 @@ NON_PYTHON = (
 )
 
 
-def runtime_site() -> Path:
+RUNTIME_ROOT = _ROOT / "apps" / "desktop" / "runtime" / "primary-runtime"
+
+#: target -> (SBOM 文件名, Python 许可清单文件名)。`win-x64` 沿用旧名。
+_OUTPUTS = {
+    "win-x64": ("sbom.json", "THIRD-PARTY-PYTHON.md"),
+    "linux-x64": ("sbom-linux-x64.json", "THIRD-PARTY-PYTHON-linux.md"),
+}
+
+
+def assembled_target() -> str:
+    """当前组装在 `runtime/` 里的是哪个 target（无产物时按 Windows）。"""
+    p = RUNTIME_ROOT / "runtime.json"
+    try:
+        return str(json.loads(p.read_text(encoding="utf-8")).get("target") or "")
+    except (OSError, ValueError):
+        return ""
+
+
+def runtime_site(target: str = "win-x64") -> Path:
     """随包运行时的 `site-packages`（SBOM 只认这一个 —— 它才是发出去的东西）。"""
-    return (_ROOT / "apps" / "desktop" / "runtime" / "primary-runtime"
-            / "python" / "Lib" / "site-packages")
+    py = RUNTIME_ROOT / "python"
+    if target == "win-x64":
+        return py / "Lib" / "site-packages"
+    cands = sorted(py.glob("lib/python3.*/site-packages"))
+    return cands[0] if len(cands) == 1 else py / "lib" / "python3.13" / "site-packages"
+
+
+def non_python(target: str = "win-x64") -> list[dict]:
+    """非 Python 组件，按 target 换掉 unpacked 目录名（版本两家一致）。"""
+    out = [dict(c) for c in NON_PYTHON]
+    if target != "win-x64":
+        for c in out:
+            c["note"] = str(c.get("note") or "").replace("win-unpacked",
+                                                         "linux-unpacked")
+    return out
 
 
 def _read_meta(dist_info: Path) -> dict:
@@ -370,10 +414,13 @@ def render_frontend_markdown(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_sbom(rows: list[dict], frontend: list[dict] | None = None) -> dict:
+def build_sbom(rows: list[dict], frontend: list[dict] | None = None,
+               target: str = "win-x64") -> dict:
     """CycloneDX 1.5 的最小子集（确定、可 diff、可对账）。
 
     注意：不写时间戳：`--check` 要与仓里的那一份逐字节比，时间戳会让它永远不相等。
+    `crannia:platform` 让每份 SBOM 自己说是给哪个平台的 —— 两份文件的文件名
+    不同，但"这份描述的是谁"不该只能从文件名猜。
     """
     comps = []
     for r in rows:
@@ -389,7 +436,7 @@ def build_sbom(rows: list[dict], frontend: list[dict] | None = None) -> dict:
                 {"name": "crannia:license-family", "value": ",".join(r["families"])}
             ]
         comps.append(comp)
-    for c in NON_PYTHON:
+    for c in non_python(target):
         comps.append({
             "type": c["type"],
             "name": c["name"],
@@ -414,17 +461,24 @@ def build_sbom(rows: list[dict], frontend: list[dict] | None = None) -> dict:
         "version": 1,
         "metadata": {
             "component": {"type": "application", "name": "Crannia"},
+            "properties": [
+                {"name": "crannia:platform", "value": target},
+            ],
         },
         "components": comps,
     }
 
 
-def render_markdown(rows: list[dict]) -> str:
+def render_markdown(rows: list[dict], target: str = "win-x64") -> str:
+    site = ("python/Lib/site-packages" if target == "win-x64"
+            else "python/lib/python3.*/site-packages")
     lines = [
         "# 随包 Python 依赖许可清单（自动生成）",
         "",
-        "> **生成命令**：`.venv/Scripts/python.exe scripts/audit_licenses.py --md`",
-        "> **数据源**：`apps/desktop/runtime/primary-runtime/python/Lib/site-packages`",
+        "> **平台**：`%s`" % target,
+        "> **生成命令**：`.venv/Scripts/python.exe scripts/audit_licenses.py --md --target %s`"
+        % target,
+        "> **数据源**：`apps/desktop/runtime/primary-runtime/%s`" % site,
         "> 的 `*.dist-info/METADATA`。",
         "",
         f"共 **{len(rows)}** 个发行包。`[!]` = 需要履约的 copyleft 家族",
@@ -458,14 +512,39 @@ def default_site() -> Path:
 
 
 def main(argv: list[str]) -> int:
-    args = [a for a in argv if not a.startswith("--")]
+    positional: list[str] = []
+    target = ""
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--target":
+            target = argv[i + 1] if i + 1 < len(argv) else ""
+            i += 2
+            continue
+        if a.startswith("--"):
+            i += 1
+            continue
+        positional.append(a)
+        i += 1
+    if target and target not in _OUTPUTS:
+        raise SystemExit("不认识的 target：%r（已知：%s）"
+                         % (target, ", ".join(sorted(_OUTPUTS))))
+    target = target or assembled_target() or "win-x64"
+    if target not in _OUTPUTS:
+        raise SystemExit("runtime.json 写的 target=%r 没有对应的清单文件名" % target)
+
     flag = "--flag" in argv
     as_json = "--json" in argv
     gen = any(x in argv for x in ("--sbom", "--md", "--all", "--check"))
-    if args:
-        site = Path(args[0])
-    elif gen and runtime_site().is_dir():
-        site = runtime_site()
+    if positional:
+        site = Path(positional[0])
+    elif gen:
+        site = runtime_site(target)
+        if not site.is_dir():
+            raise SystemExit("--target %s 的运行时没有组装：%s\n"
+                             "  先跑 `scripts/prepare_runtime.py --target %s`，"
+                             "或者显式给一个 site-packages 目录。"
+                             % (target, site, target))
     else:
         site = default_site()
     if not site.is_dir():
@@ -475,12 +554,13 @@ def main(argv: list[str]) -> int:
 
     if gen:
         fe_rows = frontend_rows()
-        sbom_text = json.dumps(build_sbom(rows, fe_rows), ensure_ascii=False,
-                               indent=2) + "\n"
-        md_text = render_markdown(rows)
+        sbom_text = json.dumps(build_sbom(rows, fe_rows, target),
+                               ensure_ascii=False, indent=2) + "\n"
+        md_text = render_markdown(rows, target)
         fe_text = render_frontend_markdown(fe_rows)
-        sbom_path = _ROOT / "sbom.json"
-        md_path = _ROOT / "THIRD-PARTY-PYTHON.md"
+        sbom_name, md_name = _OUTPUTS[target]
+        sbom_path = _ROOT / sbom_name
+        md_path = _ROOT / md_name
         fe_path = _ROOT / "THIRD-PARTY-FRONTEND.md"
         if "--check" in argv:
             bad = 0
@@ -492,8 +572,8 @@ def main(argv: list[str]) -> int:
                     print(f"[check] 不一致：{p.name}（重跑不带 --check 的）")
             if bad:
                 return 1
-            print(f"[check] 一致：{sbom_path.name} · {md_path.name} · {fe_path.name}"
-                  f"（{len(rows)} 个 Python 包 + {len(fe_rows)} 个前端包 + "
+            print(f"[check] 一致（{target}）：{sbom_path.name} · {md_path.name} · "
+                  f"{fe_path.name}（{len(rows)} 个 Python 包 + {len(fe_rows)} 个前端包 + "
                   f"{len(NON_PYTHON)} 个非 Python 组件）")
             return 0
         if "--sbom" in argv or "--all" in argv:
@@ -505,7 +585,7 @@ def main(argv: list[str]) -> int:
             fe_path.write_text(fe_text, encoding="utf-8", newline="\n")
             print(f"[sbom] 写好了：{fe_path}")
         if "--all" in argv:
-            print(f"[sbom] {len(rows)} 个 Python 包 + {len(fe_rows)} 个前端包 + "
+            print(f"[sbom] {target}：{len(rows)} 个 Python 包 + {len(fe_rows)} 个前端包 + "
                   f"{len(NON_PYTHON)} 个非 Python 组件")
         return 0
     if as_json:

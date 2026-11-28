@@ -24,6 +24,13 @@ GUI 的代码包；TUI 的代码包是第三件。没有这一件就说清「这
 补位次 0，所以 `1.1.1-beta < 1.1.1 < 1.1.2-alpha`。渠道默认由当前版本推
 （预发布查 beta，其余查 stable）。
 
+## 摘要缺失就拒绝（fail-closed）
+
+清单里的 `artifacts.tui.sha256` 必须存在且是 64 位十六进制；缺了或格式
+不对，这一条源就不算可用。理由：没有摘要的下载等于「装什么由网络说了算」，
+而安装之后就没有第二次验收。检查在两条路上都做 —— `plan()` 拿不到合法
+摘要就不报「有更新」，`_download()` 自己也不接受空摘要。
+
 ASCII-only 输出（Windows 控制台默认 GBK）。
 """
 
@@ -32,6 +39,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import platform
+import re
 import sys
 from pathlib import Path
 
@@ -40,6 +49,16 @@ from .updater import (UpdateChecker, _parse_version, channel_for_version,
 from .version import __version__
 
 _TIMEOUT = 60
+
+#: 摘要的形状是判据的一部分：64 位十六进制，别的都不算。
+_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+_UA_PLATFORM = {"win32": "Windows", "linux": "Linux", "darwin": "macOS"}.get(
+    sys.platform, platform.system() or sys.platform)
+
+
+def _valid_sha256(value) -> bool:
+    return bool(_SHA256_RE.match(str(value or "").strip()))
 
 
 def _artifacts_tui(data: dict) -> dict | None:
@@ -82,6 +101,10 @@ def plan(channel: str | None = None, *, checker=None) -> dict:
         if tui is None:
             problems.append("%s: 清单里没有 artifacts.tui" % source)
             continue
+        if not _valid_sha256(tui.get("sha256")):
+            problems.append("%s: artifacts.tui 没有合法的 sha256（64 位十六进制）"
+                            % source)
+            continue
         remote = tui["version"]
         if not remote:
             problems.append("%s: 清单没有 version" % source)
@@ -101,14 +124,17 @@ def _download(urls: list, dest: Path, sha256: str) -> tuple[bool, str]:
 
     from core import net_proxy as _np
 
+    #: 摘要缺失/格式不对就不下 —— 下了也没法验收（见模块头）。
+    if not _valid_sha256(sha256):
+        return False, "清单缺少合法的 sha256 —— 拒绝安装未经校验的包"
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
     last: Exception | None = None
     for url in urls:
         try:
             with requests.get(url, timeout=_TIMEOUT, stream=True,
-                              headers={"User-Agent": f"Crannia/{__version__} "
-                                                     "(Windows)"},
+                              headers={"User-Agent": "%s/%s (%s)"
+                                       % ("Crannia", __version__, _UA_PLATFORM)},
                               proxies=_np.requests_proxies()) as r:
                 r.raise_for_status()
                 h = hashlib.sha256()

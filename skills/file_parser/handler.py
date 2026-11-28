@@ -12,6 +12,7 @@ definitions live in manifest.yaml so the LLM sees them.
 """
 
 import io
+import json
 import re
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
@@ -619,6 +620,28 @@ def _file_entry(path: str, ext: str = "", size: int | None = None,
     return entry
 
 
+#: 一页文件条目的序列化预算（字符）。工具结果在 6000 字符处被截断
+#: （`tool_result_max_chars`），中途截断给模型的是坏 JSON；这里给
+#: stats / hint / 信封留出余量。
+_PAGE_CHAR_BUDGET = 5000
+
+
+def _fit_page(files: list[dict], offset: int, total: int) -> tuple[list[dict], bool]:
+    """按序列化后的字符数裁一页（不是按固定条数），回 `(本页条目, 是否还有下一页)`。
+
+    路径长度由用户决定：同样 36 条，CI 的绝对路径比开发机长 30 多字符/条，
+    整页就越过 6000 的截断线（2026-11-28 Linux CI 实测 6039）。固定条数
+    在深目录下必然翻车，而症状是"模型拿到半截 JSON"。
+    至少留一条：否则 offset 推不动，模型会拿同样的参数原地打转。
+    """
+    kept = list(files)
+    while len(kept) > 1:
+        if len(json.dumps(kept, ensure_ascii=False)) <= _PAGE_CHAR_BUDGET:
+            break
+        kept.pop()
+    return kept, offset + len(kept) < total
+
+
 def list_workspace_files(
     pattern: str = "*",
     sort_by: str = "time",
@@ -745,8 +768,7 @@ def list_workspace_files(
                 _file_entry(fe.path, fe.ext, fe.size, fe.modified)
                 for fe in page_results
             ]
-
-            has_more = offset + limit < total
+            files, has_more = _fit_page(files, offset, total)
             return {
                 "stats": {
                     "total": total,
@@ -762,8 +784,8 @@ def list_workspace_files(
                 },
                 "hint": (
                     f"Found {total} file(s), {total_size_str}. "
-                    + (f"Showing {offset+1}-{min(offset+limit, total)}. "
-                       f"Use offset={offset+limit} for next page, "
+                    + (f"Showing {offset+1}-{offset+len(files)}. "
+                       f"Use offset={offset+len(files)} for next page, "
                        f"or narrow pattern to filter."
                        if has_more else "All files shown.")
                 ),
@@ -827,14 +849,14 @@ def list_workspace_files(
     total_bytes = sum(s for _, s, _ in _meta)
     total_size_str = _human_size(total_bytes)
     page = [e for _, _, e in _meta[offset:offset + limit]]
-    has_more = offset + limit < total
+    page, has_more = _fit_page(page, offset, total)
     return {
         "stats": {"total": total, "total_size": total_size_str, "by_type": by_type,
                   "roots": legacy_roots},
         "page": {"files": page, "offset": offset, "limit": limit, "has_more": has_more},
         "hint": (
             f"Found {total} file(s), {total_size_str}. "
-            + (f"Use offset={offset+limit} for next page." if has_more else "All files shown.")
+            + (f"Use offset={offset+len(page)} for next page." if has_more else "All files shown.")
         ),
     }
 

@@ -4,6 +4,21 @@
 
     .venv/Scripts/python.exe scripts/pin_wheels.py            # 写进锁文件
     .venv/Scripts/python.exe scripts/pin_wheels.py --check     # 只看差多少，不写
+    .venv/Scripts/python.exe scripts/pin_wheels.py --report r.json --mirror-host HOST
+
+## 平台与镜像（2026-11-28）
+
+pip 的 `--platform` 不改环境标记：在 Linux 上解析 `win_amd64` 时，
+`sys_platform == "linux"` 仍成立，Windows 专用的传递依赖会被漏掉（反向同理）。
+一份锁必须在它自己的平台上解析。解析时若官方主机不可达，可以用镜像
+（`PIP_INDEX_URL=...` + `--mirror-host <host>`）：镜像保存的 `/packages/...`
+路径与文件名和官方逐字相同（85 条同版本 wheel 逐条比过），所以落表时把
+主机换回 `files.pythonhosted.org`，路径不动。字节仍由 `sha256` 在组装时复核 ——
+哈希是唯一的验收判据。
+
+`--report` 读一份先前 `pip install --dry-run --report` 的产物（这样解析可以在
+正确的平台上单独跑）。目标平台与 wheel 文件名对不上会当场拒：Linux 锁里出现
+`win_amd64`（或反过来）是"解析跑错了机器"，不修就发一个装不上的运行时。
 
 ## 为什么两份需求文件都进同一份锁
 
@@ -107,8 +122,25 @@ def _pip_report(reqs: list[Path]) -> list[dict]:
     return json.loads(report.read_text(encoding="utf-8"))["install"]
 
 
-def build_table(items: list[dict]) -> tuple[list[dict], dict]:
-    """`install[]` → `(wheels, pythonPackages)`。不合规的当场拒。"""
+def _platform_matches(filename: str, target: str) -> bool:
+    """wheel 文件名与目标平台是否自洽（纯 Python 轮子两边都算）。"""
+    low = filename.lower()
+    if "none-any" in low:
+        return True
+    if target == "win-x64":
+        return ("win_amd64" in low) or ("win32" in low)
+    if target == "linux-x64":
+        return ("manylinux" in low) or ("-linux" in low) or ("linux_x86_64" in low)
+    return True
+
+
+def build_table(items: list[dict], *, target: str = "",
+                mirror_host: str = "") -> tuple[list[dict], dict]:
+    """`install[]` → `(wheels, pythonPackages)`。不合规的当场拒。
+
+    `mirror_host`：解析时用的镜像主机。它保存的 `/packages/...` 路径与官方
+    逐字相同，所以这里只把主机换回 `files.pythonhosted.org`（见文件头）。
+    """
     wheels: list[dict] = []
     packages: dict[str, str] = {}
     unknown_sdist: list[str] = []
@@ -123,10 +155,21 @@ def build_table(items: list[dict]) -> tuple[list[dict], dict]:
         if not name or not url or not sha:
             raise SystemExit("[pin] 这一条缺名字/地址/哈希：%r" % (it,))
         host = url.split("/")[2] if "://" in url else ""
+        if mirror_host and host == mirror_host:
+            rest = url.split(host, 1)[1]
+            url = "https://files.pythonhosted.org" + rest
+            host = "files.pythonhosted.org"
         if host not in ALLOWED_HOSTS:
             raise SystemExit(
                 "[pin] **地址不是官方主机**（%s）：%s\n"
-                "  -> 一个第三方镜像进了锁，就是把供应链换成它了。" % (host, url))
+                "  -> 一个第三方镜像进了锁，就是把供应链换成它了。"
+                "\n     （用镜像解析时加 `--mirror-host <host>`，路径会照搬、主机换回官方。）"
+                % (host, url))
+        if url.endswith(".whl") and not _platform_matches(url.rsplit("/", 1)[-1], target):
+            raise SystemExit(
+                "[pin] **wheel 与目标平台对不上**（target=%s）：%s\n"
+                "  -> pip 的 `--platform` 不改环境标记，在别的平台上解析就会"
+                "混进这一平台的轮子；这份锁必须在目标平台上解析。" % (target, url))
         packages[name] = version
         if url.endswith(".whl"):
             wheels.append({"name": name, "version": version, "url": url, "sha256": sha})
@@ -152,6 +195,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lock", default=str(DEFAULT_LOCK))
     ap.add_argument("--requirements", action="append", default=None,
                     help="可重复；默认 requirements.txt + tui/requirements.txt")
+    ap.add_argument("--report", default="",
+                    help="读一份现成的 pip --report（不在本机重新解析）")
+    ap.add_argument("--mirror-host", default="",
+                    help="解析用的镜像主机；落表时主机换回官方，路径照搬")
     ap.add_argument("--check", action="store_true",
                     help="只报告差异，不写文件（收尾/CI 用）")
     args = ap.parse_args(argv)
@@ -160,7 +207,10 @@ def main(argv: list[str] | None = None) -> int:
             else [REQUIREMENTS, TUI_REQUIREMENTS])
     lock_path = Path(args.lock)
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    wheels, packages = build_table(_pip_report(reqs))
+    items = (json.loads(Path(args.report).read_text(encoding="utf-8"))["install"]
+             if args.report else _pip_report(reqs))
+    wheels, packages = build_table(items, target=str(lock.get("target") or ""),
+                                   mirror_host=args.mirror_host)
 
     old = [w.get("sha256") for w in (lock.get("wheels") or [])]
     new = [w["sha256"] for w in wheels]

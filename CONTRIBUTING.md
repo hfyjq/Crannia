@@ -1,8 +1,8 @@
 # Contributing to Crannia
 
-> **中文摘要**：每一处改动都要满足三件事 —— **代码改完 + 测试跑过 + 说失效了的话订正**。
-> 测试**没有 pytest**，每个文件自带 `__main__`；跑全量用 `scripts/run_tests.py`。
-> 安全问题走 [`SECURITY.md`](SECURITY.md)，**别开公开 issue**。
+> **中文摘要**：每一处改动都应当满足三点—— **代码改动完成 + 测试通过 + 因变动而失效的话术订正**。
+> 测试**没有 pytest**，每个文件自带 `__main__`；全量测试应当使用 `scripts/run_tests.py`（CI 在 Windows 与 Linux 上各跑一遍）。
+> 安全问题请走 [`SECURITY.md`](SECURITY.md)，**请勿使用公开 issue**。
 
 ## Before you start
 
@@ -92,7 +92,8 @@ A new test file must:
   the description — do not bury it.
 - Do not add a dependency without saying which license it brings and why that is
   acceptable.
-- CI is not wired up yet. Run the suite yourself and paste the summary line.
+- CI runs the suite on Windows and Linux (`.github/workflows/tests.yml`). Paste the
+  summary line in your pull request anyway — CI is a backstop, not a substitute.
 
 ## Reporting a problem
 

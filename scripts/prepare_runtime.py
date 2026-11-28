@@ -40,7 +40,7 @@
 
 ## 两处如实记
 
-1. 锁里的 wheel 表今天有 135 条（`apps/desktop/primary-runtime-lock.json`）：
+1. 锁里的 wheel 表（条数以锁文件为准；2026-11-28 是 157 / 155）：
    同一条内容寻址 + 同一个无执行解包装出 `site-packages`，`runtime.json` 里
    记着逐包的 `pythonPackages`。表空了就打不出能跑的包（只有解释器，
    没有 `flask` / `mcp` / `openpyxl` 那些）—— 脚本会出声。
@@ -767,7 +767,29 @@ SMOKE_IMPORTS = ("flask", "waitress", "yaml", "httpx", "openai", "anthropic",
                  #:   `matplotlib`（`plot_excel_data`）· `curl_cffi`（`web_search`
                  #:   传输层）· `tzdata`（`ZoneInfo` 的数据，见上面 `SMOKE_CODE`）·
                  #:   `graph_layout`（diagram 的两种布局）。
-                 "matplotlib", "curl_cffi", "graph_layout")
+                 "matplotlib", "curl_cffi", "graph_layout",
+                 #: 2026-11-28：这三家此前一个都不在清单里 ——
+                 #: `mcp` / `paramiko` / `dns` 都是"装上了但没人验过"。
+                 #: `textual` / `rich` 是 TUI 的运行依赖（同一个运行时）。
+                 "mcp", "paramiko", "dns", "textual", "rich")
+
+#: 框架真的 import 的那几个符号（不是"包能 import"就算）。
+#:
+#: 2026-11-28 的真现场：`import mcp` 在 2.x 上照样成功，而
+#: `from mcp.client.streamable_http import streamablehttp_client` 已经不存在 ——
+#: 冒烟只查包名，于是随包运行时带着 2.x 一路绿灯发出去，MCP 的
+#: streamable HTTP 传输在装机版里直接 ImportError。锁里钉的是 1.28.1，
+#: 这条把「代码用的是哪个入口」也钉进冒烟。
+SMOKE_SYMBOLS = (
+    ("mcp.client.streamable_http", "streamablehttp_client"),
+    ("mcp.client.session", "ClientSession"),
+    ("mcp.client.stdio", "stdio_client"),
+    ("mcp.shared._httpx_utils", "MCP_DEFAULT_TIMEOUT"),
+    ("dns", "resolver"),
+    ("paramiko", "SSHClient"),
+    ("textual.app", "App"),
+    ("rich", "print"),
+)
 
 
 def runtime_dir(target: str) -> Path:
@@ -856,15 +878,19 @@ def smoke_imports(out_dir: Path, target: str) -> None:
       少了它，冒烟会借用开发机上装好的包，"通过"是一句假话。
     """
     exe = python_exe(out_dir, target)
-    code = ("import %s; print('framework imports ok')" % ", ".join(SMOKE_IMPORTS))
+    code = ("import %s; " % ", ".join(SMOKE_IMPORTS)
+            + "".join("from %s import %s; " % (m, s) for m, s in SMOKE_SYMBOLS)
+            + "print('framework imports ok')")
     r = _run_child(exe, code, timeout=300)
     out = ((r.stdout or "") + (r.stderr or "")).strip()
     if r.returncode != 0 or "framework imports ok" not in out:
         raise SystemExit(
-            "[runtime] **框架依赖 import 没过**（%d 条里有一条装不上）：\n%s\n"
+            "[runtime] **框架依赖 import 没过**（%d 个包 + %d 个符号里有一个"
+            "装不上 / 改了名）：\n%s\n"
             "  -> 表填了但产物是坏的 —— 别把它当「能跑」。"
-            % (len(SMOKE_IMPORTS), out[-800:]))
-    print("[runtime] 框架依赖 import 通过（%d 个）" % len(SMOKE_IMPORTS))
+            % (len(SMOKE_IMPORTS), len(SMOKE_SYMBOLS), out[-800:]))
+    print("[runtime] 框架依赖 import 通过（%d 个包 + %d 个符号）"
+          % (len(SMOKE_IMPORTS), len(SMOKE_SYMBOLS)))
 
 
 # ----------------------------------------------------------------------

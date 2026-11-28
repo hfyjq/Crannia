@@ -1,543 +1,213 @@
 # crannia-tui
 
-crannia 的终端界面，**全屏**：顶部信息栏和底部输入区固定，中间是对话。
+English | [简体中文](README.zh.md)
 
-## 为什么是全屏
+crannia's terminal interface, **full screen**: a scrollable conversation area in the
+middle, with the input box and status bar fixed at the bottom; the startup header is
+shown only when the TUI is launched, and scrolls with the content.
 
-早先做的是滚动式（内容写进终端历史区）。换成全屏是因为抬头里的身份信息要一直在：
+The TUI and the desktop app share the same backend and the same data: when the desktop
+app is already running, the TUI attaches to it; when no running backend is found, it
+starts one.
 
-```
-                             ▄▄▄▄
-                            █
-                            █
-                             ▀▀▀▀
-                           Crannia v1.1.0
-                       deepseek-flash | xhigh
-  #- < . . . > / * { _ } - | #> = \ @ ( ) ) - < *** / [ _ ^ _ \ - < \ - > ; | · · · =
-                          >_ D:\work\crannia
-```
+## Installation
 
-滚动式里往上翻两屏，模型名和工作目录就滚没了 —— 而"我现在连的是谁、在哪个
-仓库里干活"恰恰是随时要确认的东西，尤其换过 key 或换过配置之后。
+### Windows
 
-代价说清楚：退出后屏幕清空，终端自带的 `Ctrl+F` 搜索和框选复制都用不了。
-这是明确取舍：这个界面要的是"随时能确认状态"，不是"事后翻记录"。
-决定、代价与推翻条件在开发树里另有记录，不随发布包分发。
+- **Bundled with the desktop installer**: the TUI is installed automatically. Open a
+  **new** Command Prompt, go to any directory and type `crannia` to start it.
+- **Standalone package**: extract it and run `install.cmd`. The TUI is installed to
+  `%LOCALAPPDATA%\Programs\CranniaTUI`, and `crannia` is added to
+  `%LOCALAPPDATA%\Microsoft\WindowsApps` (already on PATH; the registry is not
+  modified). Uninstall with `uninstall.cmd`; your data is not removed automatically.
 
-## 界面
+When both are installed, `crannia` points to the one installed last; uninstalling only
+removes that package's own entry.
 
-```
-                             ▄▄▄▄
-                            █
-                            █
-                             ▀▀▀▀
-                           Crannia v1.1.0
-                       deepseek-flash | xhigh
-  #- < . . . > / * { _ } - | #> = \ @ ( ) ) - < *** / [ _ ^ _ \ - < \ - > ; | · · · =
-                          >_ D:\work\crannia    ← 抬头：启动时打印一次，随内容滚走
+Windows Terminal is required. The old cmd console does not interpret ANSI; when the
+launcher detects it (`WT_SESSION`), it reopens the TUI in a new window. `--once` does
+not reopen a window.
 
- 【User】把第 7 页的价格带改成柱状图      ← 对话区，滚动
- ● 改写表格  价格表.docx                  ← 工具卡：绿=成，红=败，黄=在跑
-   ⎿  2,140 字符 · 1.2s                     失败时多一行，长栈折成"+N 行"
- ● 读取模板  template.pptx
-   好的，先看一下现有版式。
+### Linux
 
- ⋯ 思考中   3s                             ← 状态行：跑到哪一步、多久
- ╭────────────────────────────────────────╮
- │  我可以怎么帮助您？                    │  ← 输入框
- ╰────────────────────────────────────────╯
- mode: 手动 · effort: high        2个后台  上下文：3%/85%
-```
+- **Standalone package**: extract `crannia-tui-<version>-linux-x64.tar.gz` and run
+  `./install.sh` in the extracted directory. It installs to
+  `${XDG_DATA_HOME:-~/.local/share}/crannia-tui` and links `crannia` into
+  `~/.local/bin` (change the location with `CRANNIA_HOME` / `CRANNIA_BIN_DIR`).
+  Uninstall with `uninstall.sh`; your data lives in
+  `${XDG_DATA_HOME:-~/.local/share}/crannia` and is not removed.
+- **AppImage**: the bundle also contains the TUI (`bin/crannia.sh`), but an AppImage
+  installs nothing and does not put the command on PATH — run `--appimage-extract`
+  first, then `squashfs-root/bin/crannia.sh`.
 
-四段各管一件事：`HeaderBar` 是身份（**启动时打印一次，随内容滚走**，
-不是固定条），`Transcript` 是内容，`StatusLine` 回答"它还在动吗"，
-`StatusBar` 左边报当前档位、右边给命令入口。
+Pasting images needs `wl-clipboard` on Wayland or `xclip` on X11. A Chinese UI needs a
+terminal font with CJK glyphs (for example `fonts-noto-cjk`).
 
-状态栏那两格不是写死的文案：`mode` 与 `effort` 取自 `/api/status` 的
-`mode_name` / `effort_name`。写死的话，用户在别处改了模式，这里会继续显示
-旧值 —— 比不显示更糟。
+### Running from source
 
-## 设置
-
-一份文件：`<数据根>/data/settings.json`，与 GUI 共用。TUI 首次启动用出厂基准
-播种（只在文件缺失时写）；文件坏了先备份成 `settings.json.bad-<时间>` 再按默认
-重建。值类型不对 ⇒ 按默认值用并打一行，**不写回文件**。
-
-TUI 只读下面这一列（其余键存在但不读——砍掉的功能不靠删键）：
-
-| 键 | 类型 | 管什么 |
-|---|---|---|
-| `effort_level` | 整数 | 档位 1–6 |
-| `default_mode` | 字符串 | 默认模式 |
-| `approval_timeout_seconds` | 整数 | 审批超时（0 = 关） |
-| `auto_approve` · `cross_zone_enabled` · `relax_command_tier` · `no_ask_readonly` · `full_access_unlock` | 布尔 | 审批与安全开关 |
-| `interface_language` · `response_language` | 字符串或空 | 界面 / 回答语言 |
-| `trace_full` | 布尔 | 完整轨迹 |
-| `workspace` | 字符串 | 默认工作区 |
-| `background_services` | 布尔 | 通道与定时任务随不随后端跑（TUI 首启播种为关；GUI 配置通道时打开） |
-
-`crannia config path` 打印文件路径。
-
-## 命令行
-
-`crannia`（进界面）· `crannia setup`（配一条模型 API / 首次引导）· `crannia doctor`（自检）·
-`crannia config path`（设置文件路径）· `crannia profile`（列出模型配置）·
-`crannia profile <名字|id>`（设为默认）· `crannia update`（装一个新版本）·
-`--version` · `--once "…"`。
-这几个都不会为了查一次信息就把界面拉起来；
-`profile` 在有后端运行时走它的接口（那是唯一会写配置的进程）。
-
-还没有默认模型配置时，`crannia` 会在进界面前自动走一遍 `setup`（只在交互终端里）：
-选提供商卡（回车 = 其他 / OpenAI 兼容，选它才问地址）→ 配置名 → 模型名 →
-API Key（掩码）→ 自动发一次最小请求做联通测试；失败就只改错的那一项。
-联通测试超时 25 秒；失败也可以先保留配置，之后随时 `crannia setup` 再来。
-
-界面里的模型命令：
-
-```
-/model                 当前用哪条 + 前 8 条配置（含编号）+ 用法
-/model <编号|名字|id>   这一段切到那条（下一轮生效）
-/model 默认            这一段切回跟随默认
-/model more            完整配置单
-/model set <编号|名字|id>
-                       弹编辑面板：条目名 / 模型名 / API key，
-                       空回车跳过（`Esc` 退出，成功后 1.25 秒自动关闭）
-```
-
-密钥只从这个面板收，别在聊天框里直接发 —— 打错一个字它就不再是命令，
-会被当成普通消息落库并送给模型。
-
-通道：
-
-```
-crannia channel list                 列出各通道的配置条目与接入警告
-crannia channel add <平台> [名字]    新建一条（凭据逐格输入，密钥不回显）
-crannia channel config <名字|id>     改一条（回车表示不改）
-crannia channel remove <名字|id>     删一条（默认那条要先换默认）
-crannia channel default <名字|id>    设为该平台的默认条目
-crannia channel start|stop <平台>    启停一个通道（要求后端在跑）
-crannia channel login wechat         微信扫码登录（要求后端在跑）
-```
-
-更新：
-
-```
-crannia update                          看当前版本与用法
-crannia update --from <zip 或目录>       装一个新版本（--to V 指定版本名，
-                                         --sha256 H 校验，--force 覆盖同版本）
-```
-
-新版本解到 `releases/<version>/` → 校验 → 换 `current` 指针（原子写）→ 下次启动生效；
-失败时现役版本与指针一个字节都不动。只留最近两份，当前那份永远不删。
-
-平台：`feishu` / `dingtalk` / `telegram` / `qq_bot`（要凭据）· `wechat`（扫码）。
-配置类动作不 import `core`（子进程读账本），启停与扫码走后端接口。
-群聊那一半还没做完，配置这四个通道前会先打印接入警告，`--yes` 表示已读。
-私聊与桌面是同一条会话，所以 IM 的消息会进当前这段对话；群聊不进来。
-
-## 工具卡与审批
-
-**工具卡**（步骤流的一格）调起时先挂"运行中"（绿点 + 进行时描述 +
-`> 参数` 行 + 计时），跑完原地换成"工具名 + 结局"：
-
-```
- ● 正在执行命令                                 running 1.23s   ← 运行中
-   > echo "=== 第 1 行 ==="; echo "=== 第 2 行 ==="; echo "=== 第 3 行
-     ==="; echo "=== 第 4 行 ==="; echo "=== 第 5 行 ==="; echo "=== 第 6
-     行 ==="; echo "=== 第 7 行 ==="; echo "=== 第 8 行 ==="; echo "=== 第
-     9 行 ==="; echo "=== 第 10 行 ==="; echo "=== 第 11 行 ==="
-     ── 还有 1 行 ──
- ● run_command（已完成）                  1,908 字符 · 9ms      ← 跑完：工具名+结局
- ● read_file（已拒绝）                                           ← 自动审查拦下
-```
-
-运行中的右上角是 `running 1.23s`（不足一秒给 `running 500ms`）——没有这个词，
-那格数字读起来更像"这一步用了多久"而不是"它还在跑"。
-
-命令原文按**显示宽度**折行，**最多四行**，多出来的折成一行 `── 还有 N 行 ──`：
-单行截断会把命令的尾巴（常常是"对哪个目录做的事"）藏掉，无限折行又会把
-对话挤成走马灯。
-
-不等到结束再一次性输出：工具跑十几秒很常见，那期间屏幕一动不动，
-和卡死没区别。相邻的卡片贴紧（它们是一条动作链），但第一张和上面
-那段话之间隔一行。
-
-**卡片的结局来自事件**（`tool.end` 的 `outcome` / `reason`），不去回执正文里猜：
-
-| 结局 | 点 | 括号里 |
-|---|---|---|
-| `completed` | 绿 | 已完成 |
-| `waiting` | 黄 | 待审批 |
-| `error`（异常 / 自报失败） | 白 | 失败 |
-| `error`（框架拒绝） | 白 | 未执行 |
-| `denied`（自动审查拦截） | 红 | 自动审查拦截 |
-| `rejected`（用户拒绝 / 未响应） | 红 | 被拒绝 |
-| `rejected` + `cancelled`（用户打断并补充） | 白 | 未采纳 |
-| `rejected` + `recused`（框架没办成） | 白 | 未执行 |
-
-挂起等审批的卡不会停在黄点：审批回答之后，后端会用**同一个 `call_id`**
-补发一条结算事件，卡片原地改成最终结局（不再补第二张）。审批挂着时这一轮
-正常结束（`task.end`）是常态，卡片不会被当成"没收到结束事件"。
-
-**错误正文不在卡上显示**：结局已经说完了（"失败"和"未执行"是两句话），
-排障要看的正文在轨迹 / 日志里。
-
-**颜色只归圆点**：红绿黄白只落在最前面那颗 ● 上，正文一律白、
-次要信息（参数行、体积耗时）一律灰 —— 整行跟着圆点变色的
-实现（`Text` 的 base style 传染）把主次全喊哑，改掉了。
-
-**审批**发生时，输入框整个变成拍板面板 —— 同一个槽、同一副边框，
-不是弹窗。选项用 ▌ 标出当前项：
-
-```
- ╭────────────────────────────────────────╮
- │  Crannia 想执行以下命令：              │
- │  pytest -x --maxfail=1                 │
- │                                        │
- │ ▌ 1. 同意                              │
- │   2. 同意，本对话不再询问              │
- │   3. 不同意                            │
- │   4. （我有别的话说）                  │
- │                                        │
- │   ↑↓ 或数字选择，回车确认              │
- ╰────────────────────────────────────────╯
-```
-
-**挂审批时后端就是会正常结束这一轮**（`task.end`、response 为空）；
-答完后 `POST /api/approval` 新起一轮接着跑。所以面板挂上之后收到
-`task.end` 是常态，不能当"轮次结束了"把面板撤掉 —— 撤了它，面板会在
-弹出与 `task.end` 之间被拆掉，看起来就是"做了几步就没动静"。"在别处答掉了"由 `APPROVAL_RESOLVED` 事件负责撤。
-
-只认三样输入：数字键、上下键、回车。选"我有别的话说"提交后，后端进入
-文本子状态、再发一个请求，面板那时自己变成一行输入 —— 两条路收在同一个
-部件里，因为它们共用同一副边框与槽位。授权语义（"本对话不再询问"意味着什么）
-全在后端，面板把选中的 key 原样送回去，在这里再实现一遍迟早两边分叉。
-
-## 回复里的路径
-
-后端提示词要求模型"提到本机文件时写成 Markdown 链接"（`core/prompt_assembler.py`
-的 `## FILE PATHS` 那一段），所以回复里的文件名本来就是链接：
-
-```
-产物：[作业.docx](workspace/作业.docx) 已经生成。
-```
-
-**点一下**就走后端定位：`POST /api/reveal` 按工作区根解析相对路径（还会兜一次
-URL 编码的 `%20`），然后在资源管理器里**选中**那个文件；目录则打开文件夹。
-成功不留回执（资源管理器已经把结果显示在眼前），失败才补一句。
-
-为什么不自己 `startfile`：回复是模型写的文本，链接里可能是任意串 —— 交给系统
-"用默认程序打开"，它写一个 `.bat` 的路径就变成用户一点即运行。后端那条端点
-只定位、不执行，这个判断在 GUI 与 TUI 共用同一份实现。
-
-网址（`http(s)` / `mailto` …）照旧交给系统浏览器，判据与 GUI 的 `openpath.js`
-同一张表 —— 两边分类不一致，同一条链接会去两个不同的地方。
-
-## 断线与重连
-
-事件流断了要出声 —— 那是"静默"的失败：回复照样由 HTTP 带回，只有步骤流凭空
-少掉，界面上看就是"模型没干活"。断了时红条常驻：
-
-```
- ！ 步骤流已断开，正在重连...
-```
-
-- 重连带**退避**（1s、2s、4s…封顶 10s），连接恢复后重新计；
-- 重连请求带 `last_id=<最后收到的 seq>`：错过的**可重放**事件（上下文读数、
-  工具收尾这类落盘的）由服务端补发，与浏览器 `EventSource` 的
-  `Last-Event-ID` 同一行为；
-- 恢复后红条收掉。与"模型连接重试"那条红条按来源分格：一边恢复只摘自己的，
-  另一边还挂着就接着显示。
-
-鼠标由界面接管（`?1003h`），选中文字要按住 Shift 拖 —— 这是全屏界面的既有代价。
-
-## 图片
-
-终端里剪贴板没有"图片"这个概念（那是操作系统那一层），所以图只能按键自己去取：
-
-- **Alt+V** 读剪贴板里的图。`Ctrl+V` 不行 —— 它被终端自己绑成"粘贴"了，
-  应用根本收不到这个键。
-- 取到的图按 `【图片n】` 落在**光标处**，是和正文一样的文本：能选中、能删。
-  **删掉占位符就等于撤回那张图**（提交时只发正文里还留着的那几张）。
-- 提交时图走 `/api/chat` 的 `images`（`data:image/png;base64,…`）；
-  带图的消息不走插话 —— `/api/steer` 只收文本，图会静默丢掉，所以它直接排队。
-- 命令（`/…`）不带图：框架命令拿到的是一串参数文本，图在那儿没处放。
-- 取图是一次子进程（约 0.2–0.4 秒），只在按键时发生；剪贴板里没有图会明说一句，
-  不会一声不响什么都不发生。
-- **文件拖进来、粘进来都只是路径文本**，不自动变成附件 —— 模型自己有
-  `read_file`，路径就是入口；只有"没落盘的截图"才需要 Alt+V。
-
-## 设置从哪来
-
-**只有一份：后端。** TUI 没有本地设置文件，`config.yaml` / `data/settings.json`
-里的东西（模式、effort、模型、`auto_approve`「自动放行跨区搜索」、
-命令白名单、`trace_full`…）两边看的是同一套。
-
-所以"GUI 里打开了自动放行跨区搜索，TUI 是否继承"——继承，而且不是靠同步：
-开关打开时后端**根本不发** `approval.request`，TUI 只是"事件来了才画面板"，
-没有自己的审批策略可漂移。
-
-唯一要跟的是**显示**：状态栏的档位与顶栏模型开机读一次会过时（用户可能在
-GUI 里换完再回来），所以每轮结束重读一次 `/api/status`。
-
-## 活动横幅
-
-跑着的时候输入框上方有一条横幅，与 GUI 的 StatusBar 同一套口径：
-
-```
-   \ 输入中…  2.96s / 41 token
-```
-
-短语、用时、token 排在同一条上（与 GUI 一致，不左右分栏），整体右缩两格，
-和输入框里的正文对齐，**整条全绿且加粗**（转轮、短语、数字同色）—— 满屏正文里
-这一行要一眼扫得到，它回答的是"它还在动吗"。
-
-- **转轮** `-\|/` 每 120ms 一帧（GUI 是旋转图标，终端里就是这四个字符）；
-- **随机短语**每轮换一句（不是每片换 —— 那会闪）。名单与 GUI 的
-  `loadingPhrases.js` 同源，改短语要两处一起改（正解是后端出只读端点）；
-- **计时**在等审批时暂停 —— 那段时间不是它在干活，是它在等人。
-  10 秒以内两位小数（"0.75s"），之后一位（"19.2s"）；
-- **token** 是 `turn.end` 的 `output_tokens`，**本轮输出**，不是会话累计
-  （累计里绝大多数是每轮重发的输入，两个数差 99%）；
-- 出现延迟 750ms：`/clear` 那种零点几秒的活不闪横幅；
-- **压缩时换成黄条**：同一套转轮 + “正在压缩…”，计时从压缩开始算、不带 token；
-  收尾按后端 `message` 落步骤流（完成绿 / 降级黄 / 失败红）；
-- **上游连不上时换成红条**（`llm.retry`）：全红一行、没有转轮、没有计时 ——
-  等重连的几十秒里继续转圈等于说"一切正常"：
-
-  ```
-   ！ 网络连接异常--请检查宽带互联网连接  正在重试 1/10
-  ```
-
-  文案取后端 `text`（`core/llm_errors.HEADLINES` 是唯一口径），没给才按 `kind`
-  兜底 —— 兜底那三句与 GUI 的 `format.js::retryLabel` 逐字一致。次数只在
-  常规重试阶段显示：`silent`（静默期）与 `failed`（本轮已收尾）都是噪声。
-  `llm.retry_ok` 一到就收掉，回到绿条。
-
-## 后台任务与子代理
-
-底栏中间两格只在有任务时出现（照 GUI：它们是状态，不是入口）：
-
-```
- mode: 手动 · effort: high        2个后台    1个子代理        上下文：3%/85%
-```
-
-- ↓ 从输入框进入（命令表开着时 ↓ 归命令表）；
-- ←→ 在两格之间换，选中绿、未选中黄；
-- 回车打开详细页：输入框上方一张表，最多 5 行，↑↓ 翻（不循环）；
-  翻到最后一条再 ↓ 回到两格，Esc 直接收起；
-- 门面数据来自 `GET /api/tasks`，每 3s 现拉一次；`Ctrl+B` 走 `POST /api/background`。
-
-## 上下文读数
-
-右下角常驻 `上下文：1.3%/85%`：当前占用 / 触发压缩的阈值，来自 `context.state`
-的 `pct` / `threshold_pct` —— 与 GUI 顶栏那条读数同一个字段，不另算。
-
-- **保留一位小数**（整数省掉 `.0`）：后端给的是 `round(x, 1)`，取整会让
-  一百万窗口下的对话整场停在 `1%` 上，看着像坏了；
-- `armed`（已进预警区、还没到阈值）追加 `· 接近触发`，黄色 —— 与 GUI 的
-  `.ctx-readout.armed` 同语义；压缩完成后清掉（刚压完就不在预警区了）；
-- 还没读到读数时显示 `上下文：—/85%`。
-
-GUI 还有一条"本轮已压缩 12.3K→3.1K，现 22%"的读数；TUI 是把那句话写进步骤流
-（压缩收尾那条），所以顶栏不重复一遍。
-
-后端要装十几秒（bus、技能、记忆库），这段时间输入框是灰的、状态行写"正在初始化
-后端" —— 全屏应用卡住比命令行卡住更吓人，因为连光标都不动。
-
-## 安装
-
-两种形态，共用同一份数据（`%APPDATA%\Crannia`）：
-
-- **随桌面端安装包**：装完即带 TUI。打开一个**新的**命令提示符，任意目录敲 `crannia`。
-- **独立包**：解压后运行 `install.cmd`。它装到
-  `%LOCALAPPDATA%\Programs\CranniaTUI`，并把 `crannia` 放进已经在 PATH 上的
-  `%LOCALAPPDATA%\Microsoft\WindowsApps`（不改注册表）。卸载运行 `uninstall.cmd`；
-  用户数据不动。
-
-两种都装时，`crannia` 指向**后装**的那一份；卸载只删指向自己的那个入口，不会
-把另一份的入口删掉。
-
-Linux（独立包）：解压 `crannia-tui-<版本>-linux-x64.tar.gz`，在解压目录运行
-`./install.sh`。它装到 `${XDG_DATA_HOME:-~/.local/share}/crannia-tui`，并把
-`crannia` 符号链接到 `~/.local/bin`（可用 `CRANNIA_HOME` / `CRANNIA_BIN_DIR`
-改位置）。卸载运行安装目录里的 `uninstall.sh`；用户数据在
-`${XDG_DATA_HOME:-~/.local/share}/crannia`，不动。Linux 下 `crannia.sh` 是同一套
-薄壳，认 POSIX 的三层布局（GUI 安装包 / 开发树 / 独立包），没有"换到 Windows
-Terminal 重开"那一段 —— 现代终端都解释 ANSI。粘贴图片需要 Wayland 的
-`wl-clipboard` 或 X11 的 `xclip`。中文界面需要终端字体里有 CJK 字形
-（系统装 `fonts-noto-cjk`；只影响终端怎么画字，不影响程序本身）。
-
-## 跑法
-
-装好一次，之后在**任意目录**敲 `crannia` 就行：
+Add `tui/` to PATH:
 
 ```cmd
+set PATH=%PATH%;<repo>\tui
 crannia
 ```
 
-`crannia.cmd` 是一个薄壳：找解释器与代码的位置（找不到就说清）；当前窗口不支持
-ANSI 就自动在 Windows Terminal 里重开自己（`WT_SESSION` 是判断依据，Windows
-Terminal 一定会设）；`--once` 不换窗口，因为那条路的输出去处是脚本和管道；
-把窗口标题设成 `Crannia`（否则任务栏上显示的是 `cmd.exe` 的完整路径）；把启动
-目录与更新根传给 Python（两者在独立包里不是同一层）。
+```bash
+export PATH="$PATH:<repo>/tui"    # Linux
+crannia
+```
 
-想从源码跑，把本目录加进用户 PATH 即可（发布形态由安装脚本处理，不用手工加）。
-**`.cmd` 只能写 ASCII** —— cmd 按系统代码页读这个文件，中文注释会变成乱码把
-`rem` 行撑坏。
-
-首次使用前先建 `.env`（从 `.env.example` 拷），填后端的解释器：
+When the source lives at `tui/` in the main repository, no extra configuration is
+needed: the launcher finds the repository's `.venv`. For a custom layout, create
+`tui/.env` with the backend interpreter:
 
 ```
 CRANNIA_PYTHON=D:\path\to\crannia\.venv\Scripts\python.exe
 ```
 
-源码在主仓的 `tui/` 里时**不用建 `.env`**：`crannia_home()` 会认「我自己就在
-crannia 树里」，`python_exe()` 会找到主仓的 `.venv`。`.env` 只在自定义布局时需要。
-
-窗口标题两处各管一段：启动器里那一行 `title Crannia` 覆盖 Python 起来之前
-那一秒，`app._set_console_title` 在界面挂上之后再设一次并在退出时还原原值。
-Textual 的 `TITLE` 只喂它自带的 Header 部件，**不会写终端标题** —— 所以这条
-必须自己发；Windows 走 `SetConsoleTitleW`（控制台 API，不会和渲染流的转义
-序列抢 stdout），其它平台用 OSC 0。
-
-TUI 自己的 venv 只有 textual 和 rich，没有 flask，跑不了后端。`.env` 不进库 ——
-这里放的都是"每台机器都不一样"的绝对路径，写进脚本等于把开发机的目录结构发出去。
-
-不想用启动器也可以直连：
+## Usage
 
 ```cmd
-.venv\Scripts\python.exe tools\sandbox_run.py
+crannia                  open the interface
+crannia --once "hello"   send one message only (output can be redirected)
 ```
 
-**必须用 Windows Terminal**。cmd 的旧控制台不解释 ANSI，而这个界面每一帧都靠
-光标定位和整屏重绘，在那儿进去只会看到乱码 —— 启动器会替你换窗口。
+`Ctrl+C` quits.
 
-只想发一句就退（不进界面，输出可以重定向）：
-
-```cmd
-crannia --once "你好"
-```
-
-### 数据隔离
-
-`sandbox_run.py` 先快照 `crannia/data/`，退出时还原。两个连带机制：
-
-- **单实例锁**：`.sandbox.lock` 记 PID，已有活实例就拒绝启动并给出 `taskkill` 命令。
-  两个实例同时写同一个 `data/memory` 的 sqlite，轻则报锁、重则写坏会话库。
-- **子进程跟着父进程死**：子进程挂在一个 `KILL_ON_JOB_CLOSE` 的 Job 里。父进程
-  被任务管理器强杀时，TUI 会被内核一起终结，不留孤儿继续写数据。
-
-被打断后留下的快照不会自动处理，下次启动会停下来问：
+## Interface
 
 ```
-sandbox_run.py --restore   # 丢掉这次跑出来的 data
-sandbox_run.py --discard   # 保留现在的 data
+                             ▄▄▄▄
+                            █
+                            █
+                             ▀▀▀▀
+                           Crannia v1.2.0
+                       deepseek-flash | xhigh
+  #- < . . . > / * { _ } - | #> = \ @ ( ) ) - < *** / [ _ ^ _ \ - < \ - > ; | · · · =
+                          >_ D:\work\crannia    ← header: printed once at startup, scrolls with content
+
+ 【User】把第 7 页的价格带改成柱状图      ← conversation area, scrolls
+ ● 改写表格  价格表.docx                  ← tool card: green=done, red=failed, yellow=running
+   ⎿  2,140 字符 · 1.2s                     failures add a line; long stacks fold to "+N lines"
+ ● 读取模板  template.pptx
+   好的，先看一下现有版式。
+
+ ⋯ 思考中   3s                             ← status line: what it is doing, for how long
+ ╭────────────────────────────────────────╮
+ │  我可以怎么帮助您？                    │  ← input box
+ ╰────────────────────────────────────────╯
+ mode: 手动 · effort: high        2个后台  上下文：3%/85%
 ```
 
-## 结构
+Bottom bar: the current mode and effort, background-task and sub-agent counts (shown
+only when each exists), and context usage / compaction threshold (turns yellow near
+the threshold).
 
-```
-crannia_tui/
-  app.py        Textual 应用：布局、事件分流、发送与收尾
-  app.tcss      布局样式
-  ui.py         HeaderBar / Transcript / StatusLine / StatusBar
-  commands.py   parse_command、short_path（纯函数，可测）
-  outcome.py    结局 → 文案 / 圆点颜色（词表在 crannia 那边）
-  headless.py   --once 那条路（不起界面）
-  backend.py    后端子进程（起 / 就绪 / 收尸）
-  client.py     SSE 订阅
-  events.py     事件模型与解析
-  render.py     事件 → rich 文本（--once 与界面共用同一份判断）
-  term.py       终端能力判断（只用来决定是否提示）
-tools/
-  sandbox_run.py  快照 data/ 跑一次，退出还原；单实例锁 + Job
-  pty_drive.py    伪终端驱动界面，用 pyte 还原屏幕（开发机用）
-tests/          commands · render · paths · term · approval
-```
+## Keys
 
-## 接口契约
-
-| 接口 | 说明 |
+| Key | Action |
 |---|---|
-| `GET /api/health` | 就绪探测。后端初始化要十几秒，轮询它 |
-| `POST /api/start` | 必须先调，否则 `/api/chat` 返回 503 |
-| `GET /api/events?token=` | SSE，36 种事件，含 `EVT_DELTA` / `EVT_TOOL_START` / `EVT_APPROVAL_REQUEST` |
-| `POST /api/chat {text, new?}` | 返回最终回复与 `awaiting_approval` |
-| `GET /api/status` | 抬头用：`version` / `model` / `model_config_name` / `project_root` |
-| `GET/POST /api/approval` | 审批：GET 拉详情，POST 送 `choice` 或 `text` |
-| `GET /api/commands` | 斜杠补全目录（成员与说明都在后端） |
-| `POST /api/steer` | 跑着的时候补话；被拒（idle/命令/审批中）回落成排队 |
-| `POST /api/stop` | 中断当前轮 |
+| Enter | Send |
+| Shift+Enter / Ctrl+J | New line |
+| `/` | Command list: ↑↓ to choose, Enter to insert, Esc to close |
+| Enter while running | Queue the message |
+| Ctrl+V / drag a file into the terminal | Paste text or a file path |
+| Alt+V | Paste an image from the clipboard: leaves a `【图片n】` placeholder at the cursor; deleting it withdraws that image |
+| Ctrl+B | Move the foreground task to the background (only when the card says it can) |
+| ↓ while the bottom bar has tasks | Move focus to the bottom bar: ←→ to switch cells, Enter for details, ↑ / Esc to return |
+| Esc | Request an interrupt for the current turn (no effect while an approval is pending) |
+| Ctrl+C | Quit |
 
-启动后端只要三个环境变量：`CRANNIA_LAUNCH_TOKEN`（本进程生成）、
-`CRANNIA_API_PORT`（自选空闲端口）、`CRANNIA_DESKTOP=1`（不开浏览器）。
+If a key does nothing, try `crannia --keys` to see whether the key reaches the app.
 
-## 渲染约定
+## Commands
 
-1. **一块内容只写一次。** 全屏有能力任意重绘，但这里刻意不用：一个块改两次，
-   读的人会怀疑自己刚才看错了。需要原地变化的只有状态行。
-2. **去重按"这段文本说过没有"，不按"写过没有"。** `task.end.response` 与
-   `/api/chat` 的返回值常常是同一段，两条路并发到达、先后不定 —— 各判各的标记
-   就一定会打两遍。
-3. **事件回调在后台线程，界面只能在主线程动。** 一律经 `call_from_thread`。
-4. **不做逐字输出。** 后端有 `EVT_DELTA`（桌面端用它做打字机），这里刻意不接：
-   每片一画就是每秒几十次全文重排，而终端里"整段落定"才是可读的单位。
-   详见 `app.py` 模块 docstring —— 想加回来先看那里的账。
-5. **单换行定成硬换行**（`ui.harden_soft_breaks`）：Markdown 默认把单换行折成
-   空格，命令回执那种"一行一项"的表会被挤成一整行（`/effort` 就踩过）。发出去
-   之前给行尾补两个空格；围栏里的（那是代码）和表格行不动。
+### Command line
 
-## 输入
+These commands do not open the interface; they only perform the query.
 
-| 键 | 行为 |
-|---|---|
-| 回车 | 发送 |
-| Shift+Enter / Ctrl+J | 换行（个别终端分不清 Shift+Enter 时用 Ctrl+J，任何终端都认） |
-| 输入 `/` | 弹命令表（目录来自后端 `/api/commands`，本地不抄名单）：↑↓ 选、回车填入、Esc 收起；一屏 6 条，多出来的用 ↑↓ 翻 |
-| 跑着的时候回车 | 那句话先以**黄字 + 黄点**进步骤流（还没被读进去）；插话成功由 `steer.delivered` 转正，回落成排队则由下一轮 `task.start` 转正 |
-| Ctrl+V / 拖文件进终端 | 走括号粘贴：整段文本一次到达，多行也不会误触发回车。终端给的永远是**路径文本**，不是文件对象 —— 路径不做任何处理，原样进正文 |
-| Alt+V | 把剪贴板里的图贴进来：光标处留一个 `【图片n】` 占位符，图随这条消息发给模型 |
-| Ctrl+B | 把当前前台任务转到后台（卡片上有提示时才有效） |
-| 底栏出现 `n个后台` / `n个子代理` 时按 ↓ | 焦点移到底栏：←→ 换格、回车看详细页、↑ / Esc 回输入框 |
-| Esc | 请求中断当前轮（审批挂着时不响应） |
-| 小键盘 `/ * + - .` | 直接可用（终端只给键名不给字符时，Composer 按键盘面补字；除号的键名是 `divide`） |
-
-哪个键按了没反应，用 `crannia.cmd --keys` 看它到底有没有到应用：
-屏幕会列出收到的每个按键，同时写进 `%TEMP%\crannia-keys.log`。
-一行都没有 = 键在终端/输入法那层就被吞了；有键名没字符 = Composer 该补。
-
-命令表里选中的那一行前面是绿色的 `>`；回车把命令填进输入框（后面还能接参数），
-**已经打全的命令回车就是直接发送** —— 否则完整命令要按两次回车。
-补全只认命令词本身：后面跟了参数（出现空格）候选就收起。
-`/new` 不发占位消息 —— 那句会被模型当真回答；它记一个标志，
-下一句真话用 `new=true` 开新段。
-
-## 已知限制
-
-- **中文折行会提前断。** rich 的折行按空白切词，中文没有空格，一整段被当成
-  一个"词"：碰到 `AI 助手` 这种空格就换行，剩下的整段再硬切到行宽。
-  零宽空格和 `justify="left"` 都试过，rich 不把前者当断点、后者不改变折行。
-  要彻底解决得自己按显示宽度重排并保留样式段。
-- **会话历史的回放还没做。** `/resume` 切回旧对话后，界面不会把旧消息
-  灌进对话区（后端的会话内容还在，后续轮次正常）。
-- **提问面板的多选只能逐项确认**（空格勾选、回车一起送出）；连续勾多项
-  没有"全选"之类的捷径。
-- **emoji 宽度。** rich 按 1 列算，多数终端算 2 列，长串 emoji 会让右侧错位。
-
-## 测试
-
-```bash
-.venv/Scripts/python run_tests.py
+```
+crannia setup                       configure a model API (first-run guide)
+crannia doctor                      self-check
+crannia config path                 print the settings file path
+crannia profile                     list model configs (<name|id> sets the default)
+crannia update                      show the current version and usage
+crannia channel list                list channel entries
+crannia channel add <platform> [name]   add an entry (credentials are entered field by field; the key is not echoed)
+crannia channel config <name|id>    edit an entry (Enter keeps a field unchanged)
+crannia channel remove <name|id>    remove an entry (switch the default first when removing the default one)
+crannia channel default <name|id>   make an entry the default for its platform
+crannia channel start|stop <platform>   start or stop a channel (backend must be online)
+crannia channel login wechat        WeChat QR login (backend must be online)
 ```
 
-在主仓里也可以从仓库根跑 `scripts/run_tests.py` —— 它会用 TUI 自己的解释器
-把这一套一并跑掉；找不到解释器时打一行「未跑」，**不算失败**（公开副本不一定带
-TUI 的 venv）。
+### Inside the interface
 
-纯逻辑层：命令分派、路径截断（含中文不超宽）、事件渲染与去重、解释器选择、
-标志形状与头部容量（改错不会报错，只会让人看出来不对）。
+```
+/model                     current model + first 8 configs (with numbers)
+/model <number|name|id>    switch to that entry (takes effect next turn)
+/model 默认                follow the default again
+/model more                full config list
+/model set <number|name|id>
+                           edit panel: entry name / model name / API key
+                           (empty Enter skips a field, Esc exits)
+```
 
-界面本身靠 `tools/pty_drive.py` 验 —— 它开真伪终端、按节奏敲键、用 `pyte`
-把字节流还原成屏幕，把每个阶段的画面写进 `pty_transcript.txt`。
-这两个工具依赖 `pywinpty` 与 `pyte`，只在开发机上装。
+## Settings
+
+`<data root>/data/settings.json`, shared with the desktop app; `crannia config path`
+prints the location. On first start the TUI seeds it with factory values (only when
+the file is missing); a corrupt file is backed up to `settings.json.bad-<time>` and
+rebuilt from defaults.
+
+| Key | Type | Purpose |
+|---|---|---|
+| `effort_level` | integer | effort tier 1–6 |
+| `default_mode` | string | default mode |
+| `approval_timeout_seconds` | integer | approval timeout (0 = off) |
+| `auto_approve` · `cross_zone_enabled` · `relax_command_tier` · `no_ask_readonly` · `full_access_unlock` | boolean | approval and security switches |
+| `interface_language` · `response_language` | string or empty | UI / answer language |
+| `trace_full` | boolean | full trace |
+| `workspace` | string | default workspace |
+| `background_services` | boolean | whether channels and scheduled tasks start with the backend |
+
+## Tool cards and approvals
+
+While a tool is running, its card shows the in-progress action and arguments.
+
+| Outcome | Dot |
+|---|---|
+| Completed | green |
+| Waiting for approval | yellow |
+| Failed / not executed / not adopted | white |
+| Denied / blocked by auto-review | red |
+
+When an approval is requested, the input box becomes the approval panel: use the
+number keys or ↑↓ to choose, Enter to confirm; choose "I have something else to say"
+to explain to the model instead.
+
+## Images
+
+`Alt+V` pastes an image from the clipboard (`Ctrl+V` is taken by the terminal). The
+image is left as a `【图片n】` placeholder at the cursor and becomes part of the
+message: deleting the placeholder withdraws that image. Commands (`/…`) carry no
+images; a message with images is queued directly.
+
+## Links in replies
+
+Clicking a file link in a reply locates it on the backend: the relative path is
+resolved against the workspace root and the file is **selected** in the file manager
+(a directory opens as a folder); it is only located, never executed.
+
+## Disconnects and reconnects
+
+If the step stream drops, a red bar appears and the TUI reconnects with backoff,
+replaying the events it can; the bar disappears once the connection is restored.
+
+## Development
+
+- Directory layout, API contract, rendering conventions and the UI probe live in the
+  `tui/` sources and docstrings.
+- Tests: `.venv/Scripts/python run_tests.py`; from the repository root you can also run
+  `scripts/run_tests.py`.
+- Contribution workflow: see [`CONTRIBUTING.md`](../CONTRIBUTING.md).

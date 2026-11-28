@@ -1,7 +1,7 @@
 # Crannia desktop GUI
 
 在项目根目录运行 `npm run dev` 即可。Electron 主进程会自动拉起 Python 后端，
-不需要单独启动 WebUI。首次运行前先 `npm install`。
+不需要单独启动 WebUI。首次运行前您可能需要优先 `npm install`。
 
 ## 目录
 
@@ -18,6 +18,7 @@
 
 ## 与 WebUI 的关系
 
-`python -m web` 仍然可以单独跑，方便调后端。桌面壳走的是同一个 HTTP 接口，
+WebUI已于迭代中废弃，对外不可使用。
+不过，目前您仍然可以通过`python -m web` 单独运行它，方便调后端。其与桌面壳为同一个 HTTP 接口，
 区别在传输与权限：桌面壳自己生成启动令牌，经 `preload` 交给渲染进程，
 不经过浏览器可读的位置。

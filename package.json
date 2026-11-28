@@ -18,7 +18,8 @@
     "desktop": "node node_modules/electron/cli.js apps/desktop/main.cjs",
     "package": "npm run build && node scripts/patch-nsis.cjs && electron-builder --config apps/desktop/electron-builder.config.mjs",
     "package:dir": "npm run build && node scripts/patch-nsis.cjs && electron-builder --dir --config apps/desktop/electron-builder.config.mjs",
-    "patch-nsis": "node scripts/patch-nsis.cjs"
+    "patch-nsis": "node scripts/patch-nsis.cjs",
+    "test:desktop": "node apps/desktop/tests/update-apply.test.mjs"
   },
   "dependencies": {
     "dompurify": "^3.4.17",

@@ -1,4 +1,4 @@
-In takeover mode, the agent can interact with on-screen elements, including but not limited to clicking and typing. Takeover mode can only be enabled while the current conversation is in full access.
+In takeover mode, the agent can interact with on-screen elements, including but not limited to clicking and typing. Takeover mode can only be enabled while the current conversation is in full access. It currently works on Windows desktops only; enabling it on other systems fails with an error.
 
 ## Control
 

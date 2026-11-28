@@ -149,41 +149,55 @@ def test_file_entry_keeps_only_the_four_non_derivable_fields():
 
 
 def test_a_full_index_page_fits_the_tool_result_budget():
-    """36 条 < 6,000 字符。
+    """一页必须按字符装得下，不能按固定条数。
 
-    用的路径前缀与文件名取自本机真实的工作区，不是构造的最大值 ——
-    教训："可不可能"与"会不会"是两个断言，构造最大值只能证明前者。
+    2026-11-28 Linux CI 现场：同样 36 条，CI 的绝对路径比开发机长，
+    整页 6,039 字符 —— 越过 6,000 的截断线，模型拿到的是半截 JSON。
+    路径长度由用户决定（工作区可以很深），所以产品必须按序列化结果裁页
+    （`skills/file_parser/handler._fit_page`），而不是按条数。
 
-    为什么是 36：生产同源量得（`data/settings.json` + 真 `WorkspaceManager`）
-    索引 34 条 = 5,449 字符（约 160 字符/条）。这条断言要跟着真实规模走，
-    而不是抄一个更小的数显得安全 —— 否则它测的是一个不存在的场景。
-
-    天花板约 37 条（6,000 / 160）—— 越过它就会被中途截断。
-    索引继续长（工作组再加文件夹）时这条会红，而那正是它该做的事。
+    两个断言：常规路径 36 条全部留下（不误裁）；深路径下必须 <= 预算、
+    且裁掉的是尾部、至少留一条（否则 offset 推不动）。
     """
-    from skills.file_parser.handler import _file_entry
+    from skills.file_parser.handler import (_PAGE_CHAR_BUDGET, _file_entry,
+                                            _fit_page)
 
-    root = str(_PROJECT_ROOT / "workspace")
     names = [
         "2026年5月核心投资机会与资产配置策略研究报告.pdf",
         "2025443267_刘书宇_大作业.doc",
         "2026年5月核心投资机会_核心标的整理.docx",
         "总经理办公会议案表.docx",
     ]
-    n_entries = 36
-    entries = []
-    for i in range(n_entries):
-        n = names[i % len(names)]
-        entries.append(_file_entry(
-            root + "\\" + n, Path(n).suffix.lower(), 55808, "2025-11-23 11:51",
-        ))
-    blob = json.dumps(entries, ensure_ascii=False)
-    assert len(blob) < _TOOL_RESULT_BUDGET, (
-        "%d 条 = %d 字符，越过 %d 的截断线 -- 中途截断给模型的是坏 JSON"
-        % (n_entries, len(blob), _TOOL_RESULT_BUDGET)
-    )
-    print("  [ok] %d 条 = %d 字符（预算 %d；生产实测 34 条 = 5,449）"
-          % (n_entries, len(blob), _TOOL_RESULT_BUDGET))
+
+    def _entries(root: str, n: int) -> list:
+        return [_file_entry(root + "/" + names[i % len(names)],
+                            Path(names[i % len(names)]).suffix.lower(),
+                            55808, "2025-11-23 11:51")
+                for i in range(n)]
+
+    normal = _entries("D:/OPD/workspace", 36)
+    kept, has_more = _fit_page(normal, 0, len(normal))
+    assert len(kept) == 36 and not has_more, (
+        "常规路径被误裁：%d/36（预算 %d）" % (len(kept), _PAGE_CHAR_BUDGET))
+    assert len(json.dumps(kept, ensure_ascii=False)) < _TOOL_RESULT_BUDGET
+
+    deep_root = ("/home/runner/work/leafvain-v0.99/leafvain-v0.99/workspace/"
+                 "客户项目/2026年度/资料")
+    deep = _entries(deep_root, 50)
+    #: 负对照：不裁页时它确实过线（否则下面那条断言在测一个不存在的场景）。
+    raw = len(json.dumps(deep, ensure_ascii=False))
+    assert raw > _TOOL_RESULT_BUDGET, (
+        "深路径样本只有 %d 字符，没越过 %d —— 这条负对照失效了"
+        % (raw, _TOOL_RESULT_BUDGET))
+    kept2, more2 = _fit_page(deep, 0, len(deep))
+    blob2 = len(json.dumps(kept2, ensure_ascii=False))
+    assert 1 <= len(kept2) < len(deep), "深路径没有触发裁页：%d" % len(kept2)
+    assert blob2 <= _PAGE_CHAR_BUDGET, (
+        "裁页后仍有 %d 字符（预算 %d）" % (blob2, _PAGE_CHAR_BUDGET))
+    assert kept2 == deep[:len(kept2)], "裁页必须保留前缀（顺序不许变）"
+    assert more2, "裁掉尾部之后必须报还有下一页"
+    print("  [ok] 常规 36 条全留；深路径 50 条裁到 %d 条 = %d 字符"
+          "（原始 %d；预算 %d）" % (len(kept2), blob2, raw, _PAGE_CHAR_BUDGET))
 
 
 # ------------------------------------------------------------------

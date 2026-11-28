@@ -538,6 +538,19 @@ def take_grid_hint(window_id: str) -> bool:
         return False
 
 
+def enable_for_tests(owner: str = "test") -> "Takeover":
+    """测试专用：跳过平台闸装一个接管态，不装系统钩子。
+
+    真机上的平台闸在 `enable()` 里（非 Windows 明确拒绝）；但这组测试注入的
+    全是假窗口 / 假输入，验的是落点回读、编号、盲模型降级那套纯逻辑 ——
+    在 Linux CI 上跳过它们等于放弃一半判据。
+    """
+    global _state
+    with _lock:
+        _state = Takeover(owner=owner)
+        return _state
+
+
 def reset_for_tests() -> None:
     """只给测试用（`purge` 不走它 —— `/clear` 有意不清）。
 

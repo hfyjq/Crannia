@@ -4,7 +4,8 @@
 
 ## Data storage
 
-Everything under the data directory (`%APPDATA%\Crannia` on Windows):
+Everything under the data directory (`%APPDATA%\Crannia` on Windows,
+`${XDG_DATA_HOME:-~/.local/share}/crannia` on Linux):
 
 | What | Where | Notes |
 |---|---|---|

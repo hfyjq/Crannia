@@ -123,7 +123,7 @@ def test_marks_survive_a_bad_rect():
 # ---------------------------------------------------------- 落点回读与偏差
 def test_note_click_records_the_landed_point():
     S.reset_for_tests()
-    S.enable("s1")
+    S.enable_for_tests("s1")
     try:
         S.note_click("w1", 112, 104, requested=(100, 100), miss_limit=8)
         check("红十字那格记的是实际落点", S.take_last_click("w1") == (112, 104),
@@ -140,7 +140,7 @@ def test_note_click_records_the_landed_point():
 
 def test_small_miss_does_not_force_grid():
     S.reset_for_tests()
-    S.enable("s1")
+    S.enable_for_tests("s1")
     try:
         S.note_click("w1", 102, 101, requested=(100, 100), miss_limit=8)
         check("小偏差不置网格提示", S.take_grid_hint("w1") is False)
@@ -190,7 +190,7 @@ def _restore_click(saved):
 
 def test_click_records_the_read_back_point():
     S.reset_for_tests()
-    S.enable("s1")
+    S.enable_for_tests("s1")
     sent, saved = _patch_click((612, 704))
     try:
         text = T._click("w1", "o1", None, 500, 500, 1, "left")
@@ -209,7 +209,7 @@ def test_click_records_the_read_back_point():
 
 def test_click_without_read_back_says_the_marker_is_a_request():
     S.reset_for_tests()
-    S.enable("s1")
+    S.enable_for_tests("s1")
     sent, saved = _patch_click(None)
     try:
         text = T._click("w1", "o1", None, 500, 500, 1, "left")
@@ -233,7 +233,7 @@ class _Cap:
 
 def test_blind_model_gets_no_screenshot_and_a_first_line():
     S.reset_for_tests()
-    S.enable("s1")
+    S.enable_for_tests("s1")
     info = win32.WindowInfo(hwnd=9, pid=1, exe="probe.exe",
                             exe_path="C:/probe.exe", title="probe",
                             class_name="Probe", rect=(100, 100, 1100, 900),
@@ -283,7 +283,7 @@ def test_blind_model_gets_no_screenshot_and_a_first_line():
 
 def test_blind_model_with_no_tree_is_refused():
     S.reset_for_tests()
-    S.enable("s1")
+    S.enable_for_tests("s1")
     info = win32.WindowInfo(hwnd=9, pid=1, exe="probe.exe",
                             exe_path="C:/probe.exe", title="probe",
                             class_name="Probe", rect=(100, 100, 1100, 900),

@@ -56,6 +56,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -152,15 +153,20 @@ def _is_bad(rc: int, passed, total) -> bool:
     return total is not None and passed < total
 
 
-def _run_tui_suite() -> int:
-    """TUI 的测试 —— 它用自己的解释器（主 venv 没有 `textual`）。
+def _run_tui_suite(require_tui: bool = False) -> int:
+    """TUI 的测试 —— 它用自己的解释器（主 venv 通常没有 `textual`）。
 
-    找不到那个解释器时不算失败（公开副本不一定带 TUI 的 venv），
+    找不到那个解释器时默认不算失败（公开副本不一定带 TUI 的 venv），
     但要看得见：打一行"未跑" —— 别让"没跑"长得像"通过"。
+    `--require-tui`（CI 用）把它变成失败：没有解释器 = 这一轮没有证明
+    TUI 能跑，而"没证明"不许当"通过"。
+
+    当前解释器自己有 `textual` 时也认（CI 把 TUI 依赖装进同一个环境）。
     """
     script = _ROOT / "tui" / "run_tests.py"
     if not script.is_file():
-        return 0
+        print("\n[tui] 未跑：没有 tui/run_tests.py")
+        return 1 if require_tui else 0
     cands = []
     env_py = os.environ.get("CRANNIA_TUI_PYTHON", "").strip()
     if env_py:
@@ -168,9 +174,14 @@ def _run_tui_suite() -> int:
     venv = _ROOT / "tui" / ".venv"
     cands += [venv / "Scripts" / "python.exe",
               venv / "bin" / "python3", venv / "bin" / "python"]
+    if importlib.util.find_spec("textual") is not None:
+        cands.append(Path(sys.executable))
     py = next((p for p in cands if p.is_file()), None)
     if py is None:
         print("\n[tui] 未跑：找不到 TUI 的解释器（tui/.venv 或 CRANNIA_TUI_PYTHON）")
+        if require_tui:
+            print("[tui] --require-tui：这一轮必须真跑 TUI 测试")
+            return 1
         return 0
     env = dict(os.environ, PYTHONIOENCODING="utf-8", CRANNIA_TESTING="1")
     try:
@@ -201,6 +212,8 @@ def main() -> int:
                     help="失败时把它输出的最后 N 行打出来（默认 12）")
     ap.add_argument("--dump-failures", default="",
                     help="把每个失败文件的**完整输出**写到这个目录")
+    ap.add_argument("--require-tui", action="store_true",
+                    help="找不到 TUI 解释器算失败（CI 用：没跑 ≠ 通过）")
     args = ap.parse_args()
 
     files = _files(args.files)
@@ -290,7 +303,7 @@ def main() -> int:
 
     # TUI 的测试在自己的解释器里跑（见 `_run_tui_suite`）；它的结果不进
     # `--counts` —— 那张表是主仓锚点的输入，TUI 的计数另有归属。
-    tui_rc = _run_tui_suite()
+    tui_rc = _run_tui_suite(require_tui=args.require_tui)
     return 1 if (failures or tui_rc) else 0
 
 

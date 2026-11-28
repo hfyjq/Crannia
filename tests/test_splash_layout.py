@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -147,7 +148,21 @@ def _measure() -> dict:
     try:
         tmp.write_text(_PROBE_JS, encoding="utf-8")
         _env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
-        r = subprocess.run(["node", str(_ELECTRON), str(tmp)], cwd=str(_ROOT),
+        #: Linux 上 Chromium 的 SUID sandbox 在 CI 里装不起来（runner 非 root
+        #: 也没有 setuid helper）-> 探针起不来针起不来、整条测试"没测量"。探针只读本地
+        #: HTML、不加载外部内容，关掉 sandbox 是测试进程内的事，不影响产品。
+        _args = ["node", str(_ELECTRON)]
+        if sys.platform.startswith("linux"):
+            _args.append("--no-sandbox")
+            #: Electron 在 Linux 上仍要一个 X display（即使是离屏窗口）。
+            #: GitHub 的 runner 没有 DISPLAY；xvfb-run 是它的标准做法
+            #: （runner 自带）。桌面/WSL 有 DISPLAY 时不动。
+            if not os.environ.get("DISPLAY"):
+                _xvfb = shutil.which("xvfb-run")
+                if _xvfb:
+                    _args = [_xvfb, "-a"] + _args
+        _args.append(str(tmp))
+        r = subprocess.run(_args, cwd=str(_ROOT),
                            env=_env, capture_output=True, text=True,
                            encoding="utf-8", timeout=150)
     finally:

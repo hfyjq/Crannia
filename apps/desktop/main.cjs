@@ -1531,10 +1531,20 @@ function pythonExe() {
   return venvPath();
 }
 
-/** 项目 `.venv` 那一级（开发树）；两个调用口共用（一处定义）。 */
+/** 项目 `.venv` 那一级（开发树）；两个调用口共用（一处定义）。
+ *
+ *  Windows 的虚拟环境在 `Scripts/`，POSIX 在 `bin/` —— 开发模式在 Linux
+ *  上也走这一级（打包产物走随包运行时，到不了这里）。
+ */
 function venvPath() {
-  const venv = path.resolve(__dirname, "../../.venv/Scripts/python.exe");
-  return fs.existsSync(venv) ? venv : "python";
+  const venv = path.resolve(__dirname, "../../.venv");
+  const cands = process.platform === "win32"
+    ? [path.join(venv, "Scripts/python.exe")]
+    : [path.join(venv, "bin/python3"), path.join(venv, "bin/python")];
+  for (const p of cands) {
+    if (fs.existsSync(p)) return p;
+  }
+  return process.platform === "win32" ? "python" : "python3";
 }
 
 function startBackend() {

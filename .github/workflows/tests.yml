@@ -28,16 +28,57 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            tui/requirements.txt
 
       - name: Python dependencies
         run: pip install -r requirements.txt
+
+      #: TUI 测试在自己的解释器里跑（`scripts/run_tests.py::_run_tui_suite`）。
+      #: 装进同一个环境 + `--require-tui` ⇒ 「没跑」不再悄悄算通过。
+      - name: TUI dependencies
+        run: pip install -r tui/requirements.txt
 
       #: 有一个测试用 vite 编译 JSX（tests/test_desktop_settings.py）；
       #: 启动小窗那条测试在没有 Electron 时会明确跳过，装了才会真跑。
       - name: Node dependencies
         run: npm ci
 
+      #: 换装脚本（`apps/desktop/update-apply.cjs`）的纯逻辑测试。
+      #: 它不在 `tests/` 里，Python 那套跑法看不见它。
+      - name: Desktop update-script tests
+        run: npm run test:desktop
+
       - name: Test suite
         #: 失败时多打几行 —— 默认 12 行会把失败用例的名字截掉。
-        run: python scripts/run_tests.py --quiet --fail-lines 200
+        run: python scripts/run_tests.py --quiet --fail-lines 200 --require-tui
+
+  #: Linux 那一半：证明「在 Linux 上也能跑」，与 Windows 的 green 不是同一件事。
+  tests-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tui/requirements.txt
+
+      - name: Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: TUI dependencies
+        run: pip install -r tui/requirements.txt
+
+      - name: Node dependencies
+        run: npm ci
+
+      - name: Test suite
+        run: python scripts/run_tests.py --quiet --fail-lines 200 --require-tui

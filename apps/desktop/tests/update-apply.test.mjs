@@ -15,6 +15,15 @@ import path from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+
+//: 这组测的是 Windows 换装脚本（路径 / PowerShell / NSIS）。Windows 之外的
+//: 文件系统语义（`path.resolve` 的盘符、大小写）本来就不一样 —— 在那里跑
+//: 只会红在"这不是那台机器"上。显式跳过，且说清楚不是通过。
+if (process.platform !== "win32") {
+  console.log("  [!] update-apply tests are Windows-only -- SKIPPED (not a pass).");
+  process.exit(0);
+}
+
 const U = require("../update-apply.cjs");
 
 let pass = 0;

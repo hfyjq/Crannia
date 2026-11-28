@@ -38,8 +38,8 @@
     auto 分类器能不能自动放行（False = 永不被自动放行，必问）
     audit True = 每次调用写一行 EGRESS 审计
 
-`auto=False` 的两条依据：敏感数据外发与远端执行
-属最高风险，分类器不得代答。`ssh_exec` / `ssh_upload` 是第一批。
+`auto=False` 的两条依据：敏感数据外发与远端执行属最高风险，分类器不得代答。
+`ssh_exec` / `ssh_upload` 是第一批。
 """
 
 from __future__ import annotations

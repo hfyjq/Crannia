@@ -26,8 +26,10 @@
     "LICENSE",
     "NOTICE",
     "THIRD-PARTY-PYTHON.md",
+    "THIRD-PARTY-PYTHON-linux.md",
     "THIRD-PARTY-FRONTEND.md",
     "sbom.json",
+    "sbom-linux-x64.json",
     "tui/crannia.cmd",
     "tui/crannia.sh"
   ],

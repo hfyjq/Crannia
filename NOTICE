@@ -7,10 +7,13 @@ The complete inventory, licenses and required notices are shipped with the
 product and are also available in the repository:
 
   - THIRD-PARTY.md          Human-readable notices: assets, LGPL / MPL obligations
-  - THIRD-PARTY-PYTHON.md   Every bundled Python distribution and its license
+  - THIRD-PARTY-PYTHON.md   Every bundled Python distribution (Windows build)
+  - THIRD-PARTY-PYTHON-linux.md
+                            Every bundled Python distribution (Linux build)
   - THIRD-PARTY-FRONTEND.md Every npm package bundled into the frontend, with
                             its license text
-  - sbom.json               CycloneDX software bill of materials
+  - sbom.json               CycloneDX software bill of materials (Windows x64)
+  - sbom-linux-x64.json     CycloneDX software bill of materials (Linux x64)
   - licenses/               Full texts: LGPL-3.0, LGPL-2.1, GPL-3.0, MPL-2.0,
                             MIT-chat-on-wechat, MIT-deepseek-harness,
                             Molio-LICENSE

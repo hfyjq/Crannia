@@ -1141,6 +1141,12 @@ def test_powershell_really_runs():
     """
     from core import shell as S
 
+    #: PowerShell 是 Windows 的兜底（没有 Git Bash 的机器）。Linux 上产品
+    #:   一律走 bash，`pwsh` 在不在都不改变这条路径 —— 只按"有没有 pwsh"
+    #:   判断会让 GitHub 的 Ubuntu runner（装了 pwsh）跑一条产品不会走的路。
+    if sys.platform != "win32":
+        print("  [skip] PowerShell 兜底只属于 Windows（Linux 一律 bash）")
+        return
     if not S.powershell_path():
         print("  [skip] 本机没有 PowerShell")
         return
